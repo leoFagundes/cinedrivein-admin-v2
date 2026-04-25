@@ -31,11 +31,7 @@ function FilmStrip() {
         style={{ borderRight: "2px solid var(--color-text-muted)" }}
       >
         {Array.from({ length: 14 }).map((_, i) => (
-          <div
-            key={i}
-            className="w-5 h-4 rounded-sm"
-            style={{ backgroundColor: "var(--color-text-muted)" }}
-          />
+          <div key={i} className="w-5 h-4 rounded-sm bg-text-secondary" />
         ))}
       </div>
       <div
@@ -43,11 +39,7 @@ function FilmStrip() {
         style={{ borderLeft: "2px solid var(--color-text-muted)" }}
       >
         {Array.from({ length: 14 }).map((_, i) => (
-          <div
-            key={i}
-            className="w-5 h-4 rounded-sm"
-            style={{ backgroundColor: "var(--color-text-muted)" }}
-          />
+          <div key={i} className="w-5 h-4 rounded-sm bg-text-secondary" />
         ))}
       </div>
     </div>
@@ -79,8 +71,8 @@ function parseError(err: unknown): string {
   return "Ocorreu um erro inesperado.";
 }
 
-const ANIM_HOLD_MS  = 2600; // ms until fade starts
-const FADE_DURATION = 900;  // ms for fade out
+const ANIM_HOLD_MS = 2600; // ms until fade starts
+const FADE_DURATION = 900; // ms for fade out
 
 // Module-level flag: resets on full page reload (JS restarts),
 // but stays true during Next.js SPA navigation — exactly what we need.
@@ -92,14 +84,13 @@ function LoginForm() {
   const [view, setView] = useState<View>("login");
 
   // ── Intro animation ──
-  const [showIntro, setShowIntro] = useState(false);
+  const [showIntro, setShowIntro] = useState(!introPlayed);
   const [introFading, setIntroFading] = useState(false);
 
   // Step 1: after hydration, show intro only if not yet played this page load
   useEffect(() => {
     if (!introPlayed) {
       introPlayed = true;
-      startTransition(() => setShowIntro(true));
     }
   }, []);
 
@@ -111,7 +102,10 @@ function LoginForm() {
       setShowIntro(false);
       setIntroFading(false);
     }, ANIM_HOLD_MS + FADE_DURATION);
-    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer); };
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
   }, [showIntro]);
 
   // ── Login state ──

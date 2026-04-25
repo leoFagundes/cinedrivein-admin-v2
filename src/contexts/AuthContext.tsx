@@ -1,9 +1,18 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import {
-  onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, signOut, User as FirebaseUser,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  User as FirebaseUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -13,7 +22,11 @@ const SESSION_KEY = "cdi_session_start";
 const SESSION_EXPIRED_KEY = "cdi_session_expired";
 const SESSION_DURATION = 24 * 60 * 60 * 1000;
 
-interface SignUpData { username: string; email: string; password: string; }
+interface SignUpData {
+  username: string;
+  email: string;
+  password: string;
+}
 
 interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
@@ -34,8 +47,11 @@ async function loadAppUser(uid: string): Promise<AppUser | null> {
 
   let permissions: Permission[] = [];
   if (data.profileId) {
-    const profileSnap = await getDoc(doc(db, "permissionProfiles", data.profileId));
-    if (profileSnap.exists()) permissions = profileSnap.data().permissions ?? [];
+    const profileSnap = await getDoc(
+      doc(db, "permissionProfiles", data.profileId),
+    );
+    if (profileSnap.exists())
+      permissions = profileSnap.data().permissions ?? [];
   }
 
   return {
@@ -62,7 +78,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         const sessionStart = localStorage.getItem(SESSION_KEY);
-        if (sessionStart && Date.now() - parseInt(sessionStart) > SESSION_DURATION) {
+        if (
+          sessionStart &&
+          Date.now() - parseInt(sessionStart) > SESSION_DURATION
+        ) {
           localStorage.removeItem(SESSION_KEY);
           localStorage.setItem(SESSION_EXPIRED_KEY, "1");
           await signOut(auth);
@@ -92,22 +111,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const credential = await signInWithEmailAndPassword(auth, email, password);
     const userSnap = await getDoc(doc(db, "users", credential.user.uid));
-    if (!userSnap.exists()) { await signOut(auth); throw new Error("USER_NOT_FOUND"); }
+    if (!userSnap.exists()) {
+      await signOut(auth);
+      throw new Error("USER_NOT_FOUND");
+    }
     const status = userSnap.data().status;
-    if (status === "pending")  { await signOut(auth); throw new Error("PENDING"); }
-    if (status === "rejected") { await signOut(auth); throw new Error("REJECTED"); }
+    if (status === "pending") {
+      await signOut(auth);
+      throw new Error("PENDING");
+    }
+    if (status === "rejected") {
+      await signOut(auth);
+      throw new Error("REJECTED");
+    }
     localStorage.setItem(SESSION_KEY, Date.now().toString());
   }
 
   async function signUp({ username, email, password }: SignUpData) {
     const usernameSnap = await getDoc(doc(db, "usernames", username));
     if (usernameSnap.exists()) throw new Error("USERNAME_TAKEN");
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
     await Promise.all([
       setDoc(doc(db, "users", credential.user.uid), {
-        username, email, status: "pending", isOwner: false, createdAt: serverTimestamp(),
+        username,
+        email,
+        status: "pending",
+        isOwner: false,
+        createdAt: serverTimestamp(),
       }),
-      setDoc(doc(db, "usernames", username), { uid: credential.user.uid, email }),
+      setDoc(doc(db, "usernames", username), {
+        uid: credential.user.uid,
+        email,
+      }),
     ]);
     await signOut(auth);
   }
@@ -124,7 +163,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, loading, signIn, signUp, logOut, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        firebaseUser,
+        appUser,
+        loading,
+        signIn,
+        signUp,
+        logOut,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,19 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState, ReactNode } from "react";
-import { FiCheckCircle, FiAlertCircle, FiAlertTriangle, FiInfo, FiX } from "react-icons/fi";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  ReactNode,
+} from "react";
+import {
+  FiCheckCircle,
+  FiAlertCircle,
+  FiAlertTriangle,
+  FiInfo,
+  FiX,
+} from "react-icons/fi";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
@@ -22,7 +34,10 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-const STYLES: Record<ToastType, { icon: ReactNode; color: string; bg: string; border: string }> = {
+const STYLES: Record<
+  ToastType,
+  { icon: ReactNode; color: string; bg: string; border: string }
+> = {
   success: {
     icon: <FiCheckCircle size={18} />,
     color: "var(--color-success)",
@@ -65,20 +80,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setToasts((prev) => [...prev, { id, type, title, message }]);
       setTimeout(() => dismiss(id), DURATION);
     },
-    [dismiss]
+    [dismiss],
   );
 
-  const success = useCallback((t: string, m?: string) => toast("success", t, m), [toast]);
-  const error = useCallback((t: string, m?: string) => toast("error", t, m), [toast]);
-  const warning = useCallback((t: string, m?: string) => toast("warning", t, m), [toast]);
-  const info = useCallback((t: string, m?: string) => toast("info", t, m), [toast]);
+  const success = useCallback(
+    (t: string, m?: string) => toast("success", t, m),
+    [toast],
+  );
+  const error = useCallback(
+    (t: string, m?: string) => toast("error", t, m),
+    [toast],
+  );
+  const warning = useCallback(
+    (t: string, m?: string) => toast("warning", t, m),
+    [toast],
+  );
+  const info = useCallback(
+    (t: string, m?: string) => toast("info", t, m),
+    [toast],
+  );
 
   return (
     <ToastContext.Provider value={{ toast, success, error, warning, info }}>
       {children}
 
       {/* Toast container */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite">
+      <div
+        className="fixed bottom-5 right-5 z-101 flex flex-col gap-2 pointer-events-none"
+        aria-live="polite"
+      >
         {toasts.map((t) => {
           const s = STYLES[t.type];
           return (
@@ -95,11 +125,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 {s.icon}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
                   {t.title}
                 </p>
                 {t.message && (
-                  <p className="text-xs mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
                     {t.message}
                   </p>
                 )}
