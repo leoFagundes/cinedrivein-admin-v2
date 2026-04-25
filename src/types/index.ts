@@ -50,3 +50,35 @@ export interface Log {
   changes?: LogChange[];
   createdAt: Date;
 }
+
+// ─── Stock ────────────────────────────────────────────────────────────────────
+
+export type AdditionalGroup = "additionals" | "additionals_sauce" | "additionals_drink" | "additionals_sweet";
+
+export interface Subitem {
+  id: string;
+  name: string;
+  description: string;
+  isVisible: boolean;
+  photo?: string;
+  createdAt: Date;
+}
+
+export interface StockItem {
+  id: string;
+  codItem: string;
+  name: string;
+  category: string;
+  description: string;
+  value: number;
+  visibleValue?: number;
+  quantity: number;
+  photo?: string;
+  isVisible: boolean;
+  isFeatured: boolean;
+  additionals: string[];
+  additionals_sauce: string[];
+  additionals_drink: string[];
+  additionals_sweet: string[];
+  createdAt: Date;
+}

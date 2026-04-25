@@ -28,6 +28,7 @@ import { AppUser, Permission, PermissionProfile, UserStatus } from "@/types";
 import { PERMISSION_GROUPS, PERMISSION_META } from "@/lib/permissions";
 import { log } from "@/lib/logger";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
+import Input from "@/components/ui/Input";
 import {
   FiShield,
   FiX,
@@ -251,88 +252,7 @@ function DeleteConfirmModal({
 
 // ─── Field ─────────────────────────────────────────────────────────────────────
 
-function Field({
-  label,
-  error,
-  icon,
-  children,
-}: {
-  label: string;
-  error?: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label
-        className="text-sm font-medium"
-        style={{ color: "var(--color-text-secondary)" }}
-      >
-        {label}
-      </label>
-      <div className="relative flex items-center">
-        {icon && (
-          <span
-            className="absolute left-3 pointer-events-none"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            {icon}
-          </span>
-        )}
-        <div className="w-full">{children}</div>
-      </div>
-      {error && (
-        <span className="text-xs" style={{ color: "var(--color-error)" }}>
-          {error}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  icon,
-  error,
-  disabled,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  type?: string;
-  icon?: React.ReactNode;
-  error?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      type={type}
-      placeholder={placeholder}
-      disabled={disabled}
-      className={`w-full h-10 text-sm rounded-md outline-none ${icon ? "pl-9 pr-3" : "px-3"} disabled:opacity-50`}
-      style={{
-        backgroundColor: "var(--color-bg-elevated)",
-        border: `1px solid ${error ? "var(--color-error)" : "var(--color-border)"}`,
-        color: "var(--color-text-primary)",
-      }}
-      onFocus={(e) => {
-        e.currentTarget.style.borderColor = error
-          ? "var(--color-error)"
-          : "var(--color-border-focus)";
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.borderColor = error
-          ? "var(--color-error)"
-          : "var(--color-border)";
-      }}
-    />
-  );
-}
+// Field e TextInput removidos — substituídos pelo componente Input reutilizável
 
 // ─── Create user modal ────────────────────────────────────────────────────────
 
@@ -431,77 +351,45 @@ function CreateUserModal({
   return (
     <Modal title="Criar usuário" onClose={onClose}>
       <div className="p-6 flex flex-col gap-4">
-        <Field label="Usuário" error={errors.username}>
-          <TextInput
-            value={fields.username}
-            onChange={(v) => set("username", v)}
-            placeholder="Nome de usuário"
-            icon={<FiUser size={14} />}
-            error={!!errors.username}
-          />
-          {errors.username && (
-            <span
-              className="text-xs mt-1 block"
-              style={{ color: "var(--color-error)" }}
-            >
-              {errors.username}
-            </span>
-          )}
-        </Field>
-        <Field label="E-mail" error={errors.email}>
-          <TextInput
-            value={fields.email}
-            onChange={(v) => set("email", v)}
-            placeholder="email@exemplo.com"
-            type="email"
-            icon={<FiMail size={14} />}
-            error={!!errors.email}
-          />
-          {errors.email && (
-            <span
-              className="text-xs mt-1 block"
-              style={{ color: "var(--color-error)" }}
-            >
-              {errors.email}
-            </span>
-          )}
-        </Field>
-        <Field label="Senha" error={errors.password}>
-          <TextInput
-            value={fields.password}
-            onChange={(v) => set("password", v)}
-            placeholder="Mínimo 6 caracteres"
-            type="password"
-            icon={<FiLock size={14} />}
-            error={!!errors.password}
-          />
-          {errors.password && (
-            <span
-              className="text-xs mt-1 block"
-              style={{ color: "var(--color-error)" }}
-            >
-              {errors.password}
-            </span>
-          )}
-        </Field>
-        <Field label="Confirmar senha" error={errors.confirm}>
-          <TextInput
-            value={fields.confirm}
-            onChange={(v) => set("confirm", v)}
-            placeholder="Repita a senha"
-            type="password"
-            icon={<FiLock size={14} />}
-            error={!!errors.confirm}
-          />
-          {errors.confirm && (
-            <span
-              className="text-xs mt-1 block"
-              style={{ color: "var(--color-error)" }}
-            >
-              {errors.confirm}
-            </span>
-          )}
-        </Field>
+        <Input
+          label="Usuário"
+          placeholder="Nome de usuário"
+          value={fields.username}
+          onChange={(e) => set("username", e.target.value)}
+          icon={<FiUser size={16} />}
+          error={errors.username}
+          autoComplete="off"
+        />
+        <Input
+          label="E-mail"
+          type="email"
+          placeholder="email@exemplo.com"
+          value={fields.email}
+          onChange={(e) => set("email", e.target.value)}
+          icon={<FiMail size={16} />}
+          error={errors.email}
+          autoComplete="off"
+        />
+        <Input
+          label="Senha"
+          type="password"
+          placeholder="Mínimo 6 caracteres"
+          value={fields.password}
+          onChange={(e) => set("password", e.target.value)}
+          icon={<FiLock size={16} />}
+          error={errors.password}
+          autoComplete="new-password"
+        />
+        <Input
+          label="Confirmar senha"
+          type="password"
+          placeholder="Repita a senha"
+          value={fields.confirm}
+          onChange={(e) => set("confirm", e.target.value)}
+          icon={<FiLock size={16} />}
+          error={errors.confirm}
+          autoComplete="new-password"
+        />
         <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
           O usuário será criado com acesso aprovado e sem perfil de permissões.
         </p>
@@ -609,74 +497,28 @@ function EditUserModal({
   return (
     <Modal title={`Editar @${user.username}`} onClose={onClose}>
       <div className="p-6 flex flex-col gap-4">
-        <Field label="Usuário" error={usernameError}>
-          <div className="relative flex items-center">
-            <span
-              className="absolute left-3 pointer-events-none"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              <FiUser size={14} />
-            </span>
-            <input
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-                setUsernameError("");
-              }}
-              placeholder="Nome de usuário"
-              className="w-full h-10 pl-9 pr-3 text-sm rounded-md outline-none"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: `1px solid ${usernameError ? "var(--color-error)" : "var(--color-border)"}`,
-                color: "var(--color-text-primary)",
-              }}
-              onFocus={(e) =>
-                (e.currentTarget.style.borderColor =
-                  "var(--color-border-focus)")
-              }
-              onBlur={(e) =>
-                (e.currentTarget.style.borderColor = usernameError
-                  ? "var(--color-error)"
-                  : "var(--color-border)")
-              }
-            />
-          </div>
-          {usernameError && (
-            <span
-              className="text-xs mt-1 block"
-              style={{ color: "var(--color-error)" }}
-            >
-              {usernameError}
-            </span>
-          )}
-        </Field>
+        <Input
+          label="Usuário"
+          placeholder="Nome de usuário"
+          value={username}
+          onChange={(e) => { setUsername(e.target.value); setUsernameError(""); }}
+          icon={<FiUser size={16} />}
+          error={usernameError}
+          autoComplete="off"
+        />
 
-        <Field label="E-mail">
-          <div className="relative flex items-center">
-            <span
-              className="absolute left-3 pointer-events-none"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              <FiMail size={14} />
-            </span>
-            <input
-              value={user.email}
-              disabled
-              className="w-full h-10 pl-9 pr-3 text-sm rounded-[var(--radius-md)] opacity-50"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-text-primary)",
-              }}
-            />
-          </div>
-          <span
-            className="text-xs mt-1 block"
-            style={{ color: "var(--color-text-muted)" }}
-          >
+        <div className="flex flex-col gap-1">
+          <Input
+            label="E-mail"
+            value={user.email}
+            disabled
+            icon={<FiMail size={16} />}
+            className="opacity-50 cursor-not-allowed"
+          />
+          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
             E-mail não pode ser alterado.
           </span>
-        </Field>
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <label
@@ -872,41 +714,14 @@ function ProfileModal({
       wide
     >
       <div className="p-6 flex flex-col gap-5">
-        <div className="flex flex-col gap-1.5">
-          <label
-            className="text-sm font-medium"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            Nome do perfil
-          </label>
-          <input
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setNameError("");
-            }}
-            placeholder="Ex: Caixa, Gerente..."
-            className="h-10 px-3 text-sm rounded-[var(--radius-md)] outline-none"
-            style={{
-              backgroundColor: "var(--color-bg-elevated)",
-              border: `1px solid ${nameError ? "var(--color-error)" : "var(--color-border)"}`,
-              color: "var(--color-text-primary)",
-            }}
-            onFocus={(e) =>
-              (e.currentTarget.style.borderColor = "var(--color-border-focus)")
-            }
-            onBlur={(e) =>
-              (e.currentTarget.style.borderColor = nameError
-                ? "var(--color-error)"
-                : "var(--color-border)")
-            }
-          />
-          {nameError && (
-            <span className="text-xs" style={{ color: "var(--color-error)" }}>
-              {nameError}
-            </span>
-          )}
-        </div>
+        <Input
+          label="Nome do perfil"
+          placeholder="Ex: Caixa, Gerente..."
+          value={name}
+          onChange={(e) => { setName(e.target.value); setNameError(""); }}
+          error={nameError}
+          autoFocus
+        />
         <div className="flex flex-col gap-4">
           <p
             className="text-sm font-medium"
