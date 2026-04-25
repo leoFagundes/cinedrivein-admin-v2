@@ -1,6 +1,24 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { FiGrid } from "react-icons/fi";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function DashboardPage() {
+  const { appUser, loading } = useAuth();
+  const router = useRouter();
+
+  // Usuário sem nenhuma permissão e não owner → redireciona para pedidos
+  useEffect(() => {
+    if (loading) return;
+    if (appUser && !appUser.isOwner && appUser.permissions.length === 0) {
+      router.replace("/admin/orders");
+    }
+  }, [loading, appUser, router]);
+
+  if (loading) return null;
+
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 w-full">
       <div>

@@ -26,6 +26,9 @@ export interface AppUser {
   isOwner: boolean;
   profileId?: string;
   profileName?: string;
+  permissions: Permission[];
+  avatarStyle?: string;
+  avatarSeed?: string;
   createdAt: Date;
 }
 
