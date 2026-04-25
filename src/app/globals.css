@@ -83,3 +83,20 @@ body {
 .animate-in {
   animation: animate-in 0.2s ease-out forwards;
 }
+
+@keyframes fadeOutSmooth {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+    filter: blur(6px);
+  }
+}
+
+.fade-out {
+  animation: fadeOutSmooth 2s ease forwards;
+}

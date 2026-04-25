@@ -660,6 +660,16 @@ function SubitemModal({
     <Modal
       title={existing ? `Editar subitem` : "Novo subitem"}
       onClose={onClose}
+      footer={
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-50 transition-all"
+          style={{ backgroundColor: "var(--color-primary)" }}
+        >
+          {loading ? "Salvando..." : existing ? "Salvar alterações" : "Criar subitem"}
+        </button>
+      }
     >
       <Input
         label="Nome"
@@ -695,18 +705,6 @@ function SubitemModal({
           {form.isVisible ? "Visível" : "Oculto"}
         </button>
       </div>
-      <button
-        onClick={handleSave}
-        disabled={loading}
-        className="h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-50"
-        style={{ backgroundColor: "var(--color-primary)" }}
-      >
-        {loading
-          ? "Salvando..."
-          : existing
-            ? "Salvar alterações"
-            : "Criar subitem"}
-      </button>
     </Modal>
   );
 }
@@ -803,6 +801,16 @@ function ItemModal({
       title={existing ? "Editar item" : "Novo item"}
       onClose={onClose}
       wide
+      footer={
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-50 transition-all"
+          style={{ backgroundColor: "var(--color-primary)" }}
+        >
+          {loading ? "Salvando..." : existing ? "Salvar alterações" : "Criar item"}
+        </button>
+      }
     >
       <Section title="Informações básicas" />
       <div className="grid grid-cols-2 gap-3">
@@ -917,18 +925,6 @@ function ItemModal({
         ))}
       </div>
 
-      <button
-        onClick={handleSave}
-        disabled={loading}
-        className="h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-50 mt-2"
-        style={{ backgroundColor: "var(--color-primary)" }}
-      >
-        {loading
-          ? "Salvando..."
-          : existing
-            ? "Salvar alterações"
-            : "Criar item"}
-      </button>
     </Modal>
   );
 }
@@ -1469,10 +1465,47 @@ export default function StockPage() {
       };
 
       if (itemModal.editing) {
-        await updateDoc(doc(db, "items", itemModal.editing.id), data);
+        const old = itemModal.editing;
+
+        // Compute diff
+        const changes: { field: string; from: string | null; to: string | null }[] = [];
+        if (data.codItem     !== old.codItem)     changes.push({ field: "Código",       from: old.codItem,           to: data.codItem });
+        if (data.name        !== old.name)        changes.push({ field: "Nome",         from: old.name,              to: data.name });
+        if (data.category    !== old.category)    changes.push({ field: "Tipo",         from: old.category,          to: data.category });
+        if (data.description !== old.description) changes.push({ field: "Descrição",    from: old.description || null, to: data.description || null });
+        if (data.value       !== old.value)       changes.push({ field: "Valor",        from: formatBRL(old.value),  to: formatBRL(data.value) });
+        if ((data.visibleValue ?? null) !== (old.visibleValue ?? null))
+          changes.push({ field: "Valor cliente", from: old.visibleValue != null ? formatBRL(old.visibleValue) : null, to: data.visibleValue != null ? formatBRL(data.visibleValue) : null });
+        if (data.quantity  !== old.quantity)  changes.push({ field: "Quantidade", from: String(old.quantity),  to: String(data.quantity) });
+        if (data.isVisible !== old.isVisible) changes.push({ field: "Visível",    from: old.isVisible  ? "Sim" : "Não", to: data.isVisible  ? "Sim" : "Não" });
+        if (data.isFeatured !== old.isFeatured) changes.push({ field: "Destaque", from: old.isFeatured ? "Sim" : "Não", to: data.isFeatured ? "Sim" : "Não" });
+        if (file) changes.push({ field: "Foto", from: old.photo ? "foto anterior" : null, to: "atualizada" });
+
+        // Additionals diff
+        const addGroups = [
+          { key: "additionals"       as const, label: "Gerais"  },
+          { key: "additionals_sauce" as const, label: "Molhos"  },
+          { key: "additionals_drink" as const, label: "Bebidas" },
+          { key: "additionals_sweet" as const, label: "Doces"   },
+        ];
+        for (const g of addGroups) {
+          const oldIds = [...(old[g.key] ?? [])].sort().join(",");
+          const newIds = [...(data[g.key] ?? [])].sort().join(",");
+          if (oldIds !== newIds) {
+            const oldCount = (old[g.key] ?? []).length;
+            const newCount = (data[g.key] ?? []).length;
+            changes.push({
+              field: `Adicionais ${g.label}`,
+              from: `${oldCount} item${oldCount !== 1 ? "s" : ""}`,
+              to:   `${newCount} item${newCount !== 1 ? "s" : ""}`,
+            });
+          }
+        }
+
+        await updateDoc(doc(db, "items", old.id), data);
         setItems((prev) =>
           prev.map((i) =>
-            i.id === itemModal.editing!.id
+            i.id === old.id
               ? ({ ...i, ...data } as StockItem)
               : i,
           ),
@@ -1483,7 +1516,8 @@ export default function StockPage() {
           category: "stock",
           description: `Atualizou o item "${data.name}"`,
           performedBy: actor,
-          target: { type: "item", id: itemModal.editing.id, name: data.name },
+          target: { type: "item", id: old.id, name: data.name },
+          changes: changes.length > 0 ? changes : undefined,
         });
       } else {
         const ref = await addDoc(collection(db, "items"), {
@@ -1598,6 +1632,13 @@ export default function StockPage() {
       };
 
       if (editing) {
+        // Compute diff
+        const changes: { field: string; from: string | null; to: string | null }[] = [];
+        if (data.name        !== editing.name)        changes.push({ field: "Nome",      from: editing.name,             to: data.name });
+        if (data.description !== editing.description) changes.push({ field: "Descrição", from: editing.description || null, to: data.description || null });
+        if (data.isVisible   !== editing.isVisible)   changes.push({ field: "Visível",   from: editing.isVisible ? "Sim" : "Não", to: data.isVisible ? "Sim" : "Não" });
+        if (file) changes.push({ field: "Foto", from: editing.photo ? "foto anterior" : null, to: "atualizada" });
+
         await updateDoc(doc(db, "subitems", editing.id), data);
         setSubitems((prev) =>
           prev.map((s) =>
@@ -1613,6 +1654,7 @@ export default function StockPage() {
           description: `Atualizou o subitem "${data.name}"`,
           performedBy: actor,
           target: { type: "subitem", id: editing.id, name: data.name },
+          changes: changes.length > 0 ? changes : undefined,
         });
       } else {
         const ref = await addDoc(collection(db, "subitems"), {
@@ -1784,7 +1826,7 @@ export default function StockPage() {
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "items", label: "Itens", icon: <FiBox size={14} /> },
     { key: "subitems", label: "Subitens", icon: <FiPackage size={14} /> },
-    { key: "categories", label: "Categorias", icon: <FiList size={14} /> },
+    { key: "categories", label: "Ordem das categorias", icon: <FiList size={14} /> },
   ];
 
   return (
@@ -1845,7 +1887,7 @@ export default function StockPage() {
         <>
           {/* Tabs */}
           <div
-            className="flex gap-1"
+            className="flex gap-1 overflow-x-auto"
             style={{ borderBottom: "1px solid var(--color-border)" }}
           >
             {tabs.map((t) => (
@@ -2100,38 +2142,78 @@ export default function StockPage() {
                 </button>
               </div>
 
-              {/* Add category */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Input
-                    placeholder="Nome da categoria..."
-                    value={newCategoryInput}
-                    onChange={(e) => setNewCategoryInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addCategory();
-                      }
-                    }}
-                  />
+              {/* Add category — dropdown de existentes + campo livre */}
+              <div className="flex flex-col gap-2">
+                {/* Dropdown com categorias dos itens */}
+                {allCategories.filter((c) => !categoryOrder.includes(c)).length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                      Categorias dos itens
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        id="cat-select"
+                        defaultValue=""
+                        className="flex-1 h-11 px-3 text-sm rounded-[var(--radius-md)] outline-none cursor-pointer"
+                        style={{
+                          backgroundColor: "var(--color-bg-elevated)",
+                          border: "1px solid var(--color-border)",
+                          color: "var(--color-text-secondary)",
+                        }}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (!val) return;
+                          if (!categoryOrder.includes(val)) {
+                            setCategoryOrder((prev) => [...prev, val]);
+                          }
+                          e.target.value = "";
+                        }}
+                      >
+                        <option value="" disabled>Selecionar categoria existente...</option>
+                        {allCategories
+                          .filter((c) => !categoryOrder.includes(c))
+                          .map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Campo livre para categoria nova */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                    Adicionar nova categoria
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Nome da categoria..."
+                        value={newCategoryInput}
+                        onChange={(e) => setNewCategoryInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCategory();
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={addCategory}
+                      className="flex items-center gap-1.5 h-11 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0"
+                      style={{
+                        backgroundColor: "var(--color-bg-elevated)",
+                        border: "1px solid var(--color-border)",
+                        color: "var(--color-text-secondary)",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-primary)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                    >
+                      <FiPlus size={14} /> Adicionar
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={addCategory}
-                  className="flex items-center gap-1.5 h-11 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0"
-                  style={{
-                    backgroundColor: "var(--color-bg-elevated)",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-text-secondary)",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--color-primary)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--color-border)")
-                  }
-                >
-                  <FiPlus size={14} /> Adicionar
-                </button>
               </div>
 
               {loadingCategories ? (

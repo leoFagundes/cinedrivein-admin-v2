@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { FiUser, FiLock, FiEye, FiEyeOff, FiMail, FiArrowLeft } from "react-icons/fi";
+import {
+  FiUser,
+  FiLock,
+  FiEye,
+  FiEyeOff,
+  FiMail,
+  FiArrowLeft,
+} from "react-icons/fi";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import Button from "@/components/ui/Button";
@@ -11,16 +18,24 @@ import Input from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth, SESSION_EXPIRED_KEY } from "@/contexts/AuthContext";
 import { GuestGuard } from "@/components/layout/AuthGuard";
+import CineDriveInLogo from "@/components/ui/CineDriveInLogo";
 
 function FilmStrip() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none select-none" aria-hidden>
+    <div
+      className="absolute inset-0 overflow-hidden pointer-events-none select-none"
+      aria-hidden
+    >
       <div
         className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-around items-center py-4 opacity-10"
         style={{ borderRight: "2px solid var(--color-text-muted)" }}
       >
         {Array.from({ length: 14 }).map((_, i) => (
-          <div key={i} className="w-5 h-4 rounded-sm" style={{ backgroundColor: "var(--color-text-muted)" }} />
+          <div
+            key={i}
+            className="w-5 h-4 rounded-sm"
+            style={{ backgroundColor: "var(--color-text-muted)" }}
+          />
         ))}
       </div>
       <div
@@ -28,7 +43,11 @@ function FilmStrip() {
         style={{ borderLeft: "2px solid var(--color-text-muted)" }}
       >
         {Array.from({ length: 14 }).map((_, i) => (
-          <div key={i} className="w-5 h-4 rounded-sm" style={{ backgroundColor: "var(--color-text-muted)" }} />
+          <div
+            key={i}
+            className="w-5 h-4 rounded-sm"
+            style={{ backgroundColor: "var(--color-text-muted)" }}
+          />
         ))}
       </div>
     </div>
@@ -36,39 +55,74 @@ function FilmStrip() {
 }
 
 const FIREBASE_ERRORS: Record<string, string> = {
-  "auth/invalid-credential":     "Usuário ou senha incorretos.",
-  "auth/invalid-email":          "E-mail inválido.",
-  "auth/user-disabled":          "Esta conta foi desativada.",
-  "auth/user-not-found":         "Usuário não encontrado.",
-  "auth/wrong-password":         "Senha incorreta.",
-  "auth/too-many-requests":      "Muitas tentativas. Aguarde alguns minutos.",
+  "auth/invalid-credential": "Usuário ou senha incorretos.",
+  "auth/invalid-email": "E-mail inválido.",
+  "auth/user-disabled": "Esta conta foi desativada.",
+  "auth/user-not-found": "Usuário não encontrado.",
+  "auth/wrong-password": "Senha incorreta.",
+  "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos.",
   "auth/network-request-failed": "Sem conexão. Verifique sua internet.",
-  "permission-denied":           "Permissão negada. Verifique as regras do Firestore.",
+  "permission-denied": "Permissão negada. Verifique as regras do Firestore.",
 };
 
 function parseError(err: unknown): string {
   console.error("[Login error]", err);
   if (err instanceof Error) {
     if (err.message === "USER_NOT_FOUND") return "Usuário não encontrado.";
-    if (err.message === "PENDING")  return "Sua conta ainda não foi aprovada por um administrador.";
-    if (err.message === "REJECTED") return "Sua conta foi rejeitada. Entre em contato com o suporte.";
+    if (err.message === "PENDING")
+      return "Sua conta ainda não foi aprovada por um administrador.";
+    if (err.message === "REJECTED")
+      return "Sua conta foi rejeitada. Entre em contato com o suporte.";
     const code = (err as { code?: string }).code ?? "";
     return FIREBASE_ERRORS[code] ?? `Erro inesperado (${code || err.message}).`;
   }
   return "Ocorreu um erro inesperado.";
 }
 
+const ANIM_HOLD_MS  = 2600; // ms until fade starts
+const FADE_DURATION = 900;  // ms for fade out
+
+// Module-level flag: resets on full page reload (JS restarts),
+// but stays true during Next.js SPA navigation — exactly what we need.
+let introPlayed = false;
+
 type View = "login" | "reset";
 
 function LoginForm() {
   const [view, setView] = useState<View>("login");
+
+  // ── Intro animation ──
+  const [showIntro, setShowIntro] = useState(false);
+  const [introFading, setIntroFading] = useState(false);
+
+  // Step 1: after hydration, show intro only if not yet played this page load
+  useEffect(() => {
+    if (!introPlayed) {
+      introPlayed = true;
+      startTransition(() => setShowIntro(true));
+    }
+  }, []);
+
+  // Step 2: when showIntro turns true, schedule the fade and removal
+  useEffect(() => {
+    if (!showIntro) return;
+    const fadeTimer = setTimeout(() => setIntroFading(true), ANIM_HOLD_MS);
+    const removeTimer = setTimeout(() => {
+      setShowIntro(false);
+      setIntroFading(false);
+    }, ANIM_HOLD_MS + FADE_DURATION);
+    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer); };
+  }, [showIntro]);
 
   // ── Login state ──
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginErrors, setLoginErrors] = useState<{ identifier?: string; password?: string }>({});
+  const [loginErrors, setLoginErrors] = useState<{
+    identifier?: string;
+    password?: string;
+  }>({});
 
   // ── Reset state ──
   const [resetEmail, setResetEmail] = useState("");
@@ -82,7 +136,10 @@ function LoginForm() {
   useEffect(() => {
     if (localStorage.getItem(SESSION_EXPIRED_KEY)) {
       localStorage.removeItem(SESSION_EXPIRED_KEY);
-      warning("Sessão expirada", "Sua sessão de 24h expirou. Faça login novamente.");
+      warning(
+        "Sessão expirada",
+        "Sua sessão de 24h expirou. Faça login novamente.",
+      );
     }
   }, []);
 
@@ -125,21 +182,34 @@ function LoginForm() {
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
-    if (!resetEmail.trim()) { setResetEmailError("E-mail obrigatório"); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) { setResetEmailError("E-mail inválido"); return; }
+    if (!resetEmail.trim()) {
+      setResetEmailError("E-mail obrigatório");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
+      setResetEmailError("E-mail inválido");
+      return;
+    }
     setResetLoading(true);
     try {
       await sendPasswordResetEmail(auth, resetEmail.trim());
       setResetSent(true);
-      success("E-mail enviado!", "Verifique sua caixa de entrada para redefinir a senha.");
+      success(
+        "E-mail enviado!",
+        "Verifique sua caixa de entrada para redefinir a senha.",
+      );
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";
       // Firebase doesn't reveal if email exists — show generic success for security
       if (code === "auth/user-not-found") {
         setResetSent(true);
-        success("E-mail enviado!", "Se este e-mail estiver cadastrado, você receberá as instruções.");
+        success(
+          "E-mail enviado!",
+          "Se este e-mail estiver cadastrado, você receberá as instruções.",
+        );
       } else {
-        const msg = FIREBASE_ERRORS[code] ?? "Erro ao enviar e-mail. Tente novamente.";
+        const msg =
+          FIREBASE_ERRORS[code] ?? "Erro ao enviar e-mail. Tente novamente.";
         error("Erro", msg);
       }
     } finally {
@@ -154,10 +224,36 @@ function LoginForm() {
     >
       <FilmStrip />
 
+      {/* Intro animation — aparece uma vez por sessão, some suavemente */}
+      {showIntro && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "var(--color-bg-base)",
+            zIndex: 100,
+            opacity: introFading ? 0 : 1,
+            transition: `opacity ${FADE_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+            pointerEvents: introFading ? "none" : "auto",
+          }}
+        >
+          <CineDriveInLogo glow />
+        </div>
+      )}
       <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <Image src="/images/logo-drivein.svg" alt="Cine Drive-in" width={140} height={140} priority className="mb-3" />
+          <Image
+            src="/images/logo-drivein.svg"
+            alt="Cine Drive-in"
+            width={140}
+            height={140}
+            priority
+            className="mb-3"
+          />
           <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
             Painel Administrativo
           </p>
@@ -166,16 +262,26 @@ function LoginForm() {
         {/* Card */}
         <div
           className="rounded-[var(--radius-xl)] p-8"
-          style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+          style={{
+            backgroundColor: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+          }}
         >
           {/* ── LOGIN VIEW ── */}
           {view === "login" && (
             <>
-              <h2 className="text-lg font-semibold mb-6" style={{ color: "var(--color-text-primary)" }}>
+              <h2
+                className="text-lg font-semibold mb-6"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Entrar na conta
               </h2>
 
-              <form onSubmit={handleLogin} className="flex flex-col gap-4" noValidate>
+              <form
+                onSubmit={handleLogin}
+                className="flex flex-col gap-4"
+                noValidate
+              >
                 <Input
                   label="Usuário ou e-mail"
                   type="text"
@@ -183,7 +289,8 @@ function LoginForm() {
                   value={identifier}
                   onChange={(e) => {
                     setIdentifier(e.target.value);
-                    if (loginErrors.identifier) setLoginErrors((p) => ({ ...p, identifier: undefined }));
+                    if (loginErrors.identifier)
+                      setLoginErrors((p) => ({ ...p, identifier: undefined }));
                   }}
                   icon={<FiUser size={16} />}
                   error={loginErrors.identifier}
@@ -198,10 +305,17 @@ function LoginForm() {
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
-                      if (loginErrors.password) setLoginErrors((p) => ({ ...p, password: undefined }));
+                      if (loginErrors.password)
+                        setLoginErrors((p) => ({ ...p, password: undefined }));
                     }}
                     icon={<FiLock size={16} />}
-                    rightIcon={showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                    rightIcon={
+                      showPassword ? (
+                        <FiEyeOff size={16} />
+                      ) : (
+                        <FiEye size={16} />
+                      )
+                    }
                     onRightIconClick={() => setShowPassword((v) => !v)}
                     error={loginErrors.password}
                     autoComplete="current-password"
@@ -218,7 +332,12 @@ function LoginForm() {
                   </div>
                 </div>
 
-                <Button type="submit" fullWidth loading={loginLoading} className="mt-1">
+                <Button
+                  type="submit"
+                  fullWidth
+                  loading={loginLoading}
+                  className="mt-1"
+                >
                   Entrar
                 </Button>
               </form>
@@ -237,28 +356,46 @@ function LoginForm() {
                 Voltar ao login
               </button>
 
-              <h2 className="text-lg font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+              <h2
+                className="text-lg font-semibold mb-1"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Recuperar senha
               </h2>
-              <p className="text-sm mb-6" style={{ color: "var(--color-text-muted)" }}>
-                Informe seu e-mail e enviaremos um link para redefinir sua senha.
+              <p
+                className="text-sm mb-6"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Informe seu e-mail e enviaremos um link para redefinir sua
+                senha.
               </p>
 
               {resetSent ? (
-                <div
-                  className="flex flex-col items-center gap-3 py-6 text-center"
-                >
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
                   <div
                     className="w-12 h-12 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: "rgba(34,197,94,0.12)", color: "var(--color-success)" }}
+                    style={{
+                      backgroundColor: "rgba(34,197,94,0.12)",
+                      color: "var(--color-success)",
+                    }}
                   >
                     <FiMail size={22} />
                   </div>
-                  <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     E-mail enviado!
                   </p>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
-                    Verifique sua caixa de entrada em <strong style={{ color: "var(--color-text-secondary)" }}>{resetEmail}</strong> e siga as instruções para redefinir sua senha.
+                  <p
+                    className="text-xs leading-relaxed"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Verifique sua caixa de entrada em{" "}
+                    <strong style={{ color: "var(--color-text-secondary)" }}>
+                      {resetEmail}
+                    </strong>{" "}
+                    e siga as instruções para redefinir sua senha.
                   </p>
                   <button
                     onClick={() => setView("login")}
@@ -269,7 +406,11 @@ function LoginForm() {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleReset} className="flex flex-col gap-4" noValidate>
+                <form
+                  onSubmit={handleReset}
+                  className="flex flex-col gap-4"
+                  noValidate
+                >
                   <Input
                     label="E-mail"
                     type="email"
@@ -295,9 +436,16 @@ function LoginForm() {
 
         {/* Footer */}
         {view === "login" && (
-          <p className="text-center text-sm mt-6" style={{ color: "var(--color-text-muted)" }}>
+          <p
+            className="text-center text-sm mt-6"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             Não tem conta?{" "}
-            <Link href="/signup" className="font-medium" style={{ color: "var(--color-primary)" }}>
+            <Link
+              href="/signup"
+              className="font-medium"
+              style={{ color: "var(--color-primary)" }}
+            >
               Criar conta
             </Link>
           </p>
