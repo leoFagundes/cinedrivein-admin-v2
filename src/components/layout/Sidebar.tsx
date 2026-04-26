@@ -9,6 +9,7 @@ import {
   FiActivity, FiLogOut, FiMenu, FiX,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { canAny } from "@/lib/access";
 import { Permission } from "@/types";
@@ -18,7 +19,6 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
-  /** Quais permissões dão acesso (qualquer uma). Vazio = todos os aprovados. */
   permissions?: Permission[];
 }
 
@@ -31,7 +31,15 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Configurações do Site", href: "/admin/site",      icon: <FiGlobe size={18} />,         permissions: ["manage_site"] },
 ];
 
-function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
+function NavLink({
+  item,
+  badge,
+  onClick,
+}: {
+  item: NavItem;
+  badge?: number;
+  onClick?: () => void;
+}) {
   const pathname = usePathname();
   const active = pathname === item.href || pathname.startsWith(item.href + "/");
   return (
@@ -47,7 +55,17 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
       onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)"; }}
       onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
     >
-      {item.icon}
+      <span className="relative flex-shrink-0">
+        {item.icon}
+        {badge != null && badge > 0 && (
+          <span
+            className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] rounded-full text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none"
+            style={{ backgroundColor: "var(--color-error)" }}
+          >
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </span>
       <span className="truncate">{item.label}</span>
     </Link>
   );
@@ -56,8 +74,11 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { appUser, logOut } = useAuth();
+  const { unseenCount } = useOrders();
   const { success, error } = useToast();
+  const pathname = usePathname();
   const close = () => setMobileOpen(false);
+  const onOrdersPage = pathname === "/admin/orders";
 
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (!item.permissions) return true;
@@ -77,7 +98,12 @@ export default function Sidebar() {
 
       <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
         {visibleItems.map((item) => (
-          <NavLink key={item.href} item={item} onClick={close} />
+          <NavLink
+            key={item.href}
+            item={item}
+            onClick={close}
+            badge={item.href === "/admin/orders" && !onOrdersPage ? unseenCount : undefined}
+          />
         ))}
       </nav>
 
@@ -128,8 +154,19 @@ export default function Sidebar() {
           <Image src="/images/logo-drivein.svg" alt="Cine Drive-in" width={28} height={28} />
           <span className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Cine Drive-in</span>
         </div>
-        <button onClick={() => setMobileOpen(true)} className="p-2 rounded-[var(--radius-md)] cursor-pointer" style={{ color: "var(--color-text-secondary)" }} aria-label="Abrir menu">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="relative p-2 rounded-[var(--radius-md)] cursor-pointer"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label="Abrir menu"
+        >
           <FiMenu size={20} />
+          {unseenCount > 0 && !onOrdersPage && (
+            <span
+              className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: "var(--color-error)" }}
+            />
+          )}
         </button>
       </header>
 
