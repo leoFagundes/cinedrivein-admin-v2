@@ -127,6 +127,22 @@ export interface Order {
   finishedAt?: Date;
 }
 
+export interface ChatTemplate {
+  id: string;
+  trigger: string;
+  title: string;
+  message: string;
+  createdAt: Date;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  sender: "admin" | "customer";
+  senderName: string;
+  createdAt: Date;
+}
+
 // ─── Stock ────────────────────────────────────────────────────────────────────
 
 export type AdditionalGroup = "additionals" | "additionals_sauce" | "additionals_drink" | "additionals_sweet";

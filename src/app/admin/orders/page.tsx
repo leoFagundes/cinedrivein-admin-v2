@@ -31,6 +31,8 @@ import {
   FiMaximize2,
   FiMinimize2,
   FiRefreshCw,
+  FiMessageSquare,
+  FiBookmark,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +40,8 @@ import { useOrders, parseOrder } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
 import NewOrderModal from "@/components/orders/NewOrderModal";
+import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
+import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
 import { Order, OrderPayment } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,6 +64,13 @@ function fmtElapsed(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+function fmtTimeShort(date: Date): string {
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function elapsedColor(minutes: number): string {
@@ -98,11 +109,13 @@ function OrderCard({
   onCancel,
   onFinalize,
   onEdit,
+  onChat,
 }: {
   order: Order;
   onCancel: () => void;
   onFinalize: () => void;
   onEdit: () => void;
+  onChat: () => void;
 }) {
   const [elapsedMin, setElapsedMin] = useState(0);
   const createdAtMs = order.createdAt.getTime();
@@ -147,7 +160,13 @@ function OrderCard({
             Vaga {order.spot}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="text-[10px]"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {fmtTimeShort(order.createdAt)}
+          </span>
           <span
             className="text-xs font-medium"
             style={{ color: elapsedColor(elapsedMin) }}
@@ -157,12 +176,20 @@ function OrderCard({
               size={11}
               style={{
                 display: "inline",
-                marginRight: 3,
+                marginRight: 2,
                 verticalAlign: "middle",
               }}
             />
             {fmtElapsed(elapsedMin)}
           </span>
+          <button
+            onClick={onChat}
+            className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+            style={{ color: "var(--color-text-muted)" }}
+            title="Chat"
+          >
+            <FiMessageSquare size={13} />
+          </button>
           <button
             onClick={onEdit}
             className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
@@ -334,6 +361,7 @@ function FinishedCard({
   onDelete,
   deleting,
   onReactivate,
+  onChat,
 }: {
   order: Order;
   expanded: boolean;
@@ -341,6 +369,7 @@ function FinishedCard({
   onDelete: () => void;
   deleting: boolean;
   onReactivate: () => void;
+  onChat: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReactivate, setConfirmReactivate] = useState(false);
@@ -480,6 +509,17 @@ function FinishedCard({
           </div>
         ) : (
           <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onChat();
+              }}
+              className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
+              style={{ color: "var(--color-text-muted)" }}
+              title="Chat"
+            >
+              <FiMessageSquare size={13} />
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -788,6 +828,7 @@ function FinalizeModal({
   const [pix, setPix] = useState("0");
   const [discount, setDiscount] = useState("0");
   const [serviceFeePaid, setServiceFeePaid] = useState(true);
+  const [confirmStep, setConfirmStep] = useState(false);
 
   const debitVal = parseFloat(debit) || 0;
   const creditVal = parseFloat(credit) || 0;
@@ -804,6 +845,23 @@ function FinalizeModal({
   const amountPaid = debitVal + creditVal + moneyVal + pixVal;
   const change =
     moneyVal > 0 && amountPaid > finalTotal ? amountPaid - finalTotal : 0;
+
+  const paidRounded = Math.round(amountPaid * 100);
+  const totalRounded = Math.round(finalTotal * 100);
+  const isMismatch = paidRounded !== totalRounded;
+  const isNormalChange = amountPaid > finalTotal && moneyVal > 0;
+  const needsConfirm = isMismatch && !isNormalChange;
+
+  const mismatchMessage =
+    amountPaid === 0
+      ? "Nenhum valor de pagamento foi informado."
+      : amountPaid < finalTotal
+        ? `Valor informado ${fmt(amountPaid)} é menor que o total ${fmt(finalTotal)}.`
+        : `Valor informado ${fmt(amountPaid)} excede o total sem troco em dinheiro.`;
+
+  function resetAndSet(setter: (v: string) => void) {
+    return (v: string) => { setter(v); setConfirmStep(false); };
+  }
 
   return (
     <div
@@ -847,18 +905,14 @@ function FinalizeModal({
         </div>
 
         <div className="flex flex-col gap-3 px-5 py-4 overflow-y-auto">
-          <PaymentInput label="Débito" value={debit} onChange={setDebit} />
-          <PaymentInput label="Crédito" value={credit} onChange={setCredit} />
-          <PaymentInput label="Dinheiro" value={money} onChange={setMoney} />
-          <PaymentInput label="Pix" value={pix} onChange={setPix} />
-          <PaymentInput
-            label="Desconto"
-            value={discount}
-            onChange={setDiscount}
-          />
+          <PaymentInput label="Débito" value={debit} onChange={resetAndSet(setDebit)} />
+          <PaymentInput label="Crédito" value={credit} onChange={resetAndSet(setCredit)} />
+          <PaymentInput label="Dinheiro" value={money} onChange={resetAndSet(setMoney)} />
+          <PaymentInput label="Pix" value={pix} onChange={resetAndSet(setPix)} />
+          <PaymentInput label="Desconto" value={discount} onChange={resetAndSet(setDiscount)} />
 
           <button
-            onClick={() => setServiceFeePaid((v) => !v)}
+            onClick={() => { setServiceFeePaid((v) => !v); setConfirmStep(false); }}
             className="flex items-center gap-2 text-sm mt-1 cursor-pointer transition-opacity hover:opacity-70"
           >
             <div
@@ -929,6 +983,27 @@ function FinalizeModal({
           )}
         </div>
 
+        {/* Mismatch warning */}
+        {confirmStep && needsConfirm && (
+          <div
+            className="flex items-start gap-2.5 px-5 py-3"
+            style={{
+              backgroundColor: "rgba(245,158,11,0.08)",
+              borderTop: "1px solid rgba(245,158,11,0.25)",
+            }}
+          >
+            <FiAlertTriangle
+              size={15}
+              style={{ color: "var(--color-warning)", flexShrink: 0, marginTop: 1 }}
+            />
+            <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+              {mismatchMessage} Clique em{" "}
+              <strong style={{ color: "var(--color-warning)" }}>Confirmar assim mesmo</strong>{" "}
+              para finalizar.
+            </p>
+          </div>
+        )}
+
         <div
           className="flex gap-2 px-5 py-4"
           style={{ borderTop: "1px solid var(--color-border)" }}
@@ -946,24 +1021,30 @@ function FinalizeModal({
             Cancelar
           </button>
           <button
-            onClick={() =>
+            onClick={() => {
+              if (needsConfirm && !confirmStep) {
+                setConfirmStep(true);
+                return;
+              }
               onConfirm({
-                payment: {
-                  debit: debitVal,
-                  credit: creditVal,
-                  money: moneyVal,
-                  pix: pixVal,
-                },
+                payment: { debit: debitVal, credit: creditVal, money: moneyVal, pix: pixVal },
                 discount: discountVal,
                 serviceFeePaid,
                 total: finalTotal,
-              })
-            }
+              });
+            }}
             disabled={loading}
             className="flex-1 py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-            style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+            style={{
+              backgroundColor: confirmStep && needsConfirm ? "var(--color-warning)" : "var(--color-primary)",
+              color: "white",
+            }}
           >
-            {loading ? "Finalizando..." : "Finalizar Pedido"}
+            {loading
+              ? "Finalizando..."
+              : confirmStep && needsConfirm
+                ? "Confirmar assim mesmo"
+                : "Finalizar Pedido"}
           </button>
         </div>
       </div>
@@ -1079,6 +1160,8 @@ export default function OrdersPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [reactivateTarget, setReactivateTarget] = useState<Order | null>(null);
+  const [chatOrder, setChatOrder] = useState<Order | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const [finishedStatusFilter, setFinishedStatusFilter] = useState<
     "all" | "finished" | "canceled"
@@ -1389,8 +1472,22 @@ export default function OrdersPage() {
             </div>
 
             <button
+              onClick={() => setShowTemplates(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+              }}
+              title="Mensagens prontas"
+            >
+              <FiBookmark size={15} />
+              <span className="hidden sm:inline">Mensagens</span>
+            </button>
+
+            <button
               onClick={() => setShowNewOrder(true)}
-              className="flex items-center gap-1.5 px-3 py-3 sm:py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
               style={{
                 backgroundColor: "var(--color-primary)",
                 color: "white",
@@ -1501,6 +1598,7 @@ export default function OrdersPage() {
                   onCancel={() => setCancelTarget(order)}
                   onFinalize={() => setFinalizeTarget(order)}
                   onEdit={() => setEditTarget(order)}
+                  onChat={() => setChatOrder(order)}
                 />
               ))}
             </div>
@@ -1558,7 +1656,7 @@ export default function OrdersPage() {
                       color:
                         finishedDateFilter === d
                           ? "white"
-                          : "var(--color-text-muted)",
+                          : "var(--color-text-mPuted)",
                       border:
                         finishedDateFilter === d
                           ? "none"
@@ -1691,6 +1789,7 @@ export default function OrdersPage() {
                     onDelete={() => handleDelete(order)}
                     deleting={deletingId === order.id}
                     onReactivate={() => handleReactivate(order)}
+                    onChat={() => setChatOrder(order)}
                   />
                 ))}
               </div>
@@ -1739,6 +1838,12 @@ export default function OrdersPage() {
           onClose={() => setEditTarget(null)}
           onSuccess={() => setEditTarget(null)}
         />
+      )}
+      {chatOrder && (
+        <OrderChatDrawer order={chatOrder} onClose={() => setChatOrder(null)} />
+      )}
+      {showTemplates && (
+        <ChatTemplatesModal onClose={() => setShowTemplates(false)} />
       )}
     </div>
   );

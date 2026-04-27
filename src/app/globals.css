@@ -100,3 +100,8 @@ body {
 .fade-out {
   animation: fadeOutSmooth 2s ease forwards;
 }
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(40%);
+  opacity: 1;
+}
