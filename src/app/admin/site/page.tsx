@@ -753,7 +753,7 @@ function SessionCard({
 
           {/* Actions — visible on hover */}
           <div
-            className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all"
+            className="absolute inset-0 flex items-center justify-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
             style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
           >
             <button
@@ -1473,7 +1473,7 @@ export default function SitePage() {
 
   // ── Render ──
   return (
-    <div className="flex flex-col gap-8 p-4 sm:p-6 w-full max-w-5xl">
+    <div className="flex flex-col gap-8 p-4 sm:p-6 w-full">
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div>
@@ -1626,7 +1626,7 @@ export default function SitePage() {
                 mouse para editar.
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
               {SESSIONS.map((session) => (
                 <SessionCard
                   key={session.key}

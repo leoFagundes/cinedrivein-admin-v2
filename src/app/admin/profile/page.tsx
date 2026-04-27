@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { doc, updateDoc, getDoc, writeBatch } from "firebase/firestore";
-import { FiUser, FiMail, FiShield, FiRefreshCw, FiCheck, FiChevronDown, FiChevronUp } from "react-icons/fi";
+import {
+  FiUser,
+  FiMail,
+  FiShield,
+  FiRefreshCw,
+  FiCheck,
+  FiChevronDown,
+  FiChevronUp,
+} from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
@@ -12,25 +20,45 @@ import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 // ─── DiceBear config ──────────────────────────────────────────────────────────
 
 const AVATAR_STYLES: { id: string; label: string; bg: string }[] = [
-  { id: "adventurer",        label: "Aventureiro",  bg: "#fff3e0" },
-  { id: "avataaars",         label: "Cartoon",      bg: "#e3f2fd" },
-  { id: "bottts",            label: "Robô",         bg: "#e8f5e9" },
-  { id: "fun-emoji",         label: "Emoji",        bg: "#fffde7" },
-  { id: "lorelei",           label: "Lorelei",      bg: "#f3e5f5" },
-  { id: "micah",             label: "Micah",        bg: "#fce4ec" },
-  { id: "pixel-art",         label: "Pixel Art",    bg: "#e8eaf6" },
-  { id: "thumbs",            label: "Thumbs",       bg: "#e0f7fa" },
-  { id: "notionists",        label: "Notion",       bg: "#fff8e1" },
-  { id: "open-peeps",        label: "Esboço",       bg: "#f1f8e9" },
-  { id: "big-smile",         label: "Big Smile",    bg: "#fbe9e7" },
-  { id: "croodles",          label: "Croodles",     bg: "#f9fbe7" },
+  { id: "adventurer", label: "Aventureiro", bg: "#fff3e0" },
+  { id: "avataaars", label: "Cartoon", bg: "#e3f2fd" },
+  { id: "bottts", label: "Robô", bg: "#e8f5e9" },
+  { id: "fun-emoji", label: "Emoji", bg: "#fffde7" },
+  { id: "lorelei", label: "Lorelei", bg: "#f3e5f5" },
+  { id: "micah", label: "Micah", bg: "#fce4ec" },
+  { id: "pixel-art", label: "Pixel Art", bg: "#e8eaf6" },
+  { id: "thumbs", label: "Thumbs", bg: "#e0f7fa" },
+  { id: "notionists", label: "Notion", bg: "#fff8e1" },
+  { id: "open-peeps", label: "Esboço", bg: "#f1f8e9" },
+  { id: "big-smile", label: "Big Smile", bg: "#fbe9e7" },
+  { id: "croodles", label: "Croodles", bg: "#f9fbe7" },
 ];
 
 const SEEDS = [
-  "Felix", "Luna", "Max", "Zoe", "Alex", "Mia",
-  "Jordan", "Sam", "Casey", "Riley", "Morgan", "Quinn",
-  "Leo", "Ivy", "Kai", "Nova", "Ace", "Vera",
-  "Dex", "Aria", "Cole", "Skye", "Beau", "Eden",
+  "Felix",
+  "Luna",
+  "Max",
+  "Zoe",
+  "Alex",
+  "Mia",
+  "Jordan",
+  "Sam",
+  "Casey",
+  "Riley",
+  "Morgan",
+  "Quinn",
+  "Leo",
+  "Ivy",
+  "Kai",
+  "Nova",
+  "Ace",
+  "Vera",
+  "Dex",
+  "Aria",
+  "Cole",
+  "Skye",
+  "Beau",
+  "Eden",
 ];
 
 // ─── Avatar picker ────────────────────────────────────────────────────────────
@@ -44,7 +72,9 @@ function AvatarPicker({
   selectedSeed: string;
   onSelect: (style: string, seed: string) => void;
 }) {
-  const [activeStyle, setActiveStyle] = useState(selectedStyle || AVATAR_STYLES[0].id);
+  const [activeStyle, setActiveStyle] = useState(
+    selectedStyle || AVATAR_STYLES[0].id,
+  );
   const [customSeed, setCustomSeed] = useState("");
   const [customPreview, setCustomPreview] = useState<string | null>(null);
 
@@ -69,7 +99,10 @@ function AvatarPicker({
     <div className="flex flex-col gap-5">
       {/* Style selector */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--color-text-muted)" }}>
+        <p
+          className="text-xs font-semibold uppercase tracking-wide mb-3"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           Estilo
         </p>
         <div className="flex flex-wrap gap-2">
@@ -80,8 +113,14 @@ function AvatarPicker({
               className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-all"
               style={{
                 border: `1.5px solid ${activeStyle === style.id ? "var(--color-primary)" : "var(--color-border)"}`,
-                backgroundColor: activeStyle === style.id ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
-                color: activeStyle === style.id ? "var(--color-primary)" : "var(--color-text-secondary)",
+                backgroundColor:
+                  activeStyle === style.id
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
+                color:
+                  activeStyle === style.id
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
               }}
             >
               <div
@@ -105,12 +144,16 @@ function AvatarPicker({
 
       {/* Seed grid */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--color-text-muted)" }}>
+        <p
+          className="text-xs font-semibold uppercase tracking-wide mb-3"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           Variações
         </p>
         <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
           {SEEDS.map((seed) => {
-            const isSelected = selectedSeed === seed && selectedStyle === activeStyle;
+            const isSelected =
+              selectedSeed === seed && selectedStyle === activeStyle;
             return (
               <button
                 key={seed}
@@ -119,14 +162,18 @@ function AvatarPicker({
                 className="aspect-square rounded-[var(--radius-md)] overflow-hidden cursor-pointer transition-all p-0.5"
                 style={{
                   border: `2px solid ${isSelected ? "var(--color-primary)" : "transparent"}`,
-                  backgroundColor: isSelected ? "var(--color-primary-light)" : currentStyleMeta?.bg ?? "var(--color-bg-elevated)",
+                  backgroundColor: isSelected
+                    ? "var(--color-primary-light)"
+                    : (currentStyleMeta?.bg ?? "var(--color-bg-elevated)"),
                   outline: "none",
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.borderColor = "var(--color-border)";
+                  if (!isSelected)
+                    e.currentTarget.style.borderColor = "var(--color-border)";
                 }}
                 onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.borderColor = "transparent";
+                  if (!isSelected)
+                    e.currentTarget.style.borderColor = "transparent";
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -145,14 +192,19 @@ function AvatarPicker({
 
       {/* Custom seed */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--color-text-muted)" }}>
+        <p
+          className="text-xs font-semibold uppercase tracking-wide mb-2"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           Semente personalizada
         </p>
         <div className="flex gap-2">
           <input
             value={customSeed}
             onChange={(e) => setCustomSeed(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleCustomPreview(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCustomPreview();
+            }}
             placeholder="Digite qualquer texto..."
             className="flex-1 h-9 px-3 text-sm rounded-[var(--radius-md)] outline-none"
             style={{
@@ -160,8 +212,12 @@ function AvatarPicker({
               border: "1px solid var(--color-border)",
               color: "var(--color-text-primary)",
             }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-border-focus)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+            onFocus={(e) =>
+              (e.currentTarget.style.borderColor = "var(--color-border-focus)")
+            }
+            onBlur={(e) =>
+              (e.currentTarget.style.borderColor = "var(--color-border)")
+            }
           />
           <button
             onClick={handleCustomPreview}
@@ -172,15 +228,22 @@ function AvatarPicker({
               border: "1px solid var(--color-border)",
               color: "var(--color-text-secondary)",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-primary)")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.borderColor = "var(--color-primary)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.borderColor = "var(--color-border)")
+            }
           >
             <FiCheck size={14} />
             Usar
           </button>
         </div>
         {customPreview && selectedSeed === customPreview && (
-          <p className="text-xs mt-1.5" style={{ color: "var(--color-success)" }}>
+          <p
+            className="text-xs mt-1.5"
+            style={{ color: "var(--color-success)" }}
+          >
             Semente &quot;{customPreview}&quot; aplicada.
           </p>
         )}
@@ -208,6 +271,7 @@ export default function ProfilePage() {
   // Sync with appUser after refresh
   useEffect(() => {
     if (appUser) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUsername(appUser.username);
       setAvatarStyle(appUser.avatarStyle ?? "");
       setAvatarSeed(appUser.avatarSeed ?? "");
@@ -215,7 +279,9 @@ export default function ProfilePage() {
   }, [appUser]);
 
   const hasAvatar = avatarStyle && avatarSeed;
-  const avatarChanged = avatarStyle !== (appUser?.avatarStyle ?? "") || avatarSeed !== (appUser?.avatarSeed ?? "");
+  const avatarChanged =
+    avatarStyle !== (appUser?.avatarStyle ?? "") ||
+    avatarSeed !== (appUser?.avatarSeed ?? "");
   const usernameChanged = username.trim() !== (appUser?.username ?? "");
   const hasChanges = avatarChanged || usernameChanged;
 
@@ -228,12 +294,22 @@ export default function ProfilePage() {
     if (!appUser) return;
 
     const newUsername = username.trim();
-    if (!newUsername) { setUsernameError("Usuário obrigatório"); return; }
-    if (newUsername.includes(" ")) { setUsernameError("Sem espaços no usuário"); return; }
+    if (!newUsername) {
+      setUsernameError("Usuário obrigatório");
+      return;
+    }
+    if (newUsername.includes(" ")) {
+      setUsernameError("Sem espaços no usuário");
+      return;
+    }
 
     setSaving(true);
     try {
-      const changes: { field: string; from: string | null; to: string | null }[] = [];
+      const changes: {
+        field: string;
+        from: string | null;
+        to: string | null;
+      }[] = [];
 
       // Check username availability if changed
       if (usernameChanged) {
@@ -248,13 +324,21 @@ export default function ProfilePage() {
       const updates: Record<string, unknown> = {};
       if (usernameChanged) {
         updates.username = newUsername;
-        changes.push({ field: "Usuário", from: appUser.username, to: newUsername });
+        changes.push({
+          field: "Usuário",
+          from: appUser.username,
+          to: newUsername,
+        });
       }
       if (avatarChanged) {
         updates.avatarStyle = avatarStyle || null;
-        updates.avatarSeed  = avatarSeed  || null;
+        updates.avatarSeed = avatarSeed || null;
         if (avatarStyle && avatarSeed) {
-          changes.push({ field: "Avatar", from: appUser.avatarStyle ?? null, to: avatarStyle });
+          changes.push({
+            field: "Avatar",
+            from: appUser.avatarStyle ?? null,
+            to: avatarStyle,
+          });
         }
       }
 
@@ -264,7 +348,10 @@ export default function ProfilePage() {
       if (usernameChanged) {
         const batch = writeBatch(db);
         batch.delete(doc(db, "usernames", appUser.username));
-        batch.set(doc(db, "usernames", newUsername), { uid: appUser.uid, email: appUser.email });
+        batch.set(doc(db, "usernames", newUsername), {
+          uid: appUser.uid,
+          email: appUser.email,
+        });
         await batch.commit();
       }
 
@@ -294,7 +381,8 @@ export default function ProfilePage() {
     setRefreshing(true);
     await new Promise((r) => setTimeout(r, 300));
     const randomSeed = Math.random().toString(36).slice(2, 8);
-    const randomStyle = AVATAR_STYLES[Math.floor(Math.random() * AVATAR_STYLES.length)];
+    const randomStyle =
+      AVATAR_STYLES[Math.floor(Math.random() * AVATAR_STYLES.length)];
     setAvatarStyle(randomStyle.id);
     setAvatarSeed(randomSeed);
     setRefreshing(false);
@@ -307,10 +395,16 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>
+          <h1
+            className="text-xl sm:text-2xl font-bold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
             Meu Perfil
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
+          <p
+            className="text-sm mt-1"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             Edite seu avatar e informações pessoais.
           </p>
         </div>
@@ -319,8 +413,14 @@ export default function ProfilePage() {
           disabled={saving || !hasChanges}
           className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
           style={{ backgroundColor: "var(--color-primary)" }}
-          onMouseEnter={(e) => { if (!saving && hasChanges) e.currentTarget.style.backgroundColor = "var(--color-primary-hover)"; }}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-primary)")}
+          onMouseEnter={(e) => {
+            if (!saving && hasChanges)
+              e.currentTarget.style.backgroundColor =
+                "var(--color-primary-hover)";
+          }}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "var(--color-primary)")
+          }
         >
           <FiCheck size={15} />
           {saving ? "Salvando..." : "Salvar"}
@@ -330,12 +430,17 @@ export default function ProfilePage() {
       {/* Avatar card */}
       <div
         className="rounded-[var(--radius-xl)] overflow-hidden"
-        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
       >
         {/* Avatar preview */}
         <div
           className="flex flex-col sm:flex-row items-center gap-6 p-6"
-          style={{ borderBottom: pickerOpen ? "1px solid var(--color-border)" : "none" }}
+          style={{
+            borderBottom: pickerOpen ? "1px solid var(--color-border)" : "none",
+          }}
         >
           {/* Avatar */}
           <div className="relative flex-shrink-0">
@@ -343,13 +448,18 @@ export default function ProfilePage() {
               className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center"
               style={{
                 backgroundColor: hasAvatar
-                  ? (AVATAR_STYLES.find((s) => s.id === avatarStyle)?.bg ?? "var(--color-bg-elevated)")
+                  ? (AVATAR_STYLES.find((s) => s.id === avatarStyle)?.bg ??
+                    "var(--color-bg-elevated)")
                   : "var(--color-primary)",
                 border: "3px solid var(--color-border)",
               }}
             >
               {hasAvatar ? (
-                <DiceBearAvatar style={avatarStyle} seed={avatarSeed} size={96} />
+                <DiceBearAvatar
+                  style={avatarStyle}
+                  seed={avatarSeed}
+                  size={96}
+                />
               ) : (
                 <span className="text-3xl font-bold text-white">
                   {appUser.username.charAt(0).toUpperCase()}
@@ -359,7 +469,10 @@ export default function ProfilePage() {
             {avatarChanged && (
               <div
                 className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "var(--color-primary)", border: "2px solid var(--color-bg-surface)" }}
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  border: "2px solid var(--color-bg-surface)",
+                }}
               >
                 <FiCheck size={10} color="white" />
               </div>
@@ -368,15 +481,27 @@ export default function ProfilePage() {
 
           {/* Info + controls */}
           <div className="flex-1 text-center sm:text-left">
-            <p className="text-lg font-bold" style={{ color: "var(--color-text-primary)" }}>
+            <p
+              className="text-lg font-bold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               @{appUser.username}
             </p>
-            <p className="text-sm mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-              {appUser.isOwner ? "Owner" : appUser.profileName ?? "Sem perfil"}
+            <p
+              className="text-sm mt-0.5"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              {appUser.isOwner
+                ? "Owner"
+                : (appUser.profileName ?? "Sem perfil")}
             </p>
             {hasAvatar && (
-              <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
-                {AVATAR_STYLES.find((s) => s.id === avatarStyle)?.label} · {avatarSeed}
+              <p
+                className="text-xs mt-1"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {AVATAR_STYLES.find((s) => s.id === avatarStyle)?.label} ·{" "}
+                {avatarSeed}
               </p>
             )}
 
@@ -385,12 +510,20 @@ export default function ProfilePage() {
                 onClick={() => setPickerOpen((v) => !v)}
                 className="flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-all"
                 style={{
-                  backgroundColor: pickerOpen ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                  backgroundColor: pickerOpen
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
                   border: `1px solid ${pickerOpen ? "var(--color-primary)" : "var(--color-border)"}`,
-                  color: pickerOpen ? "var(--color-primary)" : "var(--color-text-secondary)",
+                  color: pickerOpen
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
                 }}
               >
-                {pickerOpen ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />}
+                {pickerOpen ? (
+                  <FiChevronUp size={13} />
+                ) : (
+                  <FiChevronDown size={13} />
+                )}
                 {pickerOpen ? "Fechar picker" : "Personalizar avatar"}
               </button>
 
@@ -405,21 +538,31 @@ export default function ProfilePage() {
                 }}
                 title="Gerar avatar aleatório"
               >
-                <FiRefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+                <FiRefreshCw
+                  size={13}
+                  className={refreshing ? "animate-spin" : ""}
+                />
                 Aleatório
               </button>
 
               {hasAvatar && (
                 <button
-                  onClick={() => { setAvatarStyle(""); setAvatarSeed(""); }}
+                  onClick={() => {
+                    setAvatarStyle("");
+                    setAvatarSeed("");
+                  }}
                   className="flex items-center h-8 px-3 rounded-[var(--radius-md)] text-xs cursor-pointer transition-all"
                   style={{
                     backgroundColor: "var(--color-bg-elevated)",
                     border: "1px solid var(--color-border)",
                     color: "var(--color-text-muted)",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-error)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-muted)")}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "var(--color-error)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "var(--color-text-muted)")
+                  }
                 >
                   Remover
                 </button>
@@ -443,24 +586,39 @@ export default function ProfilePage() {
       {/* Info card */}
       <div
         className="rounded-[var(--radius-xl)] p-6 flex flex-col gap-5"
-        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
       >
-        <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
+        <p
+          className="text-sm font-semibold"
+          style={{ color: "var(--color-text-primary)" }}
+        >
           Informações pessoais
         </p>
 
         {/* Username */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>
+          <label
+            className="text-sm font-medium"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             Usuário
           </label>
           <div className="relative flex items-center">
-            <span className="absolute left-3 pointer-events-none" style={{ color: "var(--color-text-muted)" }}>
+            <span
+              className="absolute left-3 pointer-events-none"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               <FiUser size={15} />
             </span>
             <input
               value={username}
-              onChange={(e) => { setUsername(e.target.value); setUsernameError(""); }}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setUsernameError("");
+              }}
               placeholder="Nome de usuário"
               className="w-full h-10 pl-9 pr-3 text-sm rounded-[var(--radius-md)] outline-none"
               style={{
@@ -468,22 +626,38 @@ export default function ProfilePage() {
                 border: `1px solid ${usernameError ? "var(--color-error)" : "var(--color-border)"}`,
                 color: "var(--color-text-primary)",
               }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = usernameError ? "var(--color-error)" : "var(--color-border-focus)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = usernameError ? "var(--color-error)" : "var(--color-border)")}
+              onFocus={(e) =>
+                (e.currentTarget.style.borderColor = usernameError
+                  ? "var(--color-error)"
+                  : "var(--color-border-focus)")
+              }
+              onBlur={(e) =>
+                (e.currentTarget.style.borderColor = usernameError
+                  ? "var(--color-error)"
+                  : "var(--color-border)")
+              }
             />
           </div>
           {usernameError && (
-            <span className="text-xs" style={{ color: "var(--color-error)" }}>{usernameError}</span>
+            <span className="text-xs" style={{ color: "var(--color-error)" }}>
+              {usernameError}
+            </span>
           )}
         </div>
 
         {/* Email (readonly) */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>
+          <label
+            className="text-sm font-medium"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             E-mail
           </label>
           <div className="relative flex items-center">
-            <span className="absolute left-3 pointer-events-none" style={{ color: "var(--color-text-muted)" }}>
+            <span
+              className="absolute left-3 pointer-events-none"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               <FiMail size={15} />
             </span>
             <input
@@ -497,14 +671,20 @@ export default function ProfilePage() {
               }}
             />
           </div>
-          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+          <span
+            className="text-xs"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             O e-mail não pode ser alterado por aqui.
           </span>
         </div>
 
         {/* Profile / Role (readonly) */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>
+          <label
+            className="text-sm font-medium"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             Nível de acesso
           </label>
           <div className="flex items-center gap-2">
@@ -512,21 +692,31 @@ export default function ProfilePage() {
             {appUser.isOwner ? (
               <span
                 className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
-                style={{ backgroundColor: "rgba(0,136,194,0.12)", color: "var(--color-primary)" }}
+                style={{
+                  backgroundColor: "rgba(0,136,194,0.12)",
+                  color: "var(--color-primary)",
+                }}
               >
                 Owner — acesso total
               </span>
             ) : appUser.profileName ? (
               <span
                 className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
-                style={{ backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)" }}
+                style={{
+                  backgroundColor: "var(--color-primary-light)",
+                  color: "var(--color-primary)",
+                }}
               >
                 {appUser.profileName}
               </span>
             ) : (
               <span
                 className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
-                style={{ backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-muted)",
+                  border: "1px solid var(--color-border)",
+                }}
               >
                 Sem perfil — acesso restrito
               </span>
@@ -536,8 +726,14 @@ export default function ProfilePage() {
 
         {/* Permissions summary */}
         {!appUser.isOwner && appUser.permissions.length > 0 && (
-          <div className="flex flex-col gap-2 pt-2" style={{ borderTop: "1px solid var(--color-border)" }}>
-            <p className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>
+          <div
+            className="flex flex-col gap-2 pt-2"
+            style={{ borderTop: "1px solid var(--color-border)" }}
+          >
+            <p
+              className="text-xs font-medium"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               Suas permissões
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -545,7 +741,11 @@ export default function ProfilePage() {
                 <span
                   key={p}
                   className="px-2 py-0.5 rounded-full text-xs"
-                  style={{ backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    color: "var(--color-text-secondary)",
+                    border: "1px solid var(--color-border)",
+                  }}
                 >
                   {p.replace(/_/g, " ")}
                 </span>
