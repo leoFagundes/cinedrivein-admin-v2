@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   collection,
   query,
@@ -22,6 +22,8 @@ import {
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { ChatTemplate } from "@/types";
+import { renderMarkdown } from "@/lib/chat-format";
+import RichTextToolbar from "@/components/ui/RichTextToolbar";
 
 function sanitizeTrigger(v: string): string {
   return v.toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -37,6 +39,7 @@ export default function ChatTemplatesModal({
   const [view, setView] = useState<"list" | "form">("list");
   const [editing, setEditing] = useState<ChatTemplate | null>(null);
 
+  const msgRef = useRef<HTMLTextAreaElement>(null);
   const [trigger, setTrigger] = useState("");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -80,6 +83,21 @@ export default function ChatTemplatesModal({
     setTriggerError("");
     setMessageError("");
     setView("form");
+  }
+
+  function insertFormat(prefix: string, suffix: string) {
+    const el = msgRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? message.length;
+    const end = el.selectionEnd ?? message.length;
+    const selected = message.slice(start, end);
+    const newText = message.slice(0, start) + prefix + selected + suffix + message.slice(end);
+    setMessage(newText);
+    setMessageError("");
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    }, 0);
   }
 
   function backToList() {
@@ -393,35 +411,61 @@ export default function ChatTemplatesModal({
               </div>
 
               {/* Message */}
-              <div className="flex flex-col gap-1.5 flex-1">
+              <div className="flex flex-col gap-1.5">
                 <label
                   className="text-sm font-medium"
                   style={{ color: "var(--color-text-secondary)" }}
                 >
                   Mensagem
                 </label>
-                <textarea
-                  value={message}
-                  onChange={(e) => {
-                    setMessage(e.target.value);
-                    setMessageError("");
-                  }}
-                  placeholder={"Nossos molhos disponíveis são:\n• Catchup\n• Maionese\n• Barbecue\n• Mostarda"}
-                  rows={7}
-                  className="flex-1 px-3 py-2.5 rounded-[var(--radius-md)] text-sm outline-none resize-none"
-                  style={{
-                    backgroundColor: "var(--color-bg-elevated)",
-                    border: `1px solid ${messageError ? "var(--color-error)" : "var(--color-border)"}`,
-                    color: "var(--color-text-primary)",
-                    lineHeight: "1.6",
-                  }}
-                />
+                <div
+                  className="rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: `1px solid ${messageError ? "var(--color-error)" : "var(--color-border)"}` }}
+                >
+                  <RichTextToolbar onFormat={insertFormat} />
+                  <textarea
+                    ref={msgRef}
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      setMessageError("");
+                    }}
+                    placeholder={"Nossos molhos disponíveis são:\n• Catchup\n• Maionese\n• Barbecue\n• Mostarda"}
+                    rows={6}
+                    className="w-full px-3 py-2.5 text-sm outline-none resize-none"
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      color: "var(--color-text-primary)",
+                      lineHeight: "1.6",
+                    }}
+                  />
+                </div>
                 {messageError && (
                   <p className="text-xs" style={{ color: "var(--color-error)" }}>
                     {messageError}
                   </p>
                 )}
               </div>
+
+              {/* Preview */}
+              {message.trim() && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                    Pré-visualização
+                  </p>
+                  <div
+                    className="px-3 py-2.5 rounded-[var(--radius-md)] text-sm"
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-text-primary)",
+                      lineHeight: "1.6",
+                    }}
+                  >
+                    {renderMarkdown(message)}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div

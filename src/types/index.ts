@@ -140,7 +140,9 @@ export interface ChatMessage {
   text: string;
   sender: "admin" | "customer";
   senderName: string;
+  uid?: string;
   createdAt: Date;
+  editedAt?: Date;
 }
 
 // ─── Stock ────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   collection,
   query,
@@ -13,6 +13,7 @@ import {
   deleteDoc,
   deleteField,
   serverTimestamp,
+  Timestamp,
 } from "firebase/firestore";
 import {
   FiSearch,
@@ -110,12 +111,14 @@ function OrderCard({
   onFinalize,
   onEdit,
   onChat,
+  hasUnread,
 }: {
   order: Order;
   onCancel: () => void;
   onFinalize: () => void;
   onEdit: () => void;
   onChat: () => void;
+  hasUnread: boolean;
 }) {
   const [elapsedMin, setElapsedMin] = useState(0);
   const createdAtMs = order.createdAt.getTime();
@@ -184,11 +187,17 @@ function OrderCard({
           </span>
           <button
             onClick={onChat}
-            className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
-            style={{ color: "var(--color-text-muted)" }}
+            className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 relative"
+            style={{ color: hasUnread ? "var(--color-primary)" : "var(--color-text-muted)" }}
             title="Chat"
           >
             <FiMessageSquare size={13} />
+            {hasUnread && (
+              <span
+                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                style={{ backgroundColor: "var(--color-error)" }}
+              />
+            )}
           </button>
           <button
             onClick={onEdit}
@@ -1162,15 +1171,80 @@ export default function OrdersPage() {
   const [reactivateTarget, setReactivateTarget] = useState<Order | null>(null);
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [customerMsgTimes, setCustomerMsgTimes] = useState<Record<string, number>>({});
+  const [chatSeenTimes, setChatSeenTimes] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem("cdi_chat_seen");
+      return stored ? (JSON.parse(stored) as Record<string, number>) : {};
+    } catch {
+      return {};
+    }
+  });
 
   const [finishedStatusFilter, setFinishedStatusFilter] = useState<
     "all" | "finished" | "canceled"
   >("all");
   const [finishedDateFilter, setFinishedDateFilter] = useState(""); // "" | "today" | "yesterday" | "YYYY-MM-DD"
 
+  // Track which orders have fired their first snapshot (to seed seen times)
+  const initializedOrdersRef = useRef<Set<string>>(new Set());
+
+  // Subscribe to latest message per active order — badge for any sender that isn't you
+  useEffect(() => {
+    if (activeOrders.length === 0) return;
+    const unsubs = activeOrders.map((order) => {
+      const q = query(
+        collection(db, "orders", order.id, "messages"),
+        orderBy("createdAt", "desc"),
+        limit(1),
+      );
+      return onSnapshot(q, (snap) => {
+        if (snap.empty) {
+          setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: 0 }));
+          if (!initializedOrdersRef.current.has(order.id)) {
+            initializedOrdersRef.current.add(order.id);
+          }
+          return;
+        }
+        const d = snap.docs[0].data();
+        const ts = (d.createdAt as Timestamp)?.toMillis() ?? 0;
+        const isFromOthers = d.senderName !== appUser?.username;
+        const msgTs = isFromOthers ? ts : 0;
+
+        setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: msgTs }));
+
+        // First snapshot: only seed seen time if we have NO existing record
+        // (no record = new order we've never seen; existing record = preserved from localStorage)
+        if (!initializedOrdersRef.current.has(order.id)) {
+          initializedOrdersRef.current.add(order.id);
+          setChatSeenTimes((prev) => {
+            if (prev[order.id] == null && msgTs > 0) {
+              return { ...prev, [order.id]: msgTs };
+            }
+            return prev;
+          });
+        }
+      });
+    });
+    return () => unsubs.forEach((u) => u());
+  }, [activeOrders, appUser?.username]);
+
+  function hasUnread(orderId: string): boolean {
+    if (chatOrder?.id === orderId) return false;
+    const msgTime = customerMsgTimes[orderId] ?? 0;
+    const seenTime = chatSeenTimes[orderId] ?? 0;
+    return msgTime > 0 && msgTime > seenTime;
+  }
+
   useEffect(() => {
     markAsSeen();
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("cdi_chat_seen", JSON.stringify(chatSeenTimes));
+    } catch {}
+  }, [chatSeenTimes]);
 
   useEffect(() => {
     if (tab !== "finished") return;
@@ -1598,7 +1672,11 @@ export default function OrdersPage() {
                   onCancel={() => setCancelTarget(order)}
                   onFinalize={() => setFinalizeTarget(order)}
                   onEdit={() => setEditTarget(order)}
-                  onChat={() => setChatOrder(order)}
+                  onChat={() => {
+                    setChatOrder(order);
+                    setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
+                  }}
+                  hasUnread={hasUnread(order.id)}
                 />
               ))}
             </div>
@@ -1789,7 +1867,10 @@ export default function OrdersPage() {
                     onDelete={() => handleDelete(order)}
                     deleting={deletingId === order.id}
                     onReactivate={() => handleReactivate(order)}
-                    onChat={() => setChatOrder(order)}
+                    onChat={() => {
+                      setChatOrder(order);
+                      setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
+                    }}
                   />
                 ))}
               </div>

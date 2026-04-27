@@ -6,6 +6,7 @@ import {
   query,
   orderBy,
   limit,
+  where,
   getDocs,
   deleteDoc,
   doc,
@@ -13,6 +14,8 @@ import {
   startAfter,
   QueryDocumentSnapshot,
   DocumentData,
+  QueryConstraint,
+  Timestamp,
 } from "firebase/firestore";
 import {
   FiActivity,
@@ -26,6 +29,7 @@ import {
   FiRefreshCw,
   FiTrash2,
   FiAlertTriangle,
+  FiCalendar,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -442,6 +446,18 @@ function LogRow({
   );
 }
 
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function startOfDay(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function endOfDay(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999);
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type CategoryFilter = "all" | LogCategory;
@@ -475,6 +491,10 @@ export default function LogsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [deleteOldConfirm, setDeleteOldConfirm] = useState(false);
+  const [deleteOldLoading, setDeleteOldLoading] = useState(false);
 
   function parseLog(d: QueryDocumentSnapshot<DocumentData>): Log {
     const data = d.data();
@@ -490,15 +510,20 @@ export default function LogsPage() {
     };
   }
 
+  function buildDateConstraints(): QueryConstraint[] {
+    const c: QueryConstraint[] = [];
+    if (fromDate) c.push(where("createdAt", ">=", Timestamp.fromDate(startOfDay(fromDate))));
+    if (toDate) c.push(where("createdAt", "<=", Timestamp.fromDate(endOfDay(toDate))));
+    return c;
+  }
+
   async function fetchLogs() {
     setLoading(true);
+    setLogs([]);
+    setLastDoc(null);
     try {
       const snap = await getDocs(
-        query(
-          collection(db, "logs"),
-          orderBy("createdAt", "desc"),
-          limit(PAGE_SIZE),
-        ),
+        query(collection(db, "logs"), ...buildDateConstraints(), orderBy("createdAt", "desc"), limit(PAGE_SIZE)),
       );
       setLogs(snap.docs.map(parseLog));
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
@@ -511,17 +536,17 @@ export default function LogsPage() {
     }
   }
 
-  // Carregamento inicial — função inline para não disparar warning de setState em efeito
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setLogs([]);
+      setLastDoc(null);
       try {
+        const c: QueryConstraint[] = [];
+        if (fromDate) c.push(where("createdAt", ">=", Timestamp.fromDate(startOfDay(fromDate))));
+        if (toDate) c.push(where("createdAt", "<=", Timestamp.fromDate(endOfDay(toDate))));
         const snap = await getDocs(
-          query(
-            collection(db, "logs"),
-            orderBy("createdAt", "desc"),
-            limit(PAGE_SIZE),
-          ),
+          query(collection(db, "logs"), ...c, orderBy("createdAt", "desc"), limit(PAGE_SIZE)),
         );
         setLogs(snap.docs.map(parseLog));
         setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
@@ -533,19 +558,14 @@ export default function LogsPage() {
       }
     }
     load();
-  }, []);
+  }, [fromDate, toDate]);
 
   async function loadMore() {
     if (!lastDoc) return;
     setLoadingMore(true);
     try {
       const snap = await getDocs(
-        query(
-          collection(db, "logs"),
-          orderBy("createdAt", "desc"),
-          startAfter(lastDoc),
-          limit(PAGE_SIZE),
-        ),
+        query(collection(db, "logs"), ...buildDateConstraints(), orderBy("createdAt", "desc"), startAfter(lastDoc), limit(PAGE_SIZE)),
       );
       setLogs((prev) => [...prev, ...snap.docs.map(parseLog)]);
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
@@ -594,6 +614,41 @@ export default function LogsPage() {
     }
   }
 
+  async function handleDeleteOldLogs() {
+    setDeleteOldLoading(true);
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+      let total = 0;
+      let keepGoing = true;
+      while (keepGoing) {
+        const snap = await getDocs(
+          query(
+            collection(db, "logs"),
+            where("createdAt", "<", Timestamp.fromDate(cutoff)),
+            limit(500),
+          ),
+        );
+        if (snap.empty) { keepGoing = false; break; }
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        total += snap.docs.length;
+        if (snap.docs.length < 500) keepGoing = false;
+      }
+      success(
+        "Logs antigos excluídos",
+        `${total} log${total !== 1 ? "s" : ""} com mais de 30 dias foram excluídos.`,
+      );
+      setDeleteOldConfirm(false);
+      fetchLogs();
+    } catch {
+      error("Erro", "Não foi possível excluir os logs antigos.");
+    } finally {
+      setDeleteOldLoading(false);
+    }
+  }
+
   const filtered = logs.filter((l) => {
     const matchCat = categoryFilter === "all" || l.category === categoryFilter;
     const matchSearch =
@@ -622,25 +677,47 @@ export default function LogsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {isOwner && logs.length > 0 && (
-            <button
-              onClick={() => setClearConfirm(true)}
-              className="flex items-center gap-2 h-9 px-3 rounded-md text-sm cursor-pointer transition-all"
-              style={{
-                backgroundColor: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.2)",
-                color: "var(--color-error)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.15)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)")
-              }
-            >
-              <FiTrash2 size={14} />
-              <span className="hidden sm:inline">Limpar tudo</span>
-            </button>
+          {isOwner && (
+            <>
+              <button
+                onClick={() => setDeleteOldConfirm(true)}
+                className="flex items-center gap-2 h-9 px-3 rounded-md text-sm cursor-pointer transition-all"
+                style={{
+                  backgroundColor: "rgba(245,158,11,0.08)",
+                  border: "1px solid rgba(245,158,11,0.2)",
+                  color: "var(--color-warning)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor = "rgba(245,158,11,0.15)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = "rgba(245,158,11,0.08)")
+                }
+              >
+                <FiTrash2 size={14} />
+                <span className="hidden sm:inline">Limpar &gt;30 dias</span>
+              </button>
+              {logs.length > 0 && (
+                <button
+                  onClick={() => setClearConfirm(true)}
+                  className="flex items-center gap-2 h-9 px-3 rounded-md text-sm cursor-pointer transition-all"
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                    color: "var(--color-error)",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.15)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)")
+                  }
+                >
+                  <FiTrash2 size={14} />
+                  <span className="hidden sm:inline">Limpar tudo</span>
+                </button>
+              )}
+            </>
           )}
           <button
             onClick={fetchLogs}
@@ -669,8 +746,52 @@ export default function LogsPage() {
       ) : (
         <>
           {/* Filters + Search */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex flex-col gap-3">
+            {/* Date range */}
+            <div className="flex flex-wrap items-center gap-2">
+              <FiCalendar size={14} style={{ color: "var(--color-text-muted)" }} />
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-8 px-2.5 text-xs rounded-[var(--radius-md)] outline-none cursor-pointer"
+                style={{
+                  backgroundColor: fromDate ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                  border: `1px solid ${fromDate ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                  color: fromDate ? "var(--color-primary)" : "var(--color-text-secondary)",
+                }}
+              />
+              <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>até</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-8 px-2.5 text-xs rounded-[var(--radius-md)] outline-none cursor-pointer"
+                style={{
+                  backgroundColor: toDate ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                  border: `1px solid ${toDate ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                  color: toDate ? "var(--color-primary)" : "var(--color-text-secondary)",
+                }}
+              />
+              {(fromDate || toDate) && (
+                <button
+                  onClick={() => { setFromDate(""); setToDate(""); }}
+                  className="flex items-center gap-1 text-xs cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  <FiX size={12} />
+                  Limpar datas
+                </button>
+              )}
+              {(fromDate || toDate) && (
+                <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+              <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
               {CATEGORY_FILTERS.map((f) => (
                 <button
                   key={f.key}
@@ -717,6 +838,7 @@ export default function LogsPage() {
                   (e.currentTarget.style.borderColor = "var(--color-border)")
                 }
               />
+              </div>
             </div>
           </div>
 
@@ -869,6 +991,15 @@ export default function LogsPage() {
           onConfirm={handleClearAll}
           onClose={() => setClearConfirm(false)}
           loading={clearLoading}
+        />
+      )}
+      {deleteOldConfirm && (
+        <ConfirmModal
+          title="Excluir logs com mais de 30 dias"
+          description="Isso vai excluir permanentemente todos os logs gerados há mais de 30 dias. Esta ação não pode ser desfeita."
+          onConfirm={handleDeleteOldLogs}
+          onClose={() => setDeleteOldConfirm(false)}
+          loading={deleteOldLoading}
         />
       )}
     </div>
