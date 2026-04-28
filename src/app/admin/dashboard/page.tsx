@@ -373,6 +373,8 @@ export default function DashboardPage() {
           setOpeningTime(d.openingTime ?? "18:00");
           setClosingTime(d.closingTime ?? "23:00");
         }
+      } catch {
+        // documento ainda não existe — mantém defaults
       } finally {
         setLoadingConfig(false);
         configLoaded.current = true;
@@ -414,6 +416,8 @@ export default function DashboardPage() {
               (d.data().createdAt as Timestamp)?.toDate() ?? new Date(),
           })),
         );
+      } catch {
+        // silent — gráficos ficam vazios
       } finally {
         setLoadingStats(false);
       }
@@ -424,13 +428,17 @@ export default function DashboardPage() {
   // Count archivable orders
   useEffect(() => {
     async function count() {
-      const snap = await getDocs(
-        query(
-          collection(db, "orders"),
-          where("status", "in", ["finished", "canceled"]),
-        ),
-      );
-      setArchivableCount(snap.size);
+      try {
+        const snap = await getDocs(
+          query(
+            collection(db, "orders"),
+            where("status", "in", ["finished", "canceled"]),
+          ),
+        );
+        setArchivableCount(snap.size);
+      } catch {
+        // silent
+      }
     }
     count();
   }, [closingDay]);
@@ -481,6 +489,8 @@ export default function DashboardPage() {
           .filter((o) => o.createdAt >= start && o.createdAt <= end);
         setReportOrders(filtered);
         setReportSource("live");
+      } catch {
+        // silent — relatório fica vazio
       } finally {
         setLoadingReport(false);
       }

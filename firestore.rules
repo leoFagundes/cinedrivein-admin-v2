@@ -3,15 +3,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Leitura pública — necessário para login por username
+    // Username lookup — leitura pública para login do admin
     match /usernames/{username} {
       allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // Apenas usuários autenticados acessam o restante
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // Contador de pedidos — app cliente lê e incrementa sem auth
+    match /counters/orders {
+      allow read, write: if true;
     }
+
+    // Pedidos — cliente cria, admin gerencia
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // Chat — cliente e admin enviam mensagens; admin pode editar/deletar
+    match /orders/{orderId}/messages/{messageId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // Tudo o mais exige autenticação de admin
+    match /{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
   }
 }

@@ -12,6 +12,7 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
+  writeBatch,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
@@ -1201,6 +1202,8 @@ export default function OrdersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [confirmBulkCancelActive, setConfirmBulkCancelActive] = useState(false);
+  const [bulkCanceling, setBulkCanceling] = useState(false);
   const [reactivateTarget, setReactivateTarget] = useState<Order | null>(null);
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -1490,6 +1493,33 @@ export default function OrdersPage() {
     }
   }
 
+  async function handleBulkCancelActive() {
+    if (!appUser || activeOrders.length === 0) return;
+    setBulkCanceling(true);
+    try {
+      const batch = writeBatch(db);
+      activeOrders.forEach((o) => {
+        batch.update(doc(db, "orders", o.id), {
+          status: "canceled",
+          finishedAt: serverTimestamp(),
+        });
+      });
+      await batch.commit();
+      log({
+        action: "Pedidos ativos cancelados em massa",
+        category: "orders",
+        description: `${activeOrders.length} pedido(s) ativo(s) foram cancelados`,
+        performedBy: { uid: appUser.uid, username: appUser.username },
+      });
+      success("Cancelados", `${activeOrders.length} pedido(s) foram cancelados.`);
+      setConfirmBulkCancelActive(false);
+    } catch {
+      toastError("Erro", "Não foi possível cancelar os pedidos.");
+    } finally {
+      setBulkCanceling(false);
+    }
+  }
+
   const filteredActive = activeOrders.filter((o) => {
     if (spotFilter && !String(o.spot).includes(spotFilter)) return false;
     if (orderFilter && !String(o.orderNumber).includes(orderFilter))
@@ -1722,21 +1752,39 @@ export default function OrdersPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredActive.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onCancel={canCancelOrders ? () => setCancelTarget(order) : undefined}
-                  onFinalize={canFinishOrders ? () => setFinalizeTarget(order) : undefined}
-                  onEdit={canEditOrders ? () => setEditTarget(order) : undefined}
-                  onChat={canChatOrders ? () => {
-                    setChatOrder(order);
-                    setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
-                  } : undefined}
-                  hasUnread={hasUnread(order.id)}
-                />
-              ))}
+            <div className="flex flex-col gap-4">
+              {canCancelOrders && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setConfirmBulkCancelActive(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-70"
+                    style={{
+                      backgroundColor: "rgba(239,68,68,0.1)",
+                      color: "var(--color-error)",
+                      border: "1px solid rgba(239,68,68,0.25)",
+                    }}
+                  >
+                    <FiX size={12} />
+                    Cancelar todos ({activeOrders.length})
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredActive.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    onCancel={canCancelOrders ? () => setCancelTarget(order) : undefined}
+                    onFinalize={canFinishOrders ? () => setFinalizeTarget(order) : undefined}
+                    onEdit={canEditOrders ? () => setEditTarget(order) : undefined}
+                    onChat={canChatOrders ? () => {
+                      setChatOrder(order);
+                      setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
+                    } : undefined}
+                    hasUnread={hasUnread(order.id)}
+                  />
+                ))}
+              </div>
             </div>
           ))}
 
@@ -1953,6 +2001,17 @@ export default function OrdersPage() {
           onConfirm={handleFinalize}
           onClose={() => setFinalizeTarget(null)}
           loading={loadingAction}
+        />
+      )}
+      {confirmBulkCancelActive && (
+        <ConfirmModal
+          title="Cancelar todos os pedidos ativos"
+          message={`Isso vai cancelar todos os ${activeOrders.length} pedido(s) ativo(s) de uma vez. Os pedidos serão movidos para a aba de Finalizados com status Cancelado. Esta ação não pode ser desfeita.`}
+          confirmLabel="Cancelar todos"
+          onConfirm={handleBulkCancelActive}
+          onClose={() => setConfirmBulkCancelActive(false)}
+          loading={bulkCanceling}
+          danger
         />
       )}
       {confirmBulkDelete && (
