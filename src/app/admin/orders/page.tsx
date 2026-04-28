@@ -36,6 +36,7 @@ import {
   FiMessageSquare,
   FiBookmark,
   FiShield,
+  FiMapPin,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -192,7 +193,11 @@ function OrderCard({
             <button
               onClick={onChat}
               className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 relative"
-              style={{ color: hasUnread ? "var(--color-primary)" : "var(--color-text-muted)" }}
+              style={{
+                color: hasUnread
+                  ? "var(--color-primary)"
+                  : "var(--color-text-muted)",
+              }}
               title="Chat"
             >
               <FiMessageSquare size={13} />
@@ -216,6 +221,44 @@ function OrderCard({
           )}
         </div>
       </div>
+
+      {/* Distance */}
+      {order.distanceMeters !== null && (
+        <div
+          className="flex items-center gap-2 px-4 py-2"
+          style={{
+            backgroundColor:
+              order.distanceMeters > 500
+                ? "rgba(239,68,68,0.08)"
+                : "var(--color-bg-elevated)",
+            borderBottom: `1px solid ${order.distanceMeters > 500 ? "rgba(239,68,68,0.2)" : "var(--color-border)"}`,
+          }}
+        >
+          {order.distanceMeters > 500 ? (
+            <FiAlertTriangle
+              size={13}
+              style={{ color: "var(--color-error)", flexShrink: 0 }}
+            />
+          ) : (
+            <FiMapPin
+              size={13}
+              style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+            />
+          )}
+          <span
+            className="text-xs font-medium"
+            style={{
+              color:
+                order.distanceMeters > 500
+                  ? "var(--color-error)"
+                  : "var(--color-text-muted)",
+            }}
+          >
+            {Math.round(order.distanceMeters)} m da lanchonete
+            {order.distanceMeters > 500 && " — verifique esta comanda"}
+          </span>
+        </div>
+      )}
 
       {/* Customer */}
       <div
@@ -277,15 +320,26 @@ function OrderCard({
                       className="text-sm font-medium leading-snug"
                       style={{ color: "var(--color-text-primary)" }}
                     >
-                      <span className="font-bold" style={{ color: "var(--color-primary)" }}>{item.quantity ?? 1}x </span>
+                      <span
+                        className="font-bold"
+                        style={{ color: "var(--color-primary)" }}
+                      >
+                        {item.quantity ?? 1}x{" "}
+                      </span>
                       {item.name}
                     </span>
                     <div className="flex flex-col items-end flex-shrink-0">
-                      <span className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                      <span
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
                         {fmt(item.value * (item.quantity ?? 1))}
                       </span>
                       {(item.quantity ?? 1) > 1 && (
-                        <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                        <span
+                          className="text-[10px]"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
                           unit: {fmt(item.value)}
                         </span>
                       )}
@@ -294,8 +348,15 @@ function OrderCard({
                   {extras.length > 0 && (
                     <div className="flex flex-col gap-0.5 mt-0.5">
                       {extras.map((e, j) => (
-                        <p key={j} className="text-xs flex items-center gap-1" style={{ color: "var(--color-text-muted)" }}>
-                          <span style={{ color: "var(--color-primary)" }}>+</span> {e}
+                        <p
+                          key={j}
+                          className="text-xs flex items-center gap-1"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          <span style={{ color: "var(--color-primary)" }}>
+                            +
+                          </span>{" "}
+                          {e}
                         </p>
                       ))}
                     </div>
@@ -369,7 +430,10 @@ function OrderCard({
             <button
               onClick={onFinalize}
               className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+              style={{
+                backgroundColor: "var(--color-primary)",
+                color: "white",
+              }}
             >
               Finalizar
             </button>
@@ -510,7 +574,7 @@ function FinishedCard({
               Não
             </button>
           </div>
-        ) : (canDelete && confirmDelete) ? (
+        ) : canDelete && confirmDelete ? (
           <div className="flex items-center gap-2 flex-shrink-0">
             <span
               className="text-xs"
@@ -894,7 +958,10 @@ function FinalizeModal({
         : `Valor informado ${fmt(amountPaid)} excede o total sem troco em dinheiro.`;
 
   function resetAndSet(setter: (v: string) => void) {
-    return (v: string) => { setter(v); setConfirmStep(false); };
+    return (v: string) => {
+      setter(v);
+      setConfirmStep(false);
+    };
   }
 
   return (
@@ -939,14 +1006,37 @@ function FinalizeModal({
         </div>
 
         <div className="flex flex-col gap-3 px-5 py-4 overflow-y-auto">
-          <PaymentInput label="Débito" value={debit} onChange={resetAndSet(setDebit)} />
-          <PaymentInput label="Crédito" value={credit} onChange={resetAndSet(setCredit)} />
-          <PaymentInput label="Dinheiro" value={money} onChange={resetAndSet(setMoney)} />
-          <PaymentInput label="Pix" value={pix} onChange={resetAndSet(setPix)} />
-          <PaymentInput label="Desconto" value={discount} onChange={resetAndSet(setDiscount)} />
+          <PaymentInput
+            label="Débito"
+            value={debit}
+            onChange={resetAndSet(setDebit)}
+          />
+          <PaymentInput
+            label="Crédito"
+            value={credit}
+            onChange={resetAndSet(setCredit)}
+          />
+          <PaymentInput
+            label="Dinheiro"
+            value={money}
+            onChange={resetAndSet(setMoney)}
+          />
+          <PaymentInput
+            label="Pix"
+            value={pix}
+            onChange={resetAndSet(setPix)}
+          />
+          <PaymentInput
+            label="Desconto"
+            value={discount}
+            onChange={resetAndSet(setDiscount)}
+          />
 
           <button
-            onClick={() => { setServiceFeePaid((v) => !v); setConfirmStep(false); }}
+            onClick={() => {
+              setServiceFeePaid((v) => !v);
+              setConfirmStep(false);
+            }}
             className="flex items-center gap-2 text-sm mt-1 cursor-pointer transition-opacity hover:opacity-70"
           >
             <div
@@ -1028,11 +1118,20 @@ function FinalizeModal({
           >
             <FiAlertTriangle
               size={15}
-              style={{ color: "var(--color-warning)", flexShrink: 0, marginTop: 1 }}
+              style={{
+                color: "var(--color-warning)",
+                flexShrink: 0,
+                marginTop: 1,
+              }}
             />
-            <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+            <p
+              className="text-xs leading-relaxed"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
               {mismatchMessage} Clique em{" "}
-              <strong style={{ color: "var(--color-warning)" }}>Confirmar assim mesmo</strong>{" "}
+              <strong style={{ color: "var(--color-warning)" }}>
+                Confirmar assim mesmo
+              </strong>{" "}
               para finalizar.
             </p>
           </div>
@@ -1061,7 +1160,12 @@ function FinalizeModal({
                 return;
               }
               onConfirm({
-                payment: { debit: debitVal, credit: creditVal, money: moneyVal, pix: pixVal },
+                payment: {
+                  debit: debitVal,
+                  credit: creditVal,
+                  money: moneyVal,
+                  pix: pixVal,
+                },
                 discount: discountVal,
                 serviceFeePaid,
                 total: finalTotal,
@@ -1070,7 +1174,10 @@ function FinalizeModal({
             disabled={loading}
             className="flex-1 py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
             style={{
-              backgroundColor: confirmStep && needsConfirm ? "var(--color-warning)" : "var(--color-primary)",
+              backgroundColor:
+                confirmStep && needsConfirm
+                  ? "var(--color-warning)"
+                  : "var(--color-primary)",
               color: "white",
             }}
           >
@@ -1207,15 +1314,19 @@ export default function OrdersPage() {
   const [reactivateTarget, setReactivateTarget] = useState<Order | null>(null);
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [customerMsgTimes, setCustomerMsgTimes] = useState<Record<string, number>>({});
-  const [chatSeenTimes, setChatSeenTimes] = useState<Record<string, number>>(() => {
-    try {
-      const stored = localStorage.getItem("cdi_chat_seen");
-      return stored ? (JSON.parse(stored) as Record<string, number>) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [customerMsgTimes, setCustomerMsgTimes] = useState<
+    Record<string, number>
+  >({});
+  const [chatSeenTimes, setChatSeenTimes] = useState<Record<string, number>>(
+    () => {
+      try {
+        const stored = localStorage.getItem("cdi_chat_seen");
+        return stored ? (JSON.parse(stored) as Record<string, number>) : {};
+      } catch {
+        return {};
+      }
+    },
+  );
 
   const [finishedStatusFilter, setFinishedStatusFilter] = useState<
     "all" | "finished" | "canceled"
@@ -1511,7 +1622,10 @@ export default function OrdersPage() {
         description: `${activeOrders.length} pedido(s) ativo(s) foram cancelados`,
         performedBy: { uid: appUser.uid, username: appUser.username },
       });
-      success("Cancelados", `${activeOrders.length} pedido(s) foram cancelados.`);
+      success(
+        "Cancelados",
+        `${activeOrders.length} pedido(s) foram cancelados.`,
+      );
       setConfirmBulkCancelActive(false);
     } catch {
       toastError("Erro", "Não foi possível cancelar os pedidos.");
@@ -1560,15 +1674,24 @@ export default function OrdersPage() {
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <div
           className="w-14 h-14 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "var(--color-error)" }}
+          style={{
+            backgroundColor: "rgba(239,68,68,0.1)",
+            color: "var(--color-error)",
+          }}
         >
           <FiShield size={24} />
         </div>
         <div className="text-center">
-          <p className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          <p
+            className="text-base font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
             Acesso negado
           </p>
-          <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
+          <p
+            className="text-sm mt-1"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             Você não tem permissão para visualizar pedidos.
           </p>
         </div>
@@ -1774,13 +1897,28 @@ export default function OrdersPage() {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    onCancel={canCancelOrders ? () => setCancelTarget(order) : undefined}
-                    onFinalize={canFinishOrders ? () => setFinalizeTarget(order) : undefined}
-                    onEdit={canEditOrders ? () => setEditTarget(order) : undefined}
-                    onChat={canChatOrders ? () => {
-                      setChatOrder(order);
-                      setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
-                    } : undefined}
+                    onCancel={
+                      canCancelOrders ? () => setCancelTarget(order) : undefined
+                    }
+                    onFinalize={
+                      canFinishOrders
+                        ? () => setFinalizeTarget(order)
+                        : undefined
+                    }
+                    onEdit={
+                      canEditOrders ? () => setEditTarget(order) : undefined
+                    }
+                    onChat={
+                      canChatOrders
+                        ? () => {
+                            setChatOrder(order);
+                            setChatSeenTimes((prev) => ({
+                              ...prev,
+                              [order.id]: Date.now(),
+                            }));
+                          }
+                        : undefined
+                    }
                     hasUnread={hasUnread(order.id)}
                   />
                 ))}
@@ -1974,10 +2112,17 @@ export default function OrdersPage() {
                     deleting={deletingId === order.id}
                     canDelete={canDeleteOrders}
                     onReactivate={() => handleReactivate(order)}
-                    onChat={canChatOrders ? () => {
-                      setChatOrder(order);
-                      setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
-                    } : undefined}
+                    onChat={
+                      canChatOrders
+                        ? () => {
+                            setChatOrder(order);
+                            setChatSeenTimes((prev) => ({
+                              ...prev,
+                              [order.id]: Date.now(),
+                            }));
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </div>

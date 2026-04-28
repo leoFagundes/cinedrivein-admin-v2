@@ -80,6 +80,7 @@ export function parseOrder(id: string, data: Record<string, unknown>): Order {
     discount: (data.discount as number) ?? 0,
     total: ((data.total ?? data.total_value) as number) ?? 0,
     payment: data.payment as Order["payment"],
+    distanceMeters: data.distanceMeters != null ? (data.distanceMeters as number) : null,
     createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
     finishedAt: (data.finishedAt as Timestamp)?.toDate(),
   };

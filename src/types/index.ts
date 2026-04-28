@@ -202,6 +202,7 @@ export interface Order {
   serviceFeePaid: boolean;
   discount: number;
   total: number;
+  distanceMeters: number | null;
   payment?: OrderPayment;
   createdAt: Date;
   finishedAt?: Date;
