@@ -510,7 +510,10 @@ function Modal({
         {footer && (
           <div
             className="px-6 py-4 flex-shrink-0"
-            style={{ borderTop: "1px solid var(--color-border)", backgroundColor: "var(--color-bg-surface)" }}
+            style={{
+              borderTop: "1px solid var(--color-border)",
+              backgroundColor: "var(--color-bg-surface)",
+            }}
           >
             {footer}
           </div>
@@ -667,7 +670,11 @@ function SubitemModal({
           className="w-full h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-50 transition-all"
           style={{ backgroundColor: "var(--color-primary)" }}
         >
-          {loading ? "Salvando..." : existing ? "Salvar alterações" : "Criar subitem"}
+          {loading
+            ? "Salvando..."
+            : existing
+              ? "Salvar alterações"
+              : "Criar subitem"}
         </button>
       }
     >
@@ -808,7 +815,11 @@ function ItemModal({
           className="w-full h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-50 transition-all"
           style={{ backgroundColor: "var(--color-primary)" }}
         >
-          {loading ? "Salvando..." : existing ? "Salvar alterações" : "Criar item"}
+          {loading
+            ? "Salvando..."
+            : existing
+              ? "Salvar alterações"
+              : "Criar item"}
         </button>
       }
     >
@@ -924,7 +935,6 @@ function ItemModal({
           />
         ))}
       </div>
-
     </Modal>
   );
 }
@@ -1274,8 +1284,19 @@ function Spinner() {
   return (
     <div className="flex justify-center py-16">
       <svg className="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-20" cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="3" />
-        <path className="opacity-80" fill="var(--color-primary)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        <circle
+          className="opacity-20"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="var(--color-primary)"
+          strokeWidth="3"
+        />
+        <path
+          className="opacity-80"
+          fill="var(--color-primary)"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
       </svg>
     </div>
   );
@@ -1439,13 +1460,11 @@ export default function StockPage() {
     (s) => !search || s.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-
   // ── Item actions ──
   async function handleSaveItem(form: ItemForm, file: File | null) {
     try {
       let photoUrl: string | undefined = itemModal.editing?.photo;
-      if (file)
-        photoUrl = await uploadPhoto(file, "items");
+      if (file) photoUrl = await uploadPhoto(file, "items");
 
       const data = {
         codItem: form.codItem.trim(),
@@ -1468,25 +1487,74 @@ export default function StockPage() {
         const old = itemModal.editing;
 
         // Compute diff
-        const changes: { field: string; from: string | null; to: string | null }[] = [];
-        if (data.codItem     !== old.codItem)     changes.push({ field: "Código",       from: old.codItem,           to: data.codItem });
-        if (data.name        !== old.name)        changes.push({ field: "Nome",         from: old.name,              to: data.name });
-        if (data.category    !== old.category)    changes.push({ field: "Tipo",         from: old.category,          to: data.category });
-        if (data.description !== old.description) changes.push({ field: "Descrição",    from: old.description || null, to: data.description || null });
-        if (data.value       !== old.value)       changes.push({ field: "Valor",        from: formatBRL(old.value),  to: formatBRL(data.value) });
+        const changes: {
+          field: string;
+          from: string | null;
+          to: string | null;
+        }[] = [];
+        if (data.codItem !== old.codItem)
+          changes.push({
+            field: "Código",
+            from: old.codItem,
+            to: data.codItem,
+          });
+        if (data.name !== old.name)
+          changes.push({ field: "Nome", from: old.name, to: data.name });
+        if (data.category !== old.category)
+          changes.push({
+            field: "Tipo",
+            from: old.category,
+            to: data.category,
+          });
+        if (data.description !== old.description)
+          changes.push({
+            field: "Descrição",
+            from: old.description || null,
+            to: data.description || null,
+          });
+        if (data.value !== old.value)
+          changes.push({
+            field: "Valor",
+            from: formatBRL(old.value),
+            to: formatBRL(data.value),
+          });
         if ((data.visibleValue ?? null) !== (old.visibleValue ?? null))
-          changes.push({ field: "Valor cliente", from: old.visibleValue != null ? formatBRL(old.visibleValue) : null, to: data.visibleValue != null ? formatBRL(data.visibleValue) : null });
-        if (data.quantity  !== old.quantity)  changes.push({ field: "Quantidade", from: String(old.quantity),  to: String(data.quantity) });
-        if (data.isVisible !== old.isVisible) changes.push({ field: "Visível",    from: old.isVisible  ? "Sim" : "Não", to: data.isVisible  ? "Sim" : "Não" });
-        if (data.isFeatured !== old.isFeatured) changes.push({ field: "Destaque", from: old.isFeatured ? "Sim" : "Não", to: data.isFeatured ? "Sim" : "Não" });
-        if (file) changes.push({ field: "Foto", from: old.photo ? "foto anterior" : null, to: "atualizada" });
+          changes.push({
+            field: "Valor cliente",
+            from: old.visibleValue != null ? formatBRL(old.visibleValue) : null,
+            to: data.visibleValue != null ? formatBRL(data.visibleValue) : null,
+          });
+        if (data.quantity !== old.quantity)
+          changes.push({
+            field: "Quantidade",
+            from: String(old.quantity),
+            to: String(data.quantity),
+          });
+        if (data.isVisible !== old.isVisible)
+          changes.push({
+            field: "Visível",
+            from: old.isVisible ? "Sim" : "Não",
+            to: data.isVisible ? "Sim" : "Não",
+          });
+        if (data.isFeatured !== old.isFeatured)
+          changes.push({
+            field: "Destaque",
+            from: old.isFeatured ? "Sim" : "Não",
+            to: data.isFeatured ? "Sim" : "Não",
+          });
+        if (file)
+          changes.push({
+            field: "Foto",
+            from: old.photo ? "foto anterior" : null,
+            to: "atualizada",
+          });
 
         // Additionals diff
         const addGroups = [
-          { key: "additionals"       as const, label: "Gerais"  },
-          { key: "additionals_sauce" as const, label: "Molhos"  },
+          { key: "additionals" as const, label: "Gerais" },
+          { key: "additionals_sauce" as const, label: "Molhos" },
           { key: "additionals_drink" as const, label: "Bebidas" },
-          { key: "additionals_sweet" as const, label: "Doces"   },
+          { key: "additionals_sweet" as const, label: "Doces" },
         ];
         for (const g of addGroups) {
           const oldIds = [...(old[g.key] ?? [])].sort().join(",");
@@ -1497,7 +1565,7 @@ export default function StockPage() {
             changes.push({
               field: `Adicionais ${g.label}`,
               from: `${oldCount} item${oldCount !== 1 ? "s" : ""}`,
-              to:   `${newCount} item${newCount !== 1 ? "s" : ""}`,
+              to: `${newCount} item${newCount !== 1 ? "s" : ""}`,
             });
           }
         }
@@ -1505,9 +1573,7 @@ export default function StockPage() {
         await updateDoc(doc(db, "items", old.id), data);
         setItems((prev) =>
           prev.map((i) =>
-            i.id === old.id
-              ? ({ ...i, ...data } as StockItem)
-              : i,
+            i.id === old.id ? ({ ...i, ...data } as StockItem) : i,
           ),
         );
         success("Item atualizado", `"${data.name}" foi salvo.`);
@@ -1621,8 +1687,7 @@ export default function StockPage() {
   ) {
     try {
       let photoUrl: string | undefined = editing?.photo;
-      if (file)
-        photoUrl = await uploadPhoto(file, "subitems");
+      if (file) photoUrl = await uploadPhoto(file, "subitems");
 
       const data = {
         name: form.name.trim(),
@@ -1633,11 +1698,31 @@ export default function StockPage() {
 
       if (editing) {
         // Compute diff
-        const changes: { field: string; from: string | null; to: string | null }[] = [];
-        if (data.name        !== editing.name)        changes.push({ field: "Nome",      from: editing.name,             to: data.name });
-        if (data.description !== editing.description) changes.push({ field: "Descrição", from: editing.description || null, to: data.description || null });
-        if (data.isVisible   !== editing.isVisible)   changes.push({ field: "Visível",   from: editing.isVisible ? "Sim" : "Não", to: data.isVisible ? "Sim" : "Não" });
-        if (file) changes.push({ field: "Foto", from: editing.photo ? "foto anterior" : null, to: "atualizada" });
+        const changes: {
+          field: string;
+          from: string | null;
+          to: string | null;
+        }[] = [];
+        if (data.name !== editing.name)
+          changes.push({ field: "Nome", from: editing.name, to: data.name });
+        if (data.description !== editing.description)
+          changes.push({
+            field: "Descrição",
+            from: editing.description || null,
+            to: data.description || null,
+          });
+        if (data.isVisible !== editing.isVisible)
+          changes.push({
+            field: "Visível",
+            from: editing.isVisible ? "Sim" : "Não",
+            to: data.isVisible ? "Sim" : "Não",
+          });
+        if (file)
+          changes.push({
+            field: "Foto",
+            from: editing.photo ? "foto anterior" : null,
+            to: "atualizada",
+          });
 
         await updateDoc(doc(db, "subitems", editing.id), data);
         setSubitems((prev) =>
@@ -1826,11 +1911,15 @@ export default function StockPage() {
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "items", label: "Itens", icon: <FiBox size={14} /> },
     { key: "subitems", label: "Subitens", icon: <FiPackage size={14} /> },
-    { key: "categories", label: "Ordem das categorias", icon: <FiList size={14} /> },
+    {
+      key: "categories",
+      label: "Ordem das categorias",
+      icon: <FiList size={14} />,
+    },
   ];
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 w-full max-w-5xl">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 w-full">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -1887,7 +1976,7 @@ export default function StockPage() {
         <>
           {/* Tabs */}
           <div
-            className="flex gap-1 overflow-x-auto"
+            className="flex gap-1 overflow-x-auto overflow-y-hidden"
             style={{ borderBottom: "1px solid var(--color-border)" }}
           >
             {tabs.map((t) => (
@@ -2145,9 +2234,13 @@ export default function StockPage() {
               {/* Add category — dropdown de existentes + campo livre */}
               <div className="flex flex-col gap-2">
                 {/* Dropdown com categorias dos itens */}
-                {allCategories.filter((c) => !categoryOrder.includes(c)).length > 0 && (
+                {allCategories.filter((c) => !categoryOrder.includes(c))
+                  .length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                    <label
+                      className="text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
                       Categorias dos itens
                     </label>
                     <div className="flex gap-2">
@@ -2169,11 +2262,15 @@ export default function StockPage() {
                           e.target.value = "";
                         }}
                       >
-                        <option value="" disabled>Selecionar categoria existente...</option>
+                        <option value="" disabled>
+                          Selecionar categoria existente...
+                        </option>
                         {allCategories
                           .filter((c) => !categoryOrder.includes(c))
                           .map((c) => (
-                            <option key={c} value={c}>{c}</option>
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
                           ))}
                       </select>
                     </div>
@@ -2182,7 +2279,10 @@ export default function StockPage() {
 
                 {/* Campo livre para categoria nova */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                  <label
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Adicionar nova categoria
                   </label>
                   <div className="flex gap-2">
@@ -2207,8 +2307,14 @@ export default function StockPage() {
                         border: "1px solid var(--color-border)",
                         color: "var(--color-text-secondary)",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-primary)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.borderColor =
+                          "var(--color-primary)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.borderColor =
+                          "var(--color-border)")
+                      }
                     >
                       <FiPlus size={14} /> Adicionar
                     </button>

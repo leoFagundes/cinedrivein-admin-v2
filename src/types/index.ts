@@ -32,7 +32,13 @@ export interface AppUser {
   createdAt: Date;
 }
 
-export type LogCategory = "auth" | "users" | "profiles" | "orders" | "stock" | "site";
+export type LogCategory =
+  | "auth"
+  | "users"
+  | "profiles"
+  | "orders"
+  | "stock"
+  | "site";
 
 export interface LogChange {
   field: string;
@@ -53,7 +59,15 @@ export interface Log {
 
 // ─── Site ─────────────────────────────────────────────────────────────────────
 
-export type FilmClassification = "L" | "6" | "10" | "12" | "14" | "16" | "18" | "";
+export type FilmClassification =
+  | "L"
+  | "6"
+  | "10"
+  | "12"
+  | "14"
+  | "16"
+  | "18"
+  | "";
 export type EventType = "" | "christmas" | "halloween" | "easter";
 export type SessionKey = "session1" | "session2" | "session3" | "session4";
 
@@ -81,6 +95,7 @@ export interface SiteConfig {
   popUpImage?: string;
   popUpTitle?: string;
   popUpDescriptions?: string[];
+  popUpImageHistory?: string[];
   session1?: Film | null;
   session2?: Film | null;
   session3?: Film | null;
@@ -147,7 +162,11 @@ export interface ChatMessage {
 
 // ─── Stock ────────────────────────────────────────────────────────────────────
 
-export type AdditionalGroup = "additionals" | "additionals_sauce" | "additionals_drink" | "additionals_sweet";
+export type AdditionalGroup =
+  | "additionals"
+  | "additionals_sauce"
+  | "additionals_drink"
+  | "additionals_sweet";
 
 export interface Subitem {
   id: string;

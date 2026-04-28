@@ -6,6 +6,7 @@ import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 import {
   FiPlus,
@@ -53,13 +54,13 @@ const CLASSIFICATIONS: {
   bg: string;
   text: string;
 }[] = [
-  { value: "L", label: "L", bg: "#26c6da", text: "#fff" },
-  { value: "6", label: "6", bg: "#42a5f5", text: "#fff" },
-  { value: "10", label: "10", bg: "#ff7043", text: "#fff" },
-  { value: "12", label: "12", bg: "#ffa726", text: "#fff" },
-  { value: "14", label: "14", bg: "#ffca28", text: "#212121" },
-  { value: "16", label: "16", bg: "#ef5350", text: "#fff" },
-  { value: "18", label: "18", bg: "#212121", text: "#fff" },
+  { value: "L", label: "L", bg: "#12caae", text: "#fff" },
+  { value: "6", label: "6", bg: "#B5336F", text: "#fff" },
+  { value: "10", label: "10", bg: "#0088C2", text: "#fff" },
+  { value: "12", label: "12", bg: "#C9A421", text: "#fff" },
+  { value: "14", label: "14", bg: "#C97121", text: "#212121" },
+  { value: "16", label: "16", bg: "#FF5555", text: "#fff" },
+  { value: "18", label: "18", bg: "#000000", text: "#fff" },
 ];
 
 const EVENTS: {
@@ -850,6 +851,109 @@ function SessionCard({
   );
 }
 
+// ─── Popup Image Gallery ──────────────────────────────────────────────────────
+
+function PopupImageGallery({
+  history,
+  selected,
+  onSelect,
+  onDelete,
+}: {
+  history: string[];
+  selected: string;
+  onSelect: (url: string) => void;
+  onDelete: (url: string) => void;
+}) {
+  const [hoveredUrl, setHoveredUrl] = useState<string | null>(null);
+
+  if (history.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p
+        className="text-xs font-medium"
+        style={{ color: "var(--color-text-muted)" }}
+      >
+        Imagens anteriores — clique para reutilizar
+      </p>
+      <div className="flex flex-wrap gap-3">
+        {history.map((url) => {
+          const isActive = url === selected;
+          const isHovered = hoveredUrl === url;
+
+          return (
+            <div
+              key={url}
+              className="relative flex-shrink-0"
+              style={{ width: 60, height: 60 }}
+              onMouseEnter={() => setHoveredUrl(url)}
+              onMouseLeave={() => setHoveredUrl(null)}
+            >
+              {/* Thumbnail */}
+              <button
+                type="button"
+                onClick={() => onSelect(url)}
+                title="Usar esta imagem"
+                className="w-full h-full rounded-[var(--radius-md)] overflow-hidden cursor-pointer transition-all"
+                style={{
+                  border: isActive
+                    ? "2.5px solid var(--color-primary)"
+                    : isHovered
+                      ? "2.5px solid var(--color-border-focus)"
+                      : "2px solid var(--color-border)",
+                  padding: 0,
+                  opacity: isHovered && !isActive ? 0.85 : 1,
+                  transform: isActive ? "scale(1.05)" : "scale(1)",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-full h-full object-cover" />
+              </button>
+
+              {/* Active checkmark — bottom-right */}
+              {isActive && (
+                <div
+                  className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-sm"
+                  style={{
+                    backgroundColor: "var(--color-primary)",
+                    color: "white",
+                    border: "2px solid var(--color-bg-surface)",
+                  }}
+                >
+                  <FiCheck size={10} strokeWidth={3} />
+                </div>
+              )}
+
+              {/* Delete button — top-left, shown on hover */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(url);
+                }}
+                title="Remover da galeria"
+                className="absolute -top-2.5 -left-2.5 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer shadow-md transition-all"
+                style={{
+                  backgroundColor: "var(--color-error)",
+                  color: "white",
+                  border: "2px solid var(--color-bg-surface)",
+                  opacity: isHovered ? 1 : 0,
+                  pointerEvents: isHovered ? "auto" : "none",
+                  transform: isHovered ? "scale(1)" : "scale(0.5)",
+                  transition: "opacity 0.15s ease, transform 0.15s ease",
+                }}
+              >
+                <FiX size={12} strokeWidth={3} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Extra Settings ───────────────────────────────────────────────────────────
 
 function ExtraSettings({
@@ -880,11 +984,69 @@ function ExtraSettings({
   );
   const [popupExpanded, setPopupExpanded] = useState(false);
 
+  // Local copy of image history — syncs from config when Firestore updates
+  const [imageHistory, setImageHistory] = useState<string[]>(
+    config.popUpImageHistory ?? [],
+  );
+
+  // Sync all fields when config changes (after save → persistConfig → setConfig)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsClosed(config.isClosed ?? false);
+    setIsEvent(config.isEvent ?? "");
+    setPopUpEnabled(config.popUpEnabled ?? false);
+    setPopUpTitle(config.popUpTitle ?? "");
+    setPopUpDescs((config.popUpDescriptions ?? []).join("\n"));
+    setImageHistory(config.popUpImageHistory ?? []);
+    // Only update image/preview if there's no pending local file
+    setPopUpFile((prev) => {
+      if (prev === null) {
+        setPopUpImage(config.popUpImage ?? "");
+        setPopUpPreview(config.popUpImage || null);
+      }
+      return prev;
+    });
+  }, [config]);
+
   function handlePopupFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setPopUpFile(file);
     setPopUpPreview(URL.createObjectURL(file));
+  }
+
+  function handleSelectHistoryImage(url: string) {
+    // Toggle: clicking the active image deselects it
+    if (popUpImage === url) {
+      setPopUpImage("");
+      setPopUpPreview(null);
+    } else {
+      setPopUpImage(url);
+      setPopUpPreview(url);
+    }
+    setPopUpFile(null); // clear any pending file upload
+  }
+
+  function handleDeleteHistoryImage(url: string) {
+    // Remove from local state immediately (optimistic)
+    setImageHistory((prev) => prev.filter((u) => u !== url));
+    if (popUpImage === url) {
+      setPopUpImage("");
+      setPopUpPreview(null);
+    }
+
+    // Delete from Firebase Storage (only works for files we uploaded)
+    try {
+      const fileRef = storageRef(storage, url);
+      deleteObject(fileRef).catch((err) => {
+        // Silently ignore "object not found" — may be an external URL
+        if (err?.code !== "storage/object-not-found") {
+          console.warn("Erro ao deletar imagem do Storage:", err);
+        }
+      });
+    } catch {
+      // storageRef throws if the URL is not a valid Firebase Storage path
+    }
   }
 
   async function handleSave() {
@@ -899,9 +1061,12 @@ function ExtraSettings({
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean),
+        popUpImageHistory: imageHistory,
       },
       popUpFile,
     );
+    // After save the file is no longer "pending"
+    setPopUpFile(null);
   }
 
   return (
@@ -1064,6 +1229,7 @@ function ExtraSettings({
                   onChange={(e) => {
                     setPopUpImage(e.target.value);
                     setPopUpPreview(e.target.value || null);
+                    setPopUpFile(null);
                   }}
                 />
                 <label
@@ -1084,6 +1250,15 @@ function ExtraSettings({
                 </label>
               </div>
             </div>
+
+            {/* Image history gallery */}
+            <PopupImageGallery
+              history={imageHistory}
+              selected={popUpImage}
+              onSelect={handleSelectHistoryImage}
+              onDelete={handleDeleteHistoryImage}
+            />
+
             <Input
               label="Título do pop-up"
               placeholder="Ex: Novidades no Cine Drive-in!"
@@ -1294,7 +1469,7 @@ export default function SitePage() {
           description: `Atualizou o filme "${film.title}" na ${sessionLabel}`,
           performedBy: actor,
           target: { type: "session", id: sessionKey, name: film.title },
-          changes: changes.length > 0 ? changes : undefined,
+          ...(changes.length > 0 && { changes }),
         });
       } else {
         log({
@@ -1388,7 +1563,7 @@ export default function SitePage() {
     }
   }
 
-  // Extra settings save
+  // Extra settings save — merges uploaded image URL into history
   async function handleSaveExtra(
     updates: Partial<SiteConfig>,
     popupFile: File | null,
@@ -1396,10 +1571,24 @@ export default function SitePage() {
     setSavingExtra(true);
     try {
       let popUpImageUrl = updates.popUpImage;
-      if (popupFile)
+      if (popupFile) {
         popUpImageUrl = await uploadSitePhoto(popupFile, "site/popup");
+      }
 
-      const final = { ...updates, popUpImage: popUpImageUrl };
+      // Build deduplicated history: new URL at front, keep existing non-deleted ones
+      const existingHistory: string[] =
+        updates.popUpImageHistory ?? config.popUpImageHistory ?? [];
+      let nextHistory = existingHistory;
+      if (popUpImageUrl && !existingHistory.includes(popUpImageUrl)) {
+        nextHistory = [popUpImageUrl, ...existingHistory];
+      }
+
+      const final: Partial<SiteConfig> = {
+        ...updates,
+        popUpImage: popUpImageUrl,
+        popUpImageHistory: nextHistory,
+      };
+
       await persistConfig(final);
       success("Configurações salvas", "Alterações aplicadas ao site.");
 
@@ -1461,7 +1650,7 @@ export default function SitePage() {
         category: "site",
         description: "Atualizou as configurações extras do site",
         performedBy: actor,
-        changes: changes.length > 0 ? changes : undefined,
+        ...(changes.length > 0 && { changes }),
       });
     } catch (err) {
       console.error(err);
