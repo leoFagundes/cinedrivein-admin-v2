@@ -124,11 +124,15 @@ export interface PriceRule {
   inteira: number;
 }
 
+export interface StoreStatus {
+  isOpen: boolean;
+  openingTime?: string;
+  closingTime?: string;
+}
+
 export interface SiteConfig {
   siteUrl: string;
   isClosed: boolean;
-  openingTime?: string;
-  closingTime?: string;
   isEvent: EventType;
   popUpEnabled: boolean;
   popUpImage?: string;

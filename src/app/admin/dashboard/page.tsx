@@ -315,7 +315,7 @@ export default function DashboardPage() {
   const { success, error: toastError, info } = useToast();
 
   // ── Store control ──
-  const [isClosed, setIsClosed] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [openingTime, setOpeningTime] = useState("18:00");
   const [closingTime, setClosingTime] = useState("23:00");
   const [togglingStore, setTogglingStore] = useState(false);
@@ -362,14 +362,14 @@ export default function DashboardPage() {
     return () => clearTimeout(id);
   }, []);
 
-  // Load siteConfig
+  // Load storeConfig
   useEffect(() => {
     async function load() {
       try {
-        const snap = await getDoc(doc(db, "siteConfig", "main"));
+        const snap = await getDoc(doc(db, "storeConfig", "main"));
         if (snap.exists()) {
           const d = snap.data();
-          setIsClosed(d.isClosed ?? false);
+          setIsOpen(d.isOpen ?? false);
           setOpeningTime(d.openingTime ?? "18:00");
           setClosingTime(d.closingTime ?? "23:00");
         }
@@ -493,21 +493,21 @@ export default function DashboardPage() {
   async function handleToggleStore() {
     setTogglingStore(true);
     try {
-      const newVal = !isClosed;
-      await updateDoc(doc(db, "siteConfig", "main"), { isClosed: newVal });
-      setIsClosed(newVal);
+      const newVal = !isOpen;
+      await setDoc(doc(db, "storeConfig", "main"), { isOpen: newVal }, { merge: true });
+      setIsOpen(newVal);
       log({
-        action: newVal ? "Lanchonete fechada" : "Lanchonete aberta",
+        action: newVal ? "Lanchonete aberta" : "Lanchonete fechada",
         category: "site",
-        description: `Status da lanchonete alterado para ${newVal ? "fechado" : "aberto"}`,
+        description: `Status da lanchonete alterado para ${newVal ? "aberto" : "fechado"}`,
         performedBy: { uid: appUser!.uid, username: appUser!.username },
-        changes: [{ field: "isClosed", from: String(!newVal), to: String(newVal) }],
+        changes: [{ field: "isOpen", from: String(!newVal), to: String(newVal) }],
       });
       success(
-        newVal ? "Lanchonete fechada" : "Lanchonete aberta",
+        newVal ? "Lanchonete aberta" : "Lanchonete fechada",
         newVal
-          ? "Pedidos desativados para o público."
-          : "Pedidos ativados para o público.",
+          ? "Pedidos ativados para o público."
+          : "Pedidos desativados para o público.",
       );
     } catch {
       toastError("Erro", "Não foi possível alterar o status.");
@@ -519,10 +519,7 @@ export default function DashboardPage() {
   async function handleSaveTimes() {
     setSavingTimes(true);
     try {
-      await updateDoc(doc(db, "siteConfig", "main"), {
-        openingTime,
-        closingTime,
-      });
+      await setDoc(doc(db, "storeConfig", "main"), { openingTime, closingTime }, { merge: true });
       log({
         action: "Horários atualizados",
         category: "site",
@@ -950,15 +947,15 @@ export default function DashboardPage() {
                   >
                     {loadingConfig
                       ? "Carregando..."
-                      : isClosed
-                        ? "Fechada para pedidos"
-                        : "Aberta para pedidos"}
+                      : isOpen
+                        ? "Aberta para pedidos"
+                        : "Fechada para pedidos"}
                   </p>
                   <p
                     className="text-xs mt-0.5"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    Controla se o público pode fazer pedidos
+                    Controla se o público pode fazer pedidos na lanchonete
                   </p>
                 </div>
                 <button
@@ -966,15 +963,15 @@ export default function DashboardPage() {
                   disabled={togglingStore || loadingConfig}
                   className="cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
                   style={{
-                    color: isClosed
-                      ? "var(--color-error)"
-                      : "var(--color-success)",
+                    color: isOpen
+                      ? "var(--color-success)"
+                      : "var(--color-error)",
                   }}
                 >
-                  {isClosed ? (
-                    <FiToggleLeft size={42} />
-                  ) : (
+                  {isOpen ? (
                     <FiToggleRight size={42} />
+                  ) : (
+                    <FiToggleLeft size={42} />
                   )}
                 </button>
               </div>
@@ -983,31 +980,31 @@ export default function DashboardPage() {
               <div
                 className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)]"
                 style={{
-                  backgroundColor: isClosed
-                    ? "rgba(239,68,68,0.08)"
-                    : "rgba(34,197,94,0.08)",
-                  border: `1px solid ${isClosed ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)"}`,
+                  backgroundColor: isOpen
+                    ? "rgba(34,197,94,0.08)"
+                    : "rgba(239,68,68,0.08)",
+                  border: `1px solid ${isOpen ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
                 }}
               >
                 <div
                   className="w-2 h-2 rounded-full"
                   style={{
-                    backgroundColor: isClosed
-                      ? "var(--color-error)"
-                      : "var(--color-success)",
+                    backgroundColor: isOpen
+                      ? "var(--color-success)"
+                      : "var(--color-error)",
                   }}
                 />
                 <span
                   className="text-sm font-medium"
                   style={{
-                    color: isClosed
-                      ? "var(--color-error)"
-                      : "var(--color-success)",
+                    color: isOpen
+                      ? "var(--color-success)"
+                      : "var(--color-error)",
                   }}
                 >
-                  {isClosed
-                    ? "Fechada — pedidos desativados"
-                    : "Aberta — pedidos ativos"}
+                  {isOpen
+                    ? "Aberta — pedidos ativos"
+                    : "Fechada — pedidos desativados"}
                 </span>
               </div>
 
