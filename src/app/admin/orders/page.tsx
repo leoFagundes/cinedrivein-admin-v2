@@ -34,9 +34,11 @@ import {
   FiRefreshCw,
   FiMessageSquare,
   FiBookmark,
+  FiShield,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { can } from "@/lib/access";
 import { useOrders, parseOrder } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
@@ -114,10 +116,10 @@ function OrderCard({
   hasUnread,
 }: {
   order: Order;
-  onCancel: () => void;
-  onFinalize: () => void;
-  onEdit: () => void;
-  onChat: () => void;
+  onCancel?: () => void;
+  onFinalize?: () => void;
+  onEdit?: () => void;
+  onChat?: () => void;
   hasUnread: boolean;
 }) {
   const [elapsedMin, setElapsedMin] = useState(0);
@@ -185,28 +187,32 @@ function OrderCard({
             />
             {fmtElapsed(elapsedMin)}
           </span>
-          <button
-            onClick={onChat}
-            className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 relative"
-            style={{ color: hasUnread ? "var(--color-primary)" : "var(--color-text-muted)" }}
-            title="Chat"
-          >
-            <FiMessageSquare size={13} />
-            {hasUnread && (
-              <span
-                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                style={{ backgroundColor: "var(--color-error)" }}
-              />
-            )}
-          </button>
-          <button
-            onClick={onEdit}
-            className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
-            style={{ color: "var(--color-text-muted)" }}
-            title="Editar pedido"
-          >
-            <FiEdit2 size={13} />
-          </button>
+          {onChat && (
+            <button
+              onClick={onChat}
+              className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 relative"
+              style={{ color: hasUnread ? "var(--color-primary)" : "var(--color-text-muted)" }}
+              title="Chat"
+            >
+              <FiMessageSquare size={13} />
+              {hasUnread && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: "var(--color-error)" }}
+                />
+              )}
+            </button>
+          )}
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+              style={{ color: "var(--color-text-muted)" }}
+              title="Editar pedido"
+            >
+              <FiEdit2 size={13} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -270,22 +276,28 @@ function OrderCard({
                       className="text-sm font-medium leading-snug"
                       style={{ color: "var(--color-text-primary)" }}
                     >
-                      1x {item.name}
+                      <span className="font-bold" style={{ color: "var(--color-primary)" }}>{item.quantity ?? 1}x </span>
+                      {item.name}
                     </span>
-                    <span
-                      className="text-sm font-semibold flex-shrink-0"
-                      style={{ color: "var(--color-text-primary)" }}
-                    >
-                      {fmt(item.value)}
-                    </span>
+                    <div className="flex flex-col items-end flex-shrink-0">
+                      <span className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                        {fmt(item.value * (item.quantity ?? 1))}
+                      </span>
+                      {(item.quantity ?? 1) > 1 && (
+                        <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                          unit: {fmt(item.value)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {extras.length > 0 && (
-                    <p
-                      className="text-xs mt-0.5"
-                      style={{ color: "var(--color-text-muted)" }}
-                    >
-                      + {extras.join(", ")}
-                    </p>
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      {extras.map((e, j) => (
+                        <p key={j} className="text-xs flex items-center gap-1" style={{ color: "var(--color-text-muted)" }}>
+                          <span style={{ color: "var(--color-primary)" }}>+</span> {e}
+                        </p>
+                      ))}
+                    </div>
                   )}
                   {item.observation && (
                     <p
@@ -334,29 +346,35 @@ function OrderCard({
       </div>
 
       {/* Actions */}
-      <div
-        className="flex gap-2 px-4 py-3"
-        style={{ borderTop: "1px solid var(--color-border)" }}
-      >
-        <button
-          onClick={onCancel}
-          className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity hover:opacity-80 cursor-pointer"
-          style={{
-            backgroundColor: "rgba(239,68,68,0.1)",
-            color: "var(--color-error)",
-            border: "1px solid rgba(239,68,68,0.25)",
-          }}
+      {(onCancel || onFinalize) && (
+        <div
+          className="flex gap-2 px-4 py-3"
+          style={{ borderTop: "1px solid var(--color-border)" }}
         >
-          Cancelar
-        </button>
-        <button
-          onClick={onFinalize}
-          className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity hover:opacity-80 cursor-pointer"
-          style={{ backgroundColor: "var(--color-primary)", color: "white" }}
-        >
-          Finalizar
-        </button>
-      </div>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity hover:opacity-80 cursor-pointer"
+              style={{
+                backgroundColor: "rgba(239,68,68,0.1)",
+                color: "var(--color-error)",
+                border: "1px solid rgba(239,68,68,0.25)",
+              }}
+            >
+              Cancelar
+            </button>
+          )}
+          {onFinalize && (
+            <button
+              onClick={onFinalize}
+              className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+            >
+              Finalizar
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -371,6 +389,7 @@ function FinishedCard({
   deleting,
   onReactivate,
   onChat,
+  canDelete,
 }: {
   order: Order;
   expanded: boolean;
@@ -378,7 +397,8 @@ function FinishedCard({
   onDelete: () => void;
   deleting: boolean;
   onReactivate: () => void;
-  onChat: () => void;
+  onChat?: () => void;
+  canDelete: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReactivate, setConfirmReactivate] = useState(false);
@@ -489,7 +509,7 @@ function FinishedCard({
               Não
             </button>
           </div>
-        ) : confirmDelete ? (
+        ) : (canDelete && confirmDelete) ? (
           <div className="flex items-center gap-2 flex-shrink-0">
             <span
               className="text-xs"
@@ -518,17 +538,19 @@ function FinishedCard({
           </div>
         ) : (
           <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onChat();
-              }}
-              className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
-              style={{ color: "var(--color-text-muted)" }}
-              title="Chat"
-            >
-              <FiMessageSquare size={13} />
-            </button>
+            {onChat && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChat();
+                }}
+                className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+                title="Chat"
+              >
+                <FiMessageSquare size={13} />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -540,17 +562,19 @@ function FinishedCard({
             >
               <FiRefreshCw size={13} />
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmDelete(true);
-              }}
-              className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
-              style={{ color: "var(--color-text-muted)" }}
-              title="Excluir pedido"
-            >
-              <FiTrash2 size={13} />
-            </button>
+            {canDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmDelete(true);
+                }}
+                className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+                title="Excluir pedido"
+              >
+                <FiTrash2 size={13} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1153,6 +1177,15 @@ export default function OrdersPage() {
   const { appUser } = useAuth();
   const { success, error: toastError } = useToast();
 
+  const canViewOrders = can(appUser, "view_orders");
+  const canCancelOrders = can(appUser, "cancel_orders");
+  const canFinishOrders = can(appUser, "finish_orders");
+  const canDeleteOrders = can(appUser, "delete_orders");
+  const canEditOrders = can(appUser, "edit_orders");
+  const canChatOrders = can(appUser, "chat_orders");
+  const canCreateOrder = can(appUser, "create_order");
+  const canManageChatTemplates = can(appUser, "manage_chat_templates");
+
   const [tab, setTab] = useState<"active" | "finished">("active");
   const [finishedOrders, setFinishedOrders] = useState<Order[]>([]);
   const [spotFilter, setSpotFilter] = useState("");
@@ -1492,6 +1525,27 @@ export default function OrdersPage() {
 
   const hasCanceled = finishedOrders.some((o) => o.status === "canceled");
 
+  if (!canViewOrders) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-4">
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "var(--color-error)" }}
+        >
+          <FiShield size={24} />
+        </div>
+        <div className="text-center">
+          <p className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            Acesso negado
+          </p>
+          <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
+            Você não tem permissão para visualizar pedidos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
@@ -1545,31 +1599,35 @@ export default function OrdersPage() {
               ))}
             </div>
 
-            <button
-              onClick={() => setShowTemplates(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                color: "var(--color-text-secondary)",
-                border: "1px solid var(--color-border)",
-              }}
-              title="Mensagens prontas"
-            >
-              <FiBookmark size={15} />
-              <span className="hidden sm:inline">Mensagens</span>
-            </button>
+            {canManageChatTemplates && (
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-secondary)",
+                  border: "1px solid var(--color-border)",
+                }}
+                title="Mensagens prontas"
+              >
+                <FiBookmark size={15} />
+                <span className="hidden sm:inline">Mensagens</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => setShowNewOrder(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-              style={{
-                backgroundColor: "var(--color-primary)",
-                color: "white",
-              }}
-            >
-              <FiPlus size={16} />
-              <span className="hidden sm:inline">Novo Pedido</span>
-            </button>
+            {canCreateOrder && (
+              <button
+                onClick={() => setShowNewOrder(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  color: "white",
+                }}
+              >
+                <FiPlus size={16} />
+                <span className="hidden sm:inline">Novo Pedido</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1669,13 +1727,13 @@ export default function OrdersPage() {
                 <OrderCard
                   key={order.id}
                   order={order}
-                  onCancel={() => setCancelTarget(order)}
-                  onFinalize={() => setFinalizeTarget(order)}
-                  onEdit={() => setEditTarget(order)}
-                  onChat={() => {
+                  onCancel={canCancelOrders ? () => setCancelTarget(order) : undefined}
+                  onFinalize={canFinishOrders ? () => setFinalizeTarget(order) : undefined}
+                  onEdit={canEditOrders ? () => setEditTarget(order) : undefined}
+                  onChat={canChatOrders ? () => {
                     setChatOrder(order);
                     setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
-                  }}
+                  } : undefined}
                   hasUnread={hasUnread(order.id)}
                 />
               ))}
@@ -1813,7 +1871,7 @@ export default function OrdersPage() {
                     Recolher tudo
                   </button>
                 </div>
-                {hasCanceled && (
+                {hasCanceled && canDeleteOrders && (
                   <button
                     onClick={() => setConfirmBulkDelete(true)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-70"
@@ -1866,11 +1924,12 @@ export default function OrdersPage() {
                     onToggle={() => toggleExpand(order.id)}
                     onDelete={() => handleDelete(order)}
                     deleting={deletingId === order.id}
+                    canDelete={canDeleteOrders}
                     onReactivate={() => handleReactivate(order)}
-                    onChat={() => {
+                    onChat={canChatOrders ? () => {
                       setChatOrder(order);
                       setChatSeenTimes((prev) => ({ ...prev, [order.id]: Date.now() }));
-                    }}
+                    } : undefined}
                   />
                 ))}
               </div>

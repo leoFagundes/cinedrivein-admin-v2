@@ -52,6 +52,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
+import { log } from "@/lib/logger";
 import { Order, DailyStats } from "@/types";
 import { parseOrder } from "@/contexts/OrdersContext";
 
@@ -208,35 +209,48 @@ function ChartCard({
   title: string;
   range: { from: string; to: string };
   onRangeChange: (r: { from: string; to: string }) => void;
-  onClearClick: () => void;
+  onClearClick?: () => void;
   count: number;
   children: React.ReactNode;
 }) {
   return (
     <div
       className="flex flex-col rounded-[var(--radius-xl)] overflow-hidden"
-      style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
     >
       <div
         className="flex flex-col gap-2.5 px-5 pt-4 pb-3"
         style={{ borderBottom: "1px solid var(--color-border)" }}
       >
         <div className="flex items-center justify-between">
-          <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{title}</p>
+          <p
+            className="font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            {title}
+          </p>
           <div className="flex items-center gap-2">
             {count > 0 && (
-              <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
                 {count} dia{count !== 1 ? "s" : ""}
               </span>
             )}
-            <button
-              onClick={onClearClick}
-              className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
-              style={{ color: "var(--color-error)" }}
-              title="Zerar dados deste gráfico"
-            >
-              <FiTrash2 size={13} />
-            </button>
+            {onClearClick && (
+              <button
+                onClick={onClearClick}
+                className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-error)" }}
+                title="Zerar dados deste gráfico"
+              >
+                <FiTrash2 size={13} />
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -246,21 +260,34 @@ function ChartCard({
             onChange={(e) => onRangeChange({ ...range, from: e.target.value })}
             className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
             style={{
-              backgroundColor: range.from ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+              backgroundColor: range.from
+                ? "var(--color-primary-light)"
+                : "var(--color-bg-elevated)",
               border: `1px solid ${range.from ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
-              color: range.from ? "var(--color-primary)" : "var(--color-text-muted)",
+              color: range.from
+                ? "var(--color-primary)"
+                : "var(--color-text-muted)",
             }}
           />
-          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>até</span>
+          <span
+            className="text-xs"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            até
+          </span>
           <input
             type="date"
             value={range.to}
             onChange={(e) => onRangeChange({ ...range, to: e.target.value })}
             className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
             style={{
-              backgroundColor: range.to ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+              backgroundColor: range.to
+                ? "var(--color-primary-light)"
+                : "var(--color-bg-elevated)",
               border: `1px solid ${range.to ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
-              color: range.to ? "var(--color-primary)" : "var(--color-text-muted)",
+              color: range.to
+                ? "var(--color-primary)"
+                : "var(--color-text-muted)",
             }}
           />
           {(range.from || range.to) && (
@@ -299,7 +326,9 @@ export default function DashboardPage() {
   const [reportDate, setReportDate] = useState("");
   const [reportOrders, setReportOrders] = useState<Order[]>([]);
   const [archivedStats, setArchivedStats] = useState<DailyStats | null>(null);
-  const [reportSource, setReportSource] = useState<"live" | "archived" | null>(null);
+  const [reportSource, setReportSource] = useState<"live" | "archived" | null>(
+    null,
+  );
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportExpanded, setReportExpanded] = useState(true);
 
@@ -371,11 +400,18 @@ export default function DashboardPage() {
             finishedOrders: d.data().finishedOrders ?? 0,
             canceledOrders: d.data().canceledOrders ?? 0,
             revenue: d.data().revenue ?? {
-              total: 0, subtotal: 0, serviceFee: 0,
-              money: 0, pix: 0, credit: 0, debit: 0, discount: 0,
+              total: 0,
+              subtotal: 0,
+              serviceFee: 0,
+              money: 0,
+              pix: 0,
+              credit: 0,
+              debit: 0,
+              discount: 0,
             },
             topItems: d.data().topItems ?? [],
-            createdAt: (d.data().createdAt as Timestamp)?.toDate() ?? new Date(),
+            createdAt:
+              (d.data().createdAt as Timestamp)?.toDate() ?? new Date(),
           })),
         );
       } finally {
@@ -389,7 +425,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function count() {
       const snap = await getDocs(
-        query(collection(db, "orders"), where("status", "in", ["finished", "canceled"])),
+        query(
+          collection(db, "orders"),
+          where("status", "in", ["finished", "canceled"]),
+        ),
       );
       setArchivableCount(snap.size);
     }
@@ -416,8 +455,14 @@ export default function DashboardPage() {
             finishedOrders: (data.finishedOrders as number) ?? 0,
             canceledOrders: (data.canceledOrders as number) ?? 0,
             revenue: (data.revenue as DailyStats["revenue"]) ?? {
-              total: 0, subtotal: 0, serviceFee: 0,
-              money: 0, pix: 0, credit: 0, debit: 0, discount: 0,
+              total: 0,
+              subtotal: 0,
+              serviceFee: 0,
+              money: 0,
+              pix: 0,
+              credit: 0,
+              debit: 0,
+              discount: 0,
             },
             topItems: (data.topItems as DailyStats["topItems"]) ?? [],
             createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
@@ -451,6 +496,13 @@ export default function DashboardPage() {
       const newVal = !isClosed;
       await updateDoc(doc(db, "siteConfig", "main"), { isClosed: newVal });
       setIsClosed(newVal);
+      log({
+        action: newVal ? "Lanchonete fechada" : "Lanchonete aberta",
+        category: "site",
+        description: `Status da lanchonete alterado para ${newVal ? "fechado" : "aberto"}`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+        changes: [{ field: "isClosed", from: String(!newVal), to: String(newVal) }],
+      });
       success(
         newVal ? "Lanchonete fechada" : "Lanchonete aberta",
         newVal
@@ -467,7 +519,20 @@ export default function DashboardPage() {
   async function handleSaveTimes() {
     setSavingTimes(true);
     try {
-      await updateDoc(doc(db, "siteConfig", "main"), { openingTime, closingTime });
+      await updateDoc(doc(db, "siteConfig", "main"), {
+        openingTime,
+        closingTime,
+      });
+      log({
+        action: "Horários atualizados",
+        category: "site",
+        description: `Horário de funcionamento: ${openingTime} – ${closingTime}`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+        changes: [
+          { field: "openingTime", from: null, to: openingTime },
+          { field: "closingTime", from: null, to: closingTime },
+        ],
+      });
       success("Horários salvos", "Horários de funcionamento atualizados.");
     } catch {
       toastError("Erro", "Não foi possível salvar os horários.");
@@ -481,7 +546,10 @@ export default function DashboardPage() {
     setClosingDay(true);
     try {
       const snap = await getDocs(
-        query(collection(db, "orders"), where("status", "in", ["finished", "canceled"])),
+        query(
+          collection(db, "orders"),
+          where("status", "in", ["finished", "canceled"]),
+        ),
       );
       if (snap.empty) {
         info("Nada a arquivar", "Não há pedidos finalizados ou cancelados.");
@@ -518,21 +586,39 @@ export default function DashboardPage() {
             debit: acc.debit + (o.payment?.debit || 0),
             discount: acc.discount + (o.discount || 0),
           }),
-          { total: 0, subtotal: 0, serviceFee: 0, money: 0, pix: 0, credit: 0, debit: 0, discount: 0 },
+          {
+            total: 0,
+            subtotal: 0,
+            serviceFee: 0,
+            money: 0,
+            pix: 0,
+            credit: 0,
+            debit: 0,
+            discount: 0,
+          },
         );
 
-        const itemMap: Record<string, { codItem: string; name: string; quantity: number }> = {};
+        const itemMap: Record<
+          string,
+          { codItem: string; name: string; quantity: number }
+        > = {};
         finished.forEach((o) => {
           o.items.forEach((item) => {
             const key = item.itemId || item.name;
             if (itemMap[key]) {
               itemMap[key].quantity++;
             } else {
-              itemMap[key] = { codItem: item.codItem, name: item.name, quantity: 1 };
+              itemMap[key] = {
+                codItem: item.codItem,
+                name: item.name,
+                quantity: 1,
+              };
             }
           });
         });
-        const topItems = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
+        const topItems = Object.values(itemMap).sort(
+          (a, b) => b.quantity - a.quantity,
+        );
 
         await setDoc(
           doc(db, "dailyStats", dateKey),
@@ -557,6 +643,9 @@ export default function DashboardPage() {
         await batch.commit();
       }
 
+      // Reset order number counter so next day starts from #1
+      await setDoc(doc(db, "counters", "orders"), { last: 0 });
+
       // Refresh stats
       const statsSnap = await getDocs(
         query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(30)),
@@ -569,14 +658,30 @@ export default function DashboardPage() {
           finishedOrders: d.data().finishedOrders ?? 0,
           canceledOrders: d.data().canceledOrders ?? 0,
           revenue: d.data().revenue ?? {
-            total: 0, subtotal: 0, serviceFee: 0,
-            money: 0, pix: 0, credit: 0, debit: 0, discount: 0,
+            total: 0,
+            subtotal: 0,
+            serviceFee: 0,
+            money: 0,
+            pix: 0,
+            credit: 0,
+            debit: 0,
+            discount: 0,
           },
           topItems: d.data().topItems ?? [],
           createdAt: (d.data().createdAt as Timestamp)?.toDate() ?? new Date(),
         })),
       );
 
+      log({
+        action: "Expediente fechado",
+        category: "orders",
+        description: `${snap.size} pedido${snap.size !== 1 ? "s" : ""} arquivado${snap.size !== 1 ? "s" : ""} em ${Object.keys(byDate).length} dia${Object.keys(byDate).length !== 1 ? "s" : ""}`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+        changes: [
+          { field: "pedidos_arquivados", from: null, to: String(snap.size) },
+          { field: "contador_reiniciado", from: null, to: "0" },
+        ],
+      });
       success(
         "Expediente fechado!",
         `${snap.size} pedido${snap.size !== 1 ? "s" : ""} arquivado${snap.size !== 1 ? "s" : ""} com sucesso.`,
@@ -585,7 +690,10 @@ export default function DashboardPage() {
       setArchivableCount(0);
     } catch (err) {
       console.error(err);
-      toastError("Erro", "Não foi possível fechar o expediente. Tente novamente.");
+      toastError(
+        "Erro",
+        "Não foi possível fechar o expediente. Tente novamente.",
+      );
     } finally {
       setClosingDay(false);
     }
@@ -615,23 +723,42 @@ export default function DashboardPage() {
           serviceFee: acc.serviceFee + o.serviceFee,
           total: acc.total + o.total,
         }),
-        { money: 0, pix: 0, credit: 0, debit: 0, subtotal: 0, serviceFee: 0, total: 0 },
+        {
+          money: 0,
+          pix: 0,
+          credit: 0,
+          debit: 0,
+          subtotal: 0,
+          serviceFee: 0,
+          total: 0,
+        },
       );
 
-  const reportItems: Array<{ codItem: string; name: string; quantity: number }> =
-    archivedStats
-      ? archivedStats.topItems
-      : (() => {
-          const map: Record<string, { codItem: string; name: string; quantity: number }> = {};
-          reportOrders.forEach((o) => {
-            o.items.forEach((item) => {
-              const key = item.itemId || item.name;
-              if (map[key]) map[key].quantity++;
-              else map[key] = { codItem: item.codItem, name: item.name, quantity: 1 };
-            });
+  const reportItems: Array<{
+    codItem: string;
+    name: string;
+    quantity: number;
+  }> = archivedStats
+    ? archivedStats.topItems
+    : (() => {
+        const map: Record<
+          string,
+          { codItem: string; name: string; quantity: number }
+        > = {};
+        reportOrders.forEach((o) => {
+          o.items.forEach((item) => {
+            const key = item.itemId || item.name;
+            if (map[key]) map[key].quantity++;
+            else
+              map[key] = {
+                codItem: item.codItem,
+                name: item.name,
+                quantity: 1,
+              };
           });
-          return Object.values(map).sort((a, b) => b.quantity - a.quantity);
-        })();
+        });
+        return Object.values(map).sort((a, b) => b.quantity - a.quantity);
+      })();
 
   // ── Chart helpers ──────────────────────────────────────────────────────────
 
@@ -646,7 +773,9 @@ export default function DashboardPage() {
   async function handleClearStats(range: { from: string; to: string }) {
     setClearing(true);
     try {
-      const snap = await getDocs(query(collection(db, "dailyStats"), orderBy("date")));
+      const snap = await getDocs(
+        query(collection(db, "dailyStats"), orderBy("date")),
+      );
       const toDelete = snap.docs.filter((d) => {
         const date = d.data().date as string;
         if (range.from && date < range.from) return false;
@@ -671,7 +800,17 @@ export default function DashboardPage() {
           return false;
         }),
       );
-      success("Dados zerados", `${toDelete.length} dia${toDelete.length !== 1 ? "s" : ""} removido${toDelete.length !== 1 ? "s" : ""}.`);
+      log({
+        action: "Estatísticas zeradas",
+        category: "orders",
+        description: `${toDelete.length} dia${toDelete.length !== 1 ? "s" : ""} de estatísticas removido${toDelete.length !== 1 ? "s" : ""}${range.from || range.to ? ` (${range.from || "início"} → ${range.to || "fim"})` : ""}`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+        changes: [{ field: "dailyStats_deletados", from: null, to: String(toDelete.length) }],
+      });
+      success(
+        "Dados zerados",
+        `${toDelete.length} dia${toDelete.length !== 1 ? "s" : ""} removido${toDelete.length !== 1 ? "s" : ""}.`,
+      );
       setClearModal(null);
     } catch {
       toastError("Erro", "Não foi possível zerar os dados.");
@@ -697,12 +836,22 @@ export default function DashboardPage() {
   }));
 
   const topItemsStats = filterStats(topItemsRange);
-  const topItemsAgg: Record<string, { name: string; codItem: string; total: number }> = {};
-  topItemsStats.flatMap((s) => s.topItems).forEach((item) => {
-    const key = item.codItem || item.name;
-    if (topItemsAgg[key]) topItemsAgg[key].total += item.quantity;
-    else topItemsAgg[key] = { name: item.name, codItem: item.codItem, total: item.quantity };
-  });
+  const topItemsAgg: Record<
+    string,
+    { name: string; codItem: string; total: number }
+  > = {};
+  topItemsStats
+    .flatMap((s) => s.topItems)
+    .forEach((item) => {
+      const key = item.codItem || item.name;
+      if (topItemsAgg[key]) topItemsAgg[key].total += item.quantity;
+      else
+        topItemsAgg[key] = {
+          name: item.name,
+          codItem: item.codItem,
+          total: item.quantity,
+        };
+    });
   const topItemsData = Object.values(topItemsAgg)
     .sort((a, b) => b.total - a.total)
     .slice(0, 8)
@@ -721,23 +870,39 @@ export default function DashboardPage() {
   const paymentPieData = Object.entries(paymentData)
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({ name, value: +value.toFixed(2) }));
-  const PIE_COLORS = [CHART_COLORS.success, CHART_COLORS.primary, CHART_COLORS.purple, CHART_COLORS.warning];
+  const PIE_COLORS = [
+    CHART_COLORS.success,
+    CHART_COLORS.primary,
+    CHART_COLORS.purple,
+    CHART_COLORS.warning,
+  ];
 
-  const todayRevenue = activeOrders.reduce((s, o) => s + o.subtotal + o.serviceFee, 0);
+  const todayRevenue = activeOrders.reduce(
+    (s, o) => s + o.subtotal + o.serviceFee,
+    0,
+  );
 
   if (authLoading) return null;
 
-  const canManageSite = can(appUser, "manage_site") || (appUser?.isOwner ?? false);
-  const canViewReport = can(appUser, "manage_orders") || can(appUser, "view_reports") || (appUser?.isOwner ?? false);
+  const canViewDashboard = can(appUser, "view_dashboard");
+  const canManageStore = can(appUser, "manage_store");
+  const canGenerateReport = can(appUser, "generate_report");
+  const canDeleteChartData = can(appUser, "delete_chart_data");
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 w-full">
       {/* Header */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>
+        <h1
+          className="text-xl sm:text-2xl font-bold"
+          style={{ color: "var(--color-text-primary)" }}
+        >
           Dashboard
         </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
+        <p
+          className="text-sm mt-1"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           Visão geral da operação.
         </p>
       </div>
@@ -773,16 +938,26 @@ export default function DashboardPage() {
       {/* Row 2: Store control + Close day */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Store Control */}
-        {canManageSite && (
+        {canManageStore && (
           <SectionCard title="Controle da Lanchonete">
             <div className="flex flex-col gap-5">
               {/* Toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>
-                    {loadingConfig ? "Carregando..." : isClosed ? "Fechada para pedidos" : "Aberta para pedidos"}
+                  <p
+                    className="font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {loadingConfig
+                      ? "Carregando..."
+                      : isClosed
+                        ? "Fechada para pedidos"
+                        : "Aberta para pedidos"}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Controla se o público pode fazer pedidos
                   </p>
                 </div>
@@ -790,9 +965,17 @@ export default function DashboardPage() {
                   onClick={handleToggleStore}
                   disabled={togglingStore || loadingConfig}
                   className="cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
-                  style={{ color: isClosed ? "var(--color-error)" : "var(--color-success)" }}
+                  style={{
+                    color: isClosed
+                      ? "var(--color-error)"
+                      : "var(--color-success)",
+                  }}
                 >
-                  {isClosed ? <FiToggleLeft size={42} /> : <FiToggleRight size={42} />}
+                  {isClosed ? (
+                    <FiToggleLeft size={42} />
+                  ) : (
+                    <FiToggleRight size={42} />
+                  )}
                 </button>
               </div>
 
@@ -800,35 +983,61 @@ export default function DashboardPage() {
               <div
                 className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)]"
                 style={{
-                  backgroundColor: isClosed ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.08)",
+                  backgroundColor: isClosed
+                    ? "rgba(239,68,68,0.08)"
+                    : "rgba(34,197,94,0.08)",
                   border: `1px solid ${isClosed ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)"}`,
                 }}
               >
                 <div
                   className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: isClosed ? "var(--color-error)" : "var(--color-success)" }}
+                  style={{
+                    backgroundColor: isClosed
+                      ? "var(--color-error)"
+                      : "var(--color-success)",
+                  }}
                 />
                 <span
                   className="text-sm font-medium"
-                  style={{ color: isClosed ? "var(--color-error)" : "var(--color-success)" }}
+                  style={{
+                    color: isClosed
+                      ? "var(--color-error)"
+                      : "var(--color-success)",
+                  }}
                 >
-                  {isClosed ? "Fechada — pedidos desativados" : "Aberta — pedidos ativos"}
+                  {isClosed
+                    ? "Fechada — pedidos desativados"
+                    : "Aberta — pedidos ativos"}
                 </span>
               </div>
 
               {/* Time inputs */}
               <div className="flex flex-col gap-3">
-                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                <p
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
                   Horário de funcionamento
                 </p>
                 <div className="flex gap-3">
                   <div className="flex-1 flex flex-col gap-1.5">
-                    <label className="text-xs" style={{ color: "var(--color-text-muted)" }}>Abertura</label>
+                    <label
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Abertura
+                    </label>
                     <div
                       className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)]"
-                      style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+                      style={{
+                        backgroundColor: "var(--color-bg-elevated)",
+                        border: "1px solid var(--color-border)",
+                      }}
                     >
-                      <FiClock size={13} style={{ color: "var(--color-text-muted)" }} />
+                      <FiClock
+                        size={13}
+                        style={{ color: "var(--color-text-muted)" }}
+                      />
                       <input
                         type="time"
                         value={openingTime}
@@ -839,12 +1048,23 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex-1 flex flex-col gap-1.5">
-                    <label className="text-xs" style={{ color: "var(--color-text-muted)" }}>Fechamento</label>
+                    <label
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Fechamento
+                    </label>
                     <div
                       className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)]"
-                      style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+                      style={{
+                        backgroundColor: "var(--color-bg-elevated)",
+                        border: "1px solid var(--color-border)",
+                      }}
                     >
-                      <FiClock size={13} style={{ color: "var(--color-text-muted)" }} />
+                      <FiClock
+                        size={13}
+                        style={{ color: "var(--color-text-muted)" }}
+                      />
                       <input
                         type="time"
                         value={closingTime}
@@ -859,7 +1079,10 @@ export default function DashboardPage() {
                   onClick={handleSaveTimes}
                   disabled={savingTimes}
                   className="flex items-center justify-center gap-1.5 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                  style={{
+                    backgroundColor: "var(--color-primary)",
+                    color: "white",
+                  }}
                 >
                   <FiSave size={14} />
                   {savingTimes ? "Salvando..." : "Salvar horários"}
@@ -870,26 +1093,49 @@ export default function DashboardPage() {
         )}
 
         {/* Close Day */}
-        {(appUser?.isOwner || canViewReport) && (
+        {canGenerateReport && (
           <SectionCard title="Fechar Expediente">
             <div className="flex flex-col gap-4">
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                Arquiva os pedidos finalizados e cancelados nas estatísticas diárias e os remove da fila de pedidos. Execute ao fim de cada dia de operação.
+              <p
+                className="text-sm"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                Arquiva os pedidos finalizados e cancelados nas estatísticas
+                diárias e os remove da fila de pedidos. Execute ao fim de cada
+                dia de operação.
               </p>
 
               <div
                 className="flex flex-col gap-2 p-3 rounded-[var(--radius-md)]"
-                style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
               >
                 <div className="flex justify-between text-sm">
-                  <span style={{ color: "var(--color-text-muted)" }}>Pedidos para arquivar</span>
-                  <span className="font-semibold" style={{ color: archivableCount > 0 ? "var(--color-warning)" : "var(--color-text-muted)" }}>
+                  <span style={{ color: "var(--color-text-muted)" }}>
+                    Pedidos para arquivar
+                  </span>
+                  <span
+                    className="font-semibold"
+                    style={{
+                      color:
+                        archivableCount > 0
+                          ? "var(--color-warning)"
+                          : "var(--color-text-muted)",
+                    }}
+                  >
                     {archivableCount}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span style={{ color: "var(--color-text-muted)" }}>Dias já registrados</span>
-                  <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                  <span style={{ color: "var(--color-text-muted)" }}>
+                    Dias já registrados
+                  </span>
+                  <span
+                    className="font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     {stats.length}
                   </span>
                 </div>
@@ -898,7 +1144,11 @@ export default function DashboardPage() {
               {archivableCount === 0 ? (
                 <div
                   className="flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)] text-sm"
-                  style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", color: "var(--color-success)" }}
+                  style={{
+                    backgroundColor: "rgba(34,197,94,0.08)",
+                    border: "1px solid rgba(34,197,94,0.25)",
+                    color: "var(--color-success)",
+                  }}
                 >
                   Nenhum pedido pendente de arquivamento
                 </div>
@@ -906,10 +1156,14 @@ export default function DashboardPage() {
                 <button
                   onClick={() => setShowCloseModal(true)}
                   className="flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-                  style={{ backgroundColor: "var(--color-warning)", color: "white" }}
+                  style={{
+                    backgroundColor: "var(--color-warning)",
+                    color: "white",
+                  }}
                 >
                   <FiArchive size={16} />
-                  Fechar Expediente ({archivableCount} pedido{archivableCount !== 1 ? "s" : ""})
+                  Fechar Expediente ({archivableCount} pedido
+                  {archivableCount !== 1 ? "s" : ""})
                 </button>
               )}
             </div>
@@ -918,24 +1172,37 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 3: Daily Report */}
-      {canViewReport && (
+      {canViewDashboard && (
         <div
           className="flex flex-col rounded-[var(--radius-xl)] overflow-hidden"
-          style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+          style={{
+            backgroundColor: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+          }}
         >
           <button
             onClick={() => setReportExpanded((v) => !v)}
             className="flex items-center justify-between px-5 py-4 w-full text-left cursor-pointer"
-            style={{ borderBottom: reportExpanded ? "1px solid var(--color-border)" : "none" }}
+            style={{
+              borderBottom: reportExpanded
+                ? "1px solid var(--color-border)"
+                : "none",
+            }}
           >
             <div className="flex items-center gap-2">
-              <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              <p
+                className="font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Relatório Diário
               </p>
               {reportSource === "archived" && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                  style={{ backgroundColor: "rgba(168,85,247,0.15)", color: "#a855f7" }}
+                  style={{
+                    backgroundColor: "rgba(168,85,247,0.15)",
+                    color: "#a855f7",
+                  }}
                 >
                   Arquivado
                 </span>
@@ -943,7 +1210,10 @@ export default function DashboardPage() {
               {reportSource === "live" && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                  style={{ backgroundColor: "rgba(34,197,94,0.12)", color: "var(--color-success)" }}
+                  style={{
+                    backgroundColor: "rgba(34,197,94,0.12)",
+                    color: "var(--color-success)",
+                  }}
                 >
                   Ao vivo
                 </span>
@@ -953,10 +1223,16 @@ export default function DashboardPage() {
               {/* Date picker */}
               <div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] text-sm"
-                style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <FiCalendar size={13} style={{ color: "var(--color-text-muted)" }} />
+                <FiCalendar
+                  size={13}
+                  style={{ color: "var(--color-text-muted)" }}
+                />
                 <input
                   type="date"
                   value={reportDate}
@@ -980,11 +1256,19 @@ export default function DashboardPage() {
             <div className="p-5 flex flex-col gap-5">
               {loadingReport ? (
                 <div className="py-8 flex justify-center">
-                  <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Carregando...</p>
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Carregando...
+                  </p>
                 </div>
               ) : !hasReportData ? (
                 <div className="py-8 flex flex-col items-center gap-2">
-                  <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Nenhum pedido finalizado em {reportDate || "..."}
                   </p>
                 </div>
@@ -993,18 +1277,45 @@ export default function DashboardPage() {
                   {/* Financial grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Dinheiro", value: reportRevenue.money, color: CHART_COLORS.success },
-                      { label: "Pix", value: reportRevenue.pix, color: CHART_COLORS.primary },
-                      { label: "Crédito", value: reportRevenue.credit, color: CHART_COLORS.purple },
-                      { label: "Débito", value: reportRevenue.debit, color: CHART_COLORS.warning },
+                      {
+                        label: "Dinheiro",
+                        value: reportRevenue.money,
+                        color: CHART_COLORS.success,
+                      },
+                      {
+                        label: "Pix",
+                        value: reportRevenue.pix,
+                        color: CHART_COLORS.primary,
+                      },
+                      {
+                        label: "Crédito",
+                        value: reportRevenue.credit,
+                        color: CHART_COLORS.purple,
+                      },
+                      {
+                        label: "Débito",
+                        value: reportRevenue.debit,
+                        color: CHART_COLORS.warning,
+                      },
                     ].map((item) => (
                       <div
                         key={item.label}
                         className="flex flex-col gap-1 p-3 rounded-[var(--radius-md)]"
-                        style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+                        style={{
+                          backgroundColor: "var(--color-bg-elevated)",
+                          border: "1px solid var(--color-border)",
+                        }}
                       >
-                        <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{item.label}</span>
-                        <span className="text-base font-bold" style={{ color: item.color }}>
+                        <span
+                          className="text-xs"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          className="text-base font-bold"
+                          style={{ color: item.color }}
+                        >
                           {fmtCurrency(item.value)}
                         </span>
                       </div>
@@ -1014,23 +1325,50 @@ export default function DashboardPage() {
                   {/* Totals */}
                   <div
                     className="grid grid-cols-3 gap-3 p-4 rounded-[var(--radius-md)]"
-                    style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                    }}
                   >
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Subtotal</span>
-                      <span className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Subtotal
+                      </span>
+                      <span
+                        className="font-semibold text-sm"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
                         {fmtCurrency(reportRevenue.subtotal)}
                       </span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Taxa de serviço</span>
-                      <span className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Taxa de serviço
+                      </span>
+                      <span
+                        className="font-semibold text-sm"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
                         {fmtCurrency(reportRevenue.serviceFee)}
                       </span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-bold" style={{ color: "var(--color-text-muted)" }}>Total</span>
-                      <span className="font-bold text-lg" style={{ color: "var(--color-success)" }}>
+                      <span
+                        className="text-xs font-bold"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Total
+                      </span>
+                      <span
+                        className="font-bold text-lg"
+                        style={{ color: "var(--color-success)" }}
+                      >
                         {fmtCurrency(reportRevenue.total)}
                       </span>
                     </div>
@@ -1039,7 +1377,10 @@ export default function DashboardPage() {
                   {/* Items */}
                   {reportItems.length > 0 && (
                     <div className="flex flex-col gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                      <p
+                        className="text-xs font-semibold uppercase tracking-wide"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
                         Itens vendidos
                       </p>
                       <div
@@ -1049,25 +1390,37 @@ export default function DashboardPage() {
                         {reportItems.map((item, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-3 px-4 py-2.5"
+                            className="flex items-center gap-3 px-4 p-2.5"
                             style={{
-                              borderBottom: i < reportItems.length - 1 ? "1px solid var(--color-border)" : undefined,
-                              backgroundColor: i % 2 === 0 ? "var(--color-bg-elevated)" : "transparent",
+                              borderBottom:
+                                i < reportItems.length - 1
+                                  ? "1px solid var(--color-border)"
+                                  : undefined,
+                              backgroundColor:
+                                i % 2 === 0
+                                  ? "var(--color-bg-elevated)"
+                                  : "transparent",
                             }}
                           >
                             <span
-                              className="text-sm font-bold w-10 flex-shrink-0 text-right"
+                              className="text-sm font-bold w-10 flex-shrink-0 text-center"
                               style={{ color: "var(--color-primary)" }}
                             >
                               {item.quantity}x
                             </span>
                             <span
                               className="text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0"
-                              style={{ backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)" }}
+                              style={{
+                                backgroundColor: "var(--color-primary-light)",
+                                color: "var(--color-primary)",
+                              }}
                             >
-                              {item.codItem || "—"}
+                              {item.codItem || "—"} (código)
                             </span>
-                            <span className="text-sm flex-1 min-w-0 truncate" style={{ color: "var(--color-text-primary)" }}>
+                            <span
+                              className="text-sm flex-1 min-w-0 truncate"
+                              style={{ color: "var(--color-text-primary)" }}
+                            >
                               {item.name}
                             </span>
                           </div>
@@ -1081,7 +1434,11 @@ export default function DashboardPage() {
                     <button
                       onClick={() => window.print()}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm cursor-pointer transition-opacity hover:opacity-70"
-                      style={{ backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}
+                      style={{
+                        backgroundColor: "var(--color-bg-elevated)",
+                        color: "var(--color-text-secondary)",
+                        border: "1px solid var(--color-border)",
+                      }}
                     >
                       <FiPrinter size={14} />
                       Imprimir
@@ -1098,130 +1455,281 @@ export default function DashboardPage() {
       {stats.length === 0 && !loadingStats ? (
         <div
           className="flex flex-col items-center justify-center rounded-[var(--radius-xl)] py-16 gap-3"
-          style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+          style={{
+            backgroundColor: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+          }}
         >
-          <FiTrendingUp size={32} style={{ color: "var(--color-text-muted)", opacity: 0.4 }} />
+          <FiTrendingUp
+            size={32}
+            style={{ color: "var(--color-text-muted)", opacity: 0.4 }}
+          />
           <div className="text-center">
-            <p className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               Nenhum dado histórico ainda
             </p>
-            <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)", opacity: 0.7 }}>
-              Execute &ldquo;Fechar Expediente&rdquo; ao fim do dia para gerar os gráficos
+            <p
+              className="text-xs mt-1"
+              style={{ color: "var(--color-text-muted)", opacity: 0.7 }}
+            >
+              Execute &ldquo;Fechar Expediente&rdquo; ao fim do dia para gerar
+              os gráficos
             </p>
           </div>
         </div>
-      ) : stats.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Revenue chart */}
-            <ChartCard
-              title="Faturamento por dia"
-              range={revenueRange}
-              onRangeChange={setRevenueRange}
-              onClearClick={() => setClearModal({ label: "Faturamento por dia", range: revenueRange })}
-              count={revenueStats.length}
-            >
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={revenueData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
-                  <YAxis stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} tickFormatter={(v) => `R$${v}`} width={55} />
-                  <Tooltip {...TOOLTIP_STYLE} formatter={(v) => fmtCurrency(Number(v ?? 0))} />
-                  <Area type="monotone" dataKey="Total" stroke={CHART_COLORS.primary} fill="url(#gradTotal)" strokeWidth={2} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </ChartCard>
+      ) : (
+        stats.length > 0 && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Revenue chart */}
+              <ChartCard
+                title="Faturamento por dia"
+                range={revenueRange}
+                onRangeChange={setRevenueRange}
+                onClearClick={canDeleteChartData ? () =>
+                  setClearModal({
+                    label: "Faturamento por dia",
+                    range: revenueRange,
+                  })
+                : undefined}
+                count={revenueStats.length}
+              >
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart
+                    data={revenueData}
+                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="gradTotal"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={CHART_COLORS.primary}
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={CHART_COLORS.primary}
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={CHART_COLORS.border}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                    />
+                    <YAxis
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      tickFormatter={(v) => `R$${v}`}
+                      width={55}
+                    />
+                    <Tooltip
+                      {...TOOLTIP_STYLE}
+                      formatter={(v) => fmtCurrency(Number(v ?? 0))}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="Total"
+                      stroke={CHART_COLORS.primary}
+                      fill="url(#gradTotal)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartCard>
 
-            {/* Orders chart */}
-            <ChartCard
-              title="Pedidos finalizados vs cancelados"
-              range={ordersRange}
-              onRangeChange={setOrdersRange}
-              onClearClick={() => setClearModal({ label: "Pedidos", range: ordersRange })}
-              count={ordersStats.length}
-            >
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={ordersData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
-                  <YAxis stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} width={30} />
-                  <Tooltip {...TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
-                  <Bar dataKey="Finalizados" fill={CHART_COLORS.success} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Cancelados" fill={CHART_COLORS.error} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Top items chart */}
-            <ChartCard
-              title="Itens mais vendidos"
-              range={topItemsRange}
-              onRangeChange={setTopItemsRange}
-              onClearClick={() => setClearModal({ label: "Itens mais vendidos", range: topItemsRange })}
-              count={topItemsStats.length}
-            >
-              {topItemsData.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: "var(--color-text-muted)" }}>
-                  Sem dados no período
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height={topItemsData.length * 36 + 20}>
-                  <BarChart data={topItemsData} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} horizontal={false} />
-                    <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" width={160} stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 10 }} tickLine={false} />
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [`${Number(v ?? 0)}x`, "Vendidos"]} />
-                    <Bar dataKey="value" fill={CHART_COLORS.teal} radius={[0, 3, 3, 0]} />
+              {/* Orders chart */}
+              <ChartCard
+                title="Pedidos finalizados vs cancelados"
+                range={ordersRange}
+                onRangeChange={setOrdersRange}
+                onClearClick={canDeleteChartData ? () =>
+                  setClearModal({ label: "Pedidos", range: ordersRange })
+                : undefined}
+                count={ordersStats.length}
+              >
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={ordersData}
+                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                    barGap={2}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={CHART_COLORS.border}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                    />
+                    <YAxis
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      width={30}
+                    />
+                    <Tooltip {...TOOLTIP_STYLE} />
+                    <Legend
+                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
+                    />
+                    <Bar
+                      dataKey="Finalizados"
+                      fill={CHART_COLORS.success}
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="Cancelados"
+                      fill={CHART_COLORS.error}
+                      radius={[3, 3, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
-              )}
-            </ChartCard>
+              </ChartCard>
+            </div>
 
-            {/* Payment pie chart */}
-            <ChartCard
-              title="Distribuição por pagamento"
-              range={paymentRange}
-              onRangeChange={setPaymentRange}
-              onClearClick={() => setClearModal({ label: "Distribuição por pagamento", range: paymentRange })}
-              count={paymentStats.length}
-            >
-              {paymentPieData.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: "var(--color-text-muted)" }}>
-                  Sem dados no período
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={paymentPieData}
-                      cx="50%" cy="50%"
-                      innerRadius={55} outerRadius={90}
-                      paddingAngle={3}
-                      dataKey="value" nameKey="name"
-                      label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                      labelLine={false} fontSize={11} fill={CHART_COLORS.text}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Top items chart */}
+              <ChartCard
+                title="Itens mais vendidos"
+                range={topItemsRange}
+                onRangeChange={setTopItemsRange}
+                onClearClick={canDeleteChartData ? () =>
+                  setClearModal({
+                    label: "Itens mais vendidos",
+                    range: topItemsRange,
+                  })
+                : undefined}
+                count={topItemsStats.length}
+              >
+                {topItemsData.length === 0 ? (
+                  <p
+                    className="text-sm text-center py-8"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Sem dados no período
+                  </p>
+                ) : (
+                  <ResponsiveContainer
+                    width="100%"
+                    height={topItemsData.length * 36 + 20}
+                  >
+                    <BarChart
+                      data={topItemsData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
                     >
-                      {paymentPieData.map((_, index) => (
-                        <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v) => fmtCurrency(Number(v ?? 0))} />
-                    <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-          </div>
-        </>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke={CHART_COLORS.border}
+                        horizontal={false}
+                      />
+                      <XAxis
+                        type="number"
+                        stroke={CHART_COLORS.text}
+                        tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={160}
+                        stroke={CHART_COLORS.text}
+                        tick={{ fill: CHART_COLORS.text, fontSize: 10 }}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        {...TOOLTIP_STYLE}
+                        formatter={(v) => [`${Number(v ?? 0)}x`, "Vendidos"]}
+                      />
+                      <Bar
+                        dataKey="value"
+                        fill={CHART_COLORS.teal}
+                        radius={[0, 3, 3, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartCard>
+
+              {/* Payment pie chart */}
+              <ChartCard
+                title="Distribuição por pagamento"
+                range={paymentRange}
+                onRangeChange={setPaymentRange}
+                onClearClick={canDeleteChartData ? () =>
+                  setClearModal({
+                    label: "Distribuição por pagamento",
+                    range: paymentRange,
+                  })
+                : undefined}
+                count={paymentStats.length}
+              >
+                {paymentPieData.length === 0 ? (
+                  <p
+                    className="text-sm text-center py-8"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Sem dados no período
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={paymentPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        dataKey="value"
+                        nameKey="name"
+                        label={({ name, percent }) =>
+                          `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
+                        labelLine={false}
+                        fontSize={11}
+                        fill={CHART_COLORS.text}
+                      >
+                        {paymentPieData.map((_, index) => (
+                          <Cell
+                            key={index}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        {...TOOLTIP_STYLE}
+                        formatter={(v) => fmtCurrency(Number(v ?? 0))}
+                      />
+                      <Legend
+                        wrapperStyle={{
+                          color: CHART_COLORS.text,
+                          fontSize: 12,
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartCard>
+            </div>
+          </>
+        )
       )}
 
       {/* Close Day Modal */}
@@ -1232,48 +1740,88 @@ export default function DashboardPage() {
         >
           <div
             className="w-full max-w-sm rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
-            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+            }}
           >
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--color-border)" }}>
-              <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "1px solid var(--color-border)" }}
+            >
+              <p
+                className="font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Fechar Expediente
               </p>
-              <button onClick={() => setShowCloseModal(false)} className="p-1.5 cursor-pointer transition-opacity hover:opacity-70" style={{ color: "var(--color-text-muted)" }}>
+              <button
+                onClick={() => setShowCloseModal(false)}
+                className="p-1.5 cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+              >
                 <FiX size={18} />
               </button>
             </div>
 
             <div className="px-5 py-4 flex flex-col gap-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "var(--color-warning)" }}>
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{
+                    backgroundColor: "rgba(245,158,11,0.12)",
+                    color: "var(--color-warning)",
+                  }}
+                >
                   <FiAlertTriangle size={18} />
                 </div>
                 <div>
-                  <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>
-                    Arquivar {archivableCount} pedido{archivableCount !== 1 ? "s" : ""}
+                  <p
+                    className="font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Arquivar {archivableCount} pedido
+                    {archivableCount !== 1 ? "s" : ""}
                   </p>
-                  <p className="text-sm mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-                    Os pedidos finalizados e cancelados serão agrupados por dia nas estatísticas e removidos da fila. Esta ação não pode ser desfeita.
+                  <p
+                    className="text-sm mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Os pedidos finalizados e cancelados serão agrupados por dia
+                    nas estatísticas e removidos da fila. Esta ação não pode ser
+                    desfeita.
                   </p>
                 </div>
               </div>
 
               <div
                 className="p-3 rounded-[var(--radius-md)] text-xs"
-                style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-muted)",
+                }}
               >
-                ✓ Pedidos agrupados por data nas estatísticas<br />
-                ✓ Dados disponíveis nos gráficos do dashboard<br />
-                ✓ Pedidos ativos não são afetados
+                ✓ Pedidos agrupados por data nas estatísticas
+                <br />
+                ✓ Dados disponíveis nos gráficos do dashboard
+                <br />✓ Pedidos ativos não são afetados
               </div>
             </div>
 
-            <div className="flex gap-2 px-5 py-4" style={{ borderTop: "1px solid var(--color-border)" }}>
+            <div
+              className="flex gap-2 px-5 py-4"
+              style={{ borderTop: "1px solid var(--color-border)" }}
+            >
               <button
                 onClick={() => setShowCloseModal(false)}
                 disabled={closingDay}
                 className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
-                style={{ backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-secondary)",
+                  border: "1px solid var(--color-border)",
+                }}
               >
                 Cancelar
               </button>
@@ -1281,7 +1829,10 @@ export default function DashboardPage() {
                 onClick={handleCloseDay}
                 disabled={closingDay}
                 className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-                style={{ backgroundColor: "var(--color-warning)", color: "white" }}
+                style={{
+                  backgroundColor: "var(--color-warning)",
+                  color: "white",
+                }}
               >
                 {closingDay ? "Arquivando..." : "Confirmar"}
               </button>
@@ -1298,13 +1849,19 @@ export default function DashboardPage() {
         >
           <div
             className="w-full max-w-sm rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
-            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+            }}
           >
             <div
               className="flex items-center justify-between px-5 py-4"
               style={{ borderBottom: "1px solid var(--color-border)" }}
             >
-              <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              <p
+                className="font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Zerar dados do gráfico
               </p>
               <button
@@ -1320,27 +1877,44 @@ export default function DashboardPage() {
               <div className="flex items-start gap-3">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: "rgba(239,68,68,0.12)", color: "var(--color-error)" }}
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.12)",
+                    color: "var(--color-error)",
+                  }}
                 >
                   <FiAlertTriangle size={18} />
                 </div>
                 <div>
-                  <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                  <p
+                    className="font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     Ação irreversível
                   </p>
-                  <p className="text-sm mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-                    Os dados de <strong style={{ color: "var(--color-text-secondary)" }}>{clearModal.label}</strong>{" "}
+                  <p
+                    className="text-sm mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Os dados de{" "}
+                    <strong style={{ color: "var(--color-text-secondary)" }}>
+                      {clearModal.label}
+                    </strong>{" "}
                     {clearModal.range.from || clearModal.range.to
                       ? `do período ${clearModal.range.from || "início"} → ${clearModal.range.to || "fim"}`
                       : "de todos os períodos"}{" "}
-                    serão excluídos permanentemente e não poderão ser recuperados.
+                    serão excluídos permanentemente e não poderão ser
+                    recuperados.
                   </p>
                 </div>
               </div>
               {!clearModal.range.from && !clearModal.range.to && (
                 <div
                   className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] text-xs"
-                  style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--color-error)" }}
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    color: "var(--color-error)",
+                  }}
                 >
                   <FiAlertTriangle size={12} />
                   Nenhum período selecionado — todos os dados serão apagados.
@@ -1356,7 +1930,11 @@ export default function DashboardPage() {
                 onClick={() => setClearModal(null)}
                 disabled={clearing}
                 className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
-                style={{ backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-secondary)",
+                  border: "1px solid var(--color-border)",
+                }}
               >
                 Cancelar
               </button>
@@ -1364,7 +1942,10 @@ export default function DashboardPage() {
                 onClick={() => handleClearStats(clearModal.range)}
                 disabled={clearing}
                 className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
-                style={{ backgroundColor: "var(--color-error)", color: "white" }}
+                style={{
+                  backgroundColor: "var(--color-error)",
+                  color: "white",
+                }}
               >
                 {clearing ? "Zerando..." : "Confirmar exclusão"}
               </button>

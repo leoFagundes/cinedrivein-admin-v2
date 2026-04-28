@@ -25,7 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can, canAny } from "@/lib/access";
 import { AppUser, Permission, PermissionProfile, UserStatus } from "@/types";
-import { PERMISSION_GROUPS, PERMISSION_META } from "@/lib/permissions";
+import { PERMISSION_GROUPS, PERMISSION_META, ALL_PERMISSIONS, PermissionGroup } from "@/lib/permissions";
 import { log } from "@/lib/logger";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 import Input from "@/components/ui/Input";
@@ -691,8 +691,38 @@ function ProfileModal({
   function toggle(p: Permission) {
     setPerms((prev) => {
       const n = new Set(prev);
-      n.has(p) ? n.delete(p) : n.add(p);
+      if (n.has(p)) {
+        n.delete(p);
+        // Deselecting the view perm removes all perms in that section
+        const group = PERMISSION_GROUPS.find((g) => g.viewPerm === p);
+        if (group) group.permissions.forEach((gp) => n.delete(gp));
+      } else {
+        n.add(p);
+        // Selecting a non-view perm auto-enables the section's view perm
+        const group = PERMISSION_GROUPS.find((g) => g.permissions.includes(p) && g.viewPerm !== p);
+        if (group) n.add(group.viewPerm);
+      }
       return n;
+    });
+  }
+
+  function toggleSection(group: PermissionGroup) {
+    setPerms((prev) => {
+      const n = new Set(prev);
+      const allIn = group.permissions.every((p) => n.has(p));
+      if (allIn) {
+        group.permissions.forEach((p) => n.delete(p));
+      } else {
+        group.permissions.forEach((p) => n.add(p));
+      }
+      return n;
+    });
+  }
+
+  function toggleAll() {
+    setPerms((prev) => {
+      const allSelected = ALL_PERMISSIONS.every((p) => prev.has(p));
+      return allSelected ? new Set<Permission>() : new Set<Permission>(ALL_PERMISSIONS);
     });
   }
 
@@ -723,67 +753,112 @@ function ProfileModal({
           autoFocus
         />
         <div className="flex flex-col gap-4">
-          <p
-            className="text-sm font-medium"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            Permissões
-          </p>
-          {PERMISSION_GROUPS.map((group) => (
-            <div key={group.label}>
-              <p
-                className="text-xs font-semibold uppercase tracking-wide mb-2"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                {group.label}
-              </p>
-              <div className="flex flex-col gap-1">
-                {group.permissions.map((perm) => {
-                  const meta = PERMISSION_META[perm];
-                  const checked = perms.has(perm);
-                  return (
-                    <button
-                      key={perm}
-                      onClick={() => toggle(perm)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)] text-left cursor-pointer transition-all"
-                      style={{
-                        backgroundColor: checked
-                          ? "var(--color-primary-light)"
-                          : "var(--color-bg-elevated)",
-                        border: `1px solid ${checked ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
-                      }}
-                    >
-                      <div
-                        className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>
+              Permissões
+            </p>
+            <button
+              onClick={toggleAll}
+              className="text-xs px-2.5 py-1 rounded cursor-pointer transition-all"
+              style={{
+                backgroundColor: ALL_PERMISSIONS.every((p) => perms.has(p)) ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                border: `1px solid ${ALL_PERMISSIONS.every((p) => perms.has(p)) ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                color: ALL_PERMISSIONS.every((p) => perms.has(p)) ? "var(--color-primary)" : "var(--color-text-secondary)",
+              }}
+            >
+              {ALL_PERMISSIONS.every((p) => perms.has(p)) ? "Desmarcar tudo" : "Selecionar tudo"}
+            </button>
+          </div>
+          {PERMISSION_GROUPS.map((group) => {
+            const sectionEnabled = perms.has(group.viewPerm);
+            const allInSection = group.permissions.every((p) => perms.has(p));
+            return (
+              <div key={group.label}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                    {group.label}
+                  </p>
+                  <button
+                    onClick={() => toggleSection(group)}
+                    className="text-xs px-2 py-0.5 rounded cursor-pointer transition-all"
+                    style={{
+                      backgroundColor: allInSection ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                      border: `1px solid ${allInSection ? "rgba(0,136,194,0.3)" : "var(--color-border)"}`,
+                      color: allInSection ? "var(--color-primary)" : "var(--color-text-muted)",
+                    }}
+                  >
+                    {allInSection ? "Desmarcar seção" : "Selecionar seção"}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {group.permissions.map((perm) => {
+                    const meta = PERMISSION_META[perm];
+                    const checked = perms.has(perm);
+                    const isViewPerm = perm === group.viewPerm;
+                    const isDisabled = !isViewPerm && !sectionEnabled;
+                    return (
+                      <button
+                        key={perm}
+                        onClick={() => !isDisabled && toggle(perm)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)] text-left transition-all"
                         style={{
-                          backgroundColor: checked
-                            ? "var(--color-primary)"
-                            : "transparent",
-                          border: `1.5px solid ${checked ? "var(--color-primary)" : "var(--color-border)"}`,
+                          backgroundColor: checked ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                          border: `1px solid ${checked ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                          cursor: isDisabled ? "not-allowed" : "pointer",
+                          opacity: isDisabled ? 0.45 : 1,
                         }}
                       >
-                        {checked && <FiCheck size={10} color="white" />}
-                      </div>
-                      <div>
-                        <p
-                          className="text-sm font-medium"
-                          style={{ color: "var(--color-text-primary)" }}
+                        <div
+                          className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                          style={{
+                            backgroundColor: checked ? "var(--color-primary)" : "transparent",
+                            border: `1.5px solid ${checked ? "var(--color-primary)" : "var(--color-border)"}`,
+                          }}
                         >
-                          {meta.label}
-                        </p>
-                        <p
-                          className="text-xs"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          {meta.description}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
+                          {checked && <FiCheck size={10} color="white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap" style={{ color: "var(--color-text-primary)" }}>
+                            {meta.label}
+                            {isViewPerm && (
+                              <span className="text-xs font-normal" style={{ color: "var(--color-text-muted)" }}>
+                                (requerido para a seção)
+                              </span>
+                            )}
+                            {perm === "manage_profiles" && (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                                style={{
+                                  backgroundColor: "rgba(245,158,11,0.15)",
+                                  color: "var(--color-warning)",
+                                  border: "1px solid rgba(245,158,11,0.35)",
+                                }}
+                              >
+                                <FiAlertTriangle size={9} />
+                                Acesso crítico
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                            {meta.description}
+                          </p>
+                          {perm === "manage_profiles" && (
+                            <p
+                              className="text-xs mt-1 flex items-start gap-1"
+                              style={{ color: "var(--color-warning)" }}
+                            >
+                              <FiAlertTriangle size={10} className="flex-shrink-0 mt-0.5" />
+                              Quem tem essa permissão pode criar perfis com qualquer acesso e atribuí-los a outros usuários.
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <button
           onClick={handleSave}
@@ -808,6 +883,7 @@ function UserCard({
   user,
   canApprove,
   canManage,
+  canDelete,
   onApprove,
   onReject,
   onAssign,
@@ -817,6 +893,7 @@ function UserCard({
   user: AppUser;
   canApprove: boolean;
   canManage: boolean;
+  canDelete: boolean;
   onApprove: (uid: string) => void;
   onReject: (uid: string) => void;
   onAssign: (user: AppUser) => void;
@@ -846,6 +923,15 @@ function UserCard({
             >
               @{user.username}
             </p>
+            {!user.isOwner && (
+              <p
+                className="text-xs truncate"
+                style={{ color: "var(--color-primary)", opacity: 0.85 }}
+              >
+                <FiShield size={10} style={{ display: "inline", marginRight: 3, verticalAlign: "middle" }} />
+                {user.profileName ?? "Sem perfil"}
+              </p>
+            )}
             <p
               className="text-xs truncate"
               style={{ color: "var(--color-text-muted)" }}
@@ -909,9 +995,9 @@ function UserCard({
               </button>
             </>
           )}
-          {canManage && !user.isOwner && (
+          {(canManage || canDelete) && !user.isOwner && (
             <>
-              {user.status === "approved" && (
+              {canManage && user.status === "approved" && (
                 <button
                   onClick={() => onAssign(user)}
                   title="Perfil"
@@ -925,37 +1011,41 @@ function UserCard({
                   <FiShield size={13} />
                 </button>
               )}
-              <button
-                onClick={() => onEdit(user)}
-                title="Editar"
-                className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                style={{
-                  backgroundColor: "var(--color-bg-elevated)",
-                  color: "var(--color-text-secondary)",
-                  border: "1px solid var(--color-border)",
-                }}
-              >
-                <FiEdit2 size={13} />
-              </button>
-              <button
-                onClick={() => onDelete(user)}
-                title="Excluir"
-                className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                style={{
-                  backgroundColor: "rgba(239,68,68,0.08)",
-                  color: "var(--color-error)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "rgba(239,68,68,0.2)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "rgba(239,68,68,0.08)")
-                }
-              >
-                <FiTrash2 size={13} />
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => onEdit(user)}
+                  title="Editar"
+                  className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    color: "var(--color-text-secondary)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <FiEdit2 size={13} />
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(user)}
+                  title="Excluir"
+                  className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.08)",
+                    color: "var(--color-error)",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      "rgba(239,68,68,0.2)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      "rgba(239,68,68,0.08)")
+                  }
+                >
+                  <FiTrash2 size={13} />
+                </button>
+              )}
             </>
           )}
         </div>
@@ -1101,14 +1191,12 @@ export default function UsersPage() {
   const { appUser } = useAuth();
   const { success, error, warning } = useToast();
 
-  const canAccessPage = canAny(appUser, [
-    "approve_users",
-    "manage_users",
-    "manage_profiles",
-  ]);
+  const canAccessPage = can(appUser, "view_users");
   const canApproveUsers = can(appUser, "approve_users");
-  const canManageUsers = can(appUser, "manage_users");
+  const canManageUsers = can(appUser, "edit_users");
+  const canDeleteUsers = can(appUser, "delete_users");
   const canManageProfiles = can(appUser, "manage_profiles");
+  const canCreateUser = can(appUser, "create_user");
 
   const [tab, setTab] = useState<Tab>("users");
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -1444,7 +1532,7 @@ export default function UsersPage() {
             Gerencie usuários e perfis de permissão.
           </p>
         </div>
-        {canManageUsers && (
+        {canCreateUser && (
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
@@ -1689,6 +1777,7 @@ export default function UsersPage() {
                         user={user}
                         canApprove={canApproveUsers}
                         canManage={canManageUsers}
+                        canDelete={canDeleteUsers}
                         onApprove={handleApprove}
                         onReject={handleReject}
                         onAssign={setAssignTarget}
@@ -1756,12 +1845,20 @@ export default function UsersPage() {
                                   >
                                     {user.username}
                                   </p>
-                                  {user.isOwner && (
+                                  {user.isOwner ? (
                                     <span
                                       className="text-xs"
                                       style={{ color: "var(--color-primary)" }}
                                     >
                                       Owner
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="text-xs flex items-center gap-1"
+                                      style={{ color: "var(--color-text-muted)" }}
+                                    >
+                                      <FiShield size={10} />
+                                      {user.profileName ?? "Sem perfil"}
                                     </span>
                                   )}
                                 </div>
@@ -1832,9 +1929,9 @@ export default function UsersPage() {
                                       </button>
                                     </>
                                   )}
-                                {canManageUsers && !user.isOwner && (
+                                {(canManageUsers || canDeleteUsers) && !user.isOwner && (
                                   <>
-                                    {user.status === "approved" && (
+                                    {canManageUsers && user.status === "approved" && (
                                       <button
                                         onClick={() => setAssignTarget(user)}
                                         title="Atribuir perfil"
@@ -1858,50 +1955,55 @@ export default function UsersPage() {
                                         <FiShield size={13} />
                                       </button>
                                     )}
-                                    <button
-                                      onClick={() => setEditTarget(user)}
-                                      title="Editar"
-                                      className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                                      style={{
-                                        backgroundColor:
-                                          "var(--color-bg-elevated)",
-                                        color: "var(--color-text-secondary)",
-                                        border: "1px solid var(--color-border)",
-                                      }}
-                                      onMouseEnter={(e) =>
-                                        (e.currentTarget.style.borderColor =
-                                          "var(--color-primary)")
-                                      }
-                                      onMouseLeave={(e) =>
-                                        (e.currentTarget.style.borderColor =
-                                          "var(--color-border)")
-                                      }
-                                    >
-                                      <FiEdit2 size={13} />
-                                    </button>
-                                    <button
-                                      onClick={() => setDeleteTarget(user)}
-                                      title="Excluir"
-                                      className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                                      style={{
-                                        backgroundColor: "rgba(239,68,68,0.08)",
-                                        color: "var(--color-error)",
-                                      }}
-                                      onMouseEnter={(e) =>
-                                        (e.currentTarget.style.backgroundColor =
-                                          "rgba(239,68,68,0.2)")
-                                      }
-                                      onMouseLeave={(e) =>
-                                        (e.currentTarget.style.backgroundColor =
-                                          "rgba(239,68,68,0.08)")
-                                      }
-                                    >
-                                      <FiTrash2 size={13} />
-                                    </button>
+                                    {canManageUsers && (
+                                      <button
+                                        onClick={() => setEditTarget(user)}
+                                        title="Editar"
+                                        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                                        style={{
+                                          backgroundColor:
+                                            "var(--color-bg-elevated)",
+                                          color: "var(--color-text-secondary)",
+                                          border: "1px solid var(--color-border)",
+                                        }}
+                                        onMouseEnter={(e) =>
+                                          (e.currentTarget.style.borderColor =
+                                            "var(--color-primary)")
+                                        }
+                                        onMouseLeave={(e) =>
+                                          (e.currentTarget.style.borderColor =
+                                            "var(--color-border)")
+                                        }
+                                      >
+                                        <FiEdit2 size={13} />
+                                      </button>
+                                    )}
+                                    {canDeleteUsers && (
+                                      <button
+                                        onClick={() => setDeleteTarget(user)}
+                                        title="Excluir"
+                                        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                                        style={{
+                                          backgroundColor: "rgba(239,68,68,0.08)",
+                                          color: "var(--color-error)",
+                                        }}
+                                        onMouseEnter={(e) =>
+                                          (e.currentTarget.style.backgroundColor =
+                                            "rgba(239,68,68,0.2)")
+                                        }
+                                        onMouseLeave={(e) =>
+                                          (e.currentTarget.style.backgroundColor =
+                                            "rgba(239,68,68,0.08)")
+                                        }
+                                      >
+                                        <FiTrash2 size={13} />
+                                      </button>
+                                    )}
                                   </>
                                 )}
                                 {!canApproveUsers &&
                                   !canManageUsers &&
+                                  !canDeleteUsers &&
                                   user.status !== "pending" && (
                                     <span
                                       className="text-xs"

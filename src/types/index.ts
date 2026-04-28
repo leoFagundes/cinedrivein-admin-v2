@@ -1,15 +1,43 @@
 export type UserStatus = "pending" | "approved" | "rejected";
 
 export type Permission =
+  // Dashboard
+  | "view_dashboard"
+  | "manage_store"
+  | "generate_report"
+  | "delete_chart_data"
+  // Pedidos
+  | "view_orders"
+  | "delete_orders"
+  | "cancel_orders"
+  | "finish_orders"
+  | "edit_orders"
+  | "chat_orders"
+  | "create_order"
+  | "manage_chat_templates"
+  // Estoque
+  | "view_stock"
+  | "create_item"
+  | "create_subitem"
+  | "edit_item"
+  | "edit_subitem"
+  | "delete_item"
+  | "delete_subitem"
+  | "manage_category_order"
+  // Usuários
+  | "view_users"
+  | "edit_users"
   | "approve_users"
-  | "manage_users"
+  | "delete_users"
   | "manage_profiles"
-  | "manage_orders"
-  | "manage_stock"
-  | "manage_site"
-  | "manage_schedule"
-  | "view_reports"
-  | "view_logs";
+  | "create_user"
+  // Logs
+  | "view_logs"
+  | "delete_logs"
+  // Configurações do Site
+  | "view_site"
+  | "manage_movies"
+  | "manage_site_settings";
 
 export interface PermissionProfile {
   id: string;
@@ -87,6 +115,15 @@ export interface Film {
   trailer: string;
 }
 
+type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // domingo = 0
+
+export interface PriceRule {
+  label: string;
+  days: WeekDay[];
+  meia: number;
+  inteira: number;
+}
+
 export interface SiteConfig {
   siteUrl: string;
   isClosed: boolean;
@@ -102,6 +139,7 @@ export interface SiteConfig {
   session2?: Film | null;
   session3?: Film | null;
   session4?: Film | null;
+  prices?: PriceRule[];
 }
 
 export interface DailyStats {
@@ -131,6 +169,7 @@ export interface OrderItem {
   codItem: string;
   name: string;
   value: number;
+  quantity?: number;
   photo?: string;
   observation?: string;
   additionals?: string[];

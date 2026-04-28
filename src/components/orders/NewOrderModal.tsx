@@ -18,6 +18,7 @@ import {
   FiX,
   FiSearch,
   FiPlus,
+  FiMinus,
   FiCheck,
   FiShoppingCart,
   FiPackage,
@@ -49,6 +50,7 @@ function applyPhoneMask(raw: string): string {
 interface DraftItem {
   draftId: string;
   item: StockItem;
+  quantity: number;
   observation: string;
   additional: string;
   additional_sauce: string;
@@ -193,6 +195,7 @@ function ItemConfigurator({
   onAdd: (draft: Omit<DraftItem, "draftId">) => void;
   onClose: () => void;
 }) {
+  const [quantity, setQuantity] = useState(1);
   const [observation, setObservation] = useState("");
   const [additional, setAdditional] = useState("");
   const [sauce, setSauce] = useState("");
@@ -312,6 +315,36 @@ function ItemConfigurator({
         )}
       </div>
 
+      {/* Quantity stepper */}
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderTop: "1px solid var(--color-border)", backgroundColor: "var(--color-bg-elevated)" }}
+      >
+        <span className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>Quantidade</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+            className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center cursor-pointer transition-opacity hover:opacity-70"
+            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+          >
+            <FiMinus size={12} />
+          </button>
+          <span className="w-6 text-center text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>{quantity}</span>
+          <button
+            onClick={() => setQuantity((q) => q + 1)}
+            className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+            style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+          >
+            <FiPlus size={12} />
+          </button>
+        </div>
+        {quantity > 1 && (
+          <span className="ml-auto text-xs font-semibold" style={{ color: "var(--color-primary)" }}>
+            = {`R$ ${((item.visibleValue ?? item.value) * quantity).toFixed(2).replace(".", ",")}`}
+          </span>
+        )}
+      </div>
+
       <div
         className="flex gap-2 px-4 py-3 flex-shrink-0"
         style={{ borderTop: "1px solid var(--color-border)" }}
@@ -331,6 +364,7 @@ function ItemConfigurator({
           onClick={() =>
             onAdd({
               item,
+              quantity,
               observation,
               additional,
               additional_sauce: sauce,
@@ -484,6 +518,7 @@ export default function NewOrderModal({
               additionals_sweet: [],
               createdAt: new Date(),
             } as StockItem),
+          quantity: (oi.quantity as number) ?? 1,
           observation: oi.observation ?? "",
           additional: (oi.additionals ?? [])[0] ?? "",
           additional_sauce: (oi.additionals_sauce ?? [])[0] ?? "",
@@ -528,11 +563,21 @@ export default function NewOrderModal({
   }, [stockItems, category, search, categoryOrderList]);
 
   const subtotal = draftItems.reduce(
-    (sum, d) => sum + (d.item.visibleValue ?? d.item.value),
+    (sum, d) => sum + (d.item.visibleValue ?? d.item.value) * d.quantity,
     0,
   );
   const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE * 100) / 100;
   const total = subtotal + serviceFee;
+
+  function updateQuantity(draftId: string, delta: number) {
+    setDraftItems((prev) =>
+      prev.map((d) =>
+        d.draftId === draftId
+          ? { ...d, quantity: Math.max(1, d.quantity + delta) }
+          : d,
+      ),
+    );
+  }
 
   function handleAddItem(draft: Omit<DraftItem, "draftId">) {
     setDraftItems((prev) => [
@@ -587,6 +632,7 @@ export default function NewOrderModal({
       codItem: d.item.codItem,
       name: d.item.name,
       value: d.item.visibleValue ?? d.item.value,
+      quantity: d.quantity,
       photo: d.item.photo ?? null,
       observation: d.observation || null,
       additionals: d.additional ? [d.additional] : [],
@@ -865,11 +911,8 @@ export default function NewOrderModal({
               Itens
             </p>
             {draftItems.length > 0 && (
-              <span
-                className="text-xs"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                {draftItems.length} {draftItems.length === 1 ? "item" : "itens"}
+              <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                {draftItems.reduce((s, d) => s + d.quantity, 0)} {draftItems.reduce((s, d) => s + d.quantity, 0) === 1 ? "item" : "itens"}
               </span>
             )}
           </div>
@@ -948,21 +991,22 @@ export default function NewOrderModal({
                         >
                           {d.item.name}
                         </span>
-                        <span
-                          className="text-xs font-semibold flex-shrink-0"
-                          style={{ color: "var(--color-text-primary)" }}
-                        >
-                          {fmt(d.item.visibleValue ?? d.item.value)}
-                        </span>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                            {fmt(d.item.visibleValue ?? d.item.value)}
+                          </span>
+                          {d.quantity > 1 && (
+                            <span className="text-[10px]" style={{ color: "var(--color-primary)" }}>
+                              total: {fmt((d.item.visibleValue ?? d.item.value) * d.quantity)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      {extras.length > 0 && (
-                        <p
-                          className="text-[11px] mt-0.5"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          + {extras.join(", ")}
+                      {extras.length > 0 && extras.map((e, j) => (
+                        <p key={j} className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+                          + {e}
                         </p>
-                      )}
+                      ))}
                       {d.observation && (
                         <p
                           className="text-[11px] italic mt-0.5"
@@ -972,13 +1016,33 @@ export default function NewOrderModal({
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={() => removeItem(d.draftId)}
-                      className="p-1 rounded cursor-pointer flex-shrink-0 transition-opacity hover:opacity-70"
-                      style={{ color: "var(--color-error)" }}
-                    >
-                      <FiX size={14} />
-                    </button>
+                    {/* Quantity controls */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => updateQuantity(d.draftId, -1)}
+                        className="w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-opacity hover:opacity-70"
+                        style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+                      >
+                        <FiMinus size={10} />
+                      </button>
+                      <span className="w-5 text-center text-xs font-bold" style={{ color: "var(--color-text-primary)" }}>
+                        {d.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(d.draftId, 1)}
+                        className="w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                      >
+                        <FiPlus size={10} />
+                      </button>
+                      <button
+                        onClick={() => removeItem(d.draftId)}
+                        className="w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-opacity hover:opacity-70 ml-0.5"
+                        style={{ color: "var(--color-error)" }}
+                      >
+                        <FiX size={12} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

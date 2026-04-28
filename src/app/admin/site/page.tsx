@@ -22,6 +22,8 @@ import {
   FiChevronUp,
   FiExternalLink,
   FiSave,
+  FiLock,
+  FiDollarSign,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,6 +37,7 @@ import {
   EventType,
   SessionKey,
   SiteConfig,
+  PriceRule,
 } from "@/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -983,6 +986,7 @@ function ExtraSettings({
     (config.popUpDescriptions ?? []).join("\n"),
   );
   const [popupExpanded, setPopupExpanded] = useState(false);
+  const [prices, setPrices] = useState<PriceRule[]>(config.prices ?? []);
 
   // Local copy of image history — syncs from config when Firestore updates
   const [imageHistory, setImageHistory] = useState<string[]>(
@@ -998,6 +1002,7 @@ function ExtraSettings({
     setPopUpTitle(config.popUpTitle ?? "");
     setPopUpDescs((config.popUpDescriptions ?? []).join("\n"));
     setImageHistory(config.popUpImageHistory ?? []);
+    setPrices(config.prices ?? []);
     // Only update image/preview if there's no pending local file
     setPopUpFile((prev) => {
       if (prev === null) {
@@ -1050,22 +1055,26 @@ function ExtraSettings({
   }
 
   async function handleSave() {
-    await onSave(
-      {
-        isClosed,
-        isEvent,
-        popUpEnabled,
-        popUpImage: popUpFile ? undefined : popUpImage,
-        popUpTitle,
-        popUpDescriptions: popUpDescs
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean),
-        popUpImageHistory: imageHistory,
-      },
-      popUpFile,
-    );
-    // After save the file is no longer "pending"
+    const updates: Partial<SiteConfig> = {
+      isClosed,
+      isEvent,
+      popUpEnabled,
+      popUpTitle,
+      prices,
+      popUpDescriptions: popUpDescs
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean),
+      popUpImageHistory: imageHistory,
+    };
+
+    // só inclui popUpImage se NÃO tiver upload novo
+    if (!popUpFile) {
+      updates.popUpImage = popUpImage;
+    }
+
+    await onSave(updates, popUpFile);
+
     setPopUpFile(null);
   }
 
@@ -1159,6 +1168,207 @@ function ExtraSettings({
               <span>{ev.emoji}</span> {ev.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Prices */}
+      <div
+        className="flex flex-col gap-5 p-5 rounded-[var(--radius-xl)]"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <p className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                Tabela de Preços
+              </p>
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={{
+                  backgroundColor: "rgba(34,197,94,0.12)",
+                  color: "var(--color-success)",
+                  border: "1px solid rgba(34,197,94,0.25)",
+                }}
+              >
+                <FiGlobe size={9} />
+                Exibido no site
+              </span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              Esses preços aparecem na página pública do Cine Drive-in. Cada regra define os valores de meia e inteira para um período da semana.
+            </p>
+          </div>
+          <button
+            onClick={() =>
+              setPrices([
+                ...prices,
+                { label: "", days: [], meia: 0, inteira: 0 },
+              ])
+            }
+            className="flex items-center gap-1.5 h-9 px-3 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0 transition-all"
+            style={{
+              backgroundColor: "var(--color-primary-light)",
+              color: "var(--color-primary)",
+              border: "1px solid rgba(0,136,194,0.35)",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(0,136,194,0.18)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-primary-light)")}
+          >
+            <FiPlus size={14} />
+            Nova regra
+          </button>
+        </div>
+
+        {/* Rules */}
+        <div className="flex flex-col gap-3">
+          {prices.map((p, i) => (
+            <div
+              key={i}
+              className="rounded-[var(--radius-lg)] overflow-hidden"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              {/* Card header */}
+              <div
+                className="flex items-center gap-3 px-4 py-3"
+                style={{ borderBottom: "1px solid var(--color-border)" }}
+              >
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                  style={{
+                    backgroundColor: "var(--color-primary-light)",
+                    color: "var(--color-primary)",
+                    border: "1px solid rgba(0,136,194,0.3)",
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <input
+                  value={p.label}
+                  onChange={(e) => {
+                    const copy = [...prices];
+                    copy[i].label = e.target.value;
+                    setPrices(copy);
+                  }}
+                  placeholder="Ex: Segunda e Terça"
+                  className="flex-1 bg-transparent text-sm outline-none font-medium"
+                  style={{
+                    color: p.label ? "var(--color-text-primary)" : "var(--color-text-muted)",
+                  }}
+                />
+                <button
+                  onClick={() => setPrices(prices.filter((_, idx) => idx !== i))}
+                  className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-all flex-shrink-0"
+                  style={{ color: "var(--color-text-muted)" }}
+                  title="Remover regra"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.1)";
+                    e.currentTarget.style.color = "var(--color-error)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--color-text-muted)";
+                  }}
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
+
+              {/* Price fields */}
+              <div className="grid grid-cols-2 divide-x" style={{ borderColor: "var(--color-border)" }}>
+                <div className="flex flex-col gap-1 p-4">
+                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                    Meia-entrada
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>R$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={p.meia}
+                      onChange={(e) => {
+                        const copy = [...prices];
+                        copy[i].meia = Number(e.target.value);
+                        setPrices(copy);
+                      }}
+                      className="flex-1 bg-transparent text-xl font-bold outline-none"
+                      style={{ color: "var(--color-text-primary)" }}
+                    />
+                  </div>
+                  <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                    Estudantes, idosos e similares
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1 p-4" style={{ borderLeftWidth: 1, borderLeftStyle: "solid", borderLeftColor: "var(--color-border)" }}>
+                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                    Inteira
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>R$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={p.inteira}
+                      onChange={(e) => {
+                        const copy = [...prices];
+                        copy[i].inteira = Number(e.target.value);
+                        setPrices(copy);
+                      }}
+                      className="flex-1 bg-transparent text-xl font-bold outline-none"
+                      style={{ color: "var(--color-text-primary)" }}
+                    />
+                  </div>
+                  <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                    Preço padrão
+                  </p>
+                </div>
+              </div>
+
+              {/* Preview */}
+              {(p.label || p.meia > 0 || p.inteira > 0) && (
+                <div
+                  className="flex items-center gap-2 px-4 py-2.5"
+                  style={{
+                    borderTop: "1px solid var(--color-border)",
+                    backgroundColor: "rgba(0,136,194,0.04)",
+                  }}
+                >
+                  <FiGlobe size={11} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
+                  <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                    Aparece no site como:{" "}
+                    <span className="font-medium" style={{ color: "var(--color-text-secondary)" }}>
+                      {p.label || "—"} · Meia R$ {p.meia.toFixed(2).replace(".", ",")} / Inteira R$ {p.inteira.toFixed(2).replace(".", ",")}
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {prices.length === 0 && (
+            <div
+              className="flex flex-col items-center justify-center py-10 gap-3 rounded-[var(--radius-lg)]"
+              style={{
+                border: "1px dashed var(--color-border)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              <FiDollarSign size={24} style={{ opacity: 0.4 }} />
+              <div className="text-center">
+                <p className="text-sm font-medium">Nenhuma regra de preço cadastrada</p>
+                <p className="text-xs mt-0.5">Clique em &quot;Nova regra&quot; para adicionar uma tabela de preços.</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1304,7 +1514,9 @@ function ExtraSettings({
 export default function SitePage() {
   const { appUser } = useAuth();
   const { success, error } = useToast();
-  const canAccess = can(appUser, "manage_site");
+  const canAccess = can(appUser, "view_site");
+  const canManageMovies = can(appUser, "manage_movies");
+  const canManageSiteSettings = can(appUser, "manage_site_settings");
   const actor = appUser
     ? { uid: appUser.uid, username: appUser.username }
     : { uid: "?", username: "?" };
@@ -1645,6 +1857,19 @@ export default function SitePage() {
             : null,
         });
 
+      function formatPrices(p?: PriceRule[]) {
+        if (!p) return null;
+        return p.map((r) => `${r.label}: M${r.meia}/I${r.inteira}`).join(" | ");
+      }
+
+      if (formatPrices(config.prices) !== formatPrices(final.prices)) {
+        changes.push({
+          field: "Preços",
+          from: formatPrices(config.prices),
+          to: formatPrices(final.prices),
+        });
+      }
+
       log({
         action: "update_site_config",
         category: "site",
@@ -1799,42 +2024,66 @@ export default function SitePage() {
       ) : (
         <>
           {/* Sessions */}
-          <div className="flex flex-col gap-4">
-            <div>
-              <h2
-                className="text-base font-semibold"
-                style={{ color: "var(--color-text-primary)" }}
-              >
-                Sessões em cartaz
-              </h2>
-              <p
-                className="text-sm mt-0.5"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                Clique em uma sessão vazia para adicionar um filme ou passe o
-                mouse para editar.
+          {canManageMovies ? (
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2
+                  className="text-base font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Sessões em cartaz
+                </h2>
+                <p
+                  className="text-sm mt-0.5"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Clique em uma sessão vazia para adicionar um filme ou passe o
+                  mouse para editar.
+                </p>
+              </div>
+              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                {SESSIONS.map((session) => (
+                  <SessionCard
+                    key={session.key}
+                    session={session}
+                    film={config[session.key]}
+                    onEdit={() => setEditModal({ session })}
+                    onCopy={() => setCopyModal({ session })}
+                    onDelete={() => setDeleteModal({ session })}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
+              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+            >
+              <FiLock size={16} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
+              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                Você não tem permissão para gerenciar filmes.
               </p>
             </div>
-            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-              {SESSIONS.map((session) => (
-                <SessionCard
-                  key={session.key}
-                  session={session}
-                  film={config[session.key]}
-                  onEdit={() => setEditModal({ session })}
-                  onCopy={() => setCopyModal({ session })}
-                  onDelete={() => setDeleteModal({ session })}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Extra settings */}
-          <ExtraSettings
-            config={config}
-            onSave={handleSaveExtra}
-            saving={savingExtra}
-          />
+          {canManageSiteSettings ? (
+            <ExtraSettings
+              config={config}
+              onSave={handleSaveExtra}
+              saving={savingExtra}
+            />
+          ) : (
+            <div
+              className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
+              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+            >
+              <FiLock size={16} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
+              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                Você não tem permissão para gerenciar configurações extras.
+              </p>
+            </div>
+          )}
         </>
       )}
 

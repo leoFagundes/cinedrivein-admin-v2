@@ -315,11 +315,11 @@ function ChangeTag({ from, to }: { from: string | null; to: string | null }) {
 
 function LogRow({
   log,
-  isOwner,
+  canDelete,
   onDelete,
 }: {
   log: Log;
-  isOwner: boolean;
+  canDelete: boolean;
   onDelete: (id: string) => void;
 }) {
   const cat = CATEGORY_META[log.category];
@@ -363,7 +363,7 @@ function LogRow({
               >
                 {timeAgo(log.createdAt)}
               </span>
-              {isOwner && (
+              {canDelete && (
                 <button
                   onClick={() => onDelete(log.id)}
                   title="Excluir log"
@@ -475,8 +475,8 @@ const CATEGORY_FILTERS: { key: CategoryFilter; label: string }[] = [
 export default function LogsPage() {
   const { appUser } = useAuth();
   const { success, error } = useToast();
-  const isOwner = appUser?.isOwner ?? false;
   const canView = can(appUser, "view_logs");
+  const canDelete = can(appUser, "delete_logs");
 
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
@@ -677,7 +677,7 @@ export default function LogsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {isOwner && (
+          {canDelete && (
             <>
               <button
                 onClick={() => setDeleteOldConfirm(true)}
@@ -915,7 +915,7 @@ export default function LogsPage() {
                   <LogRow
                     key={l.id}
                     log={l}
-                    isOwner={isOwner}
+                    canDelete={canDelete}
                     onDelete={(id) => setDeleteTarget(id)}
                   />
                 ))}

@@ -6,12 +6,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   FiGrid, FiShoppingBag, FiBox, FiUsers, FiGlobe,
-  FiActivity, FiLogOut, FiMenu, FiX,
+  FiActivity, FiLogOut, FiMenu, FiX, FiLock,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
-import { canAny } from "@/lib/access";
+import { can } from "@/lib/access";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 
@@ -19,29 +19,51 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
-  permissions?: Permission[];
+  permission: Permission;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard",             href: "/admin/dashboard", icon: <FiGrid size={18} />,         permissions: ["manage_orders","manage_stock","manage_site","approve_users","manage_users","manage_profiles","manage_schedule","view_reports","view_logs"] },
-  { label: "Pedidos",               href: "/admin/orders",    icon: <FiShoppingBag size={18} /> },
-  { label: "Estoque",               href: "/admin/stock",     icon: <FiBox size={18} />,           permissions: ["manage_stock"] },
-  { label: "Usuários",              href: "/admin/users",     icon: <FiUsers size={18} />,         permissions: ["approve_users","manage_users","manage_profiles"] },
-  { label: "Logs",                  href: "/admin/logs",      icon: <FiActivity size={18} />,      permissions: ["view_logs"] },
-  { label: "Configurações do Site", href: "/admin/site",      icon: <FiGlobe size={18} />,         permissions: ["manage_site"] },
+  { label: "Dashboard",             href: "/admin/dashboard", icon: <FiGrid size={18} />,        permission: "view_dashboard" },
+  { label: "Pedidos",               href: "/admin/orders",    icon: <FiShoppingBag size={18} />, permission: "view_orders" },
+  { label: "Estoque",               href: "/admin/stock",     icon: <FiBox size={18} />,         permission: "view_stock" },
+  { label: "Usuários",              href: "/admin/users",     icon: <FiUsers size={18} />,       permission: "view_users" },
+  { label: "Logs",                  href: "/admin/logs",      icon: <FiActivity size={18} />,    permission: "view_logs" },
+  { label: "Configurações do Site", href: "/admin/site",      icon: <FiGlobe size={18} />,       permission: "view_site" },
 ];
 
 function NavLink({
   item,
+  allowed,
   badge,
   onClick,
 }: {
   item: NavItem;
+  allowed: boolean;
   badge?: number;
   onClick?: () => void;
 }) {
   const pathname = usePathname();
   const active = pathname === item.href || pathname.startsWith(item.href + "/");
+
+  if (!allowed) {
+    return (
+      <div
+        title="Você não tem permissão para acessar esta página"
+        className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)] text-sm font-medium select-none"
+        style={{
+          opacity: 0.4,
+          cursor: "not-allowed",
+          color: "var(--color-text-secondary)",
+          border: "1px solid transparent",
+        }}
+      >
+        <span className="flex-shrink-0">{item.icon}</span>
+        <span className="truncate flex-1">{item.label}</span>
+        <FiLock size={12} style={{ flexShrink: 0, color: "var(--color-text-muted)" }} />
+      </div>
+    );
+  }
+
   return (
     <Link
       href={item.href}
@@ -80,12 +102,6 @@ export default function Sidebar() {
   const close = () => setMobileOpen(false);
   const onOrdersPage = pathname === "/admin/orders";
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    if (!item.permissions) return true;
-    if (appUser?.isOwner) return true;
-    return canAny(appUser, item.permissions);
-  });
-
   const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-4 py-5 flex-shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
@@ -97,14 +113,18 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
-        {visibleItems.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            onClick={close}
-            badge={item.href === "/admin/orders" && !onOrdersPage ? unseenCount : undefined}
-          />
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const allowed = appUser?.isOwner || can(appUser, item.permission);
+          return (
+            <NavLink
+              key={item.href}
+              item={item}
+              allowed={allowed}
+              onClick={close}
+              badge={item.href === "/admin/orders" && !onOrdersPage && allowed ? unseenCount : undefined}
+            />
+          );
+        })}
       </nav>
 
       <div className="p-3 flex-shrink-0" style={{ borderTop: "1px solid var(--color-border)" }}>

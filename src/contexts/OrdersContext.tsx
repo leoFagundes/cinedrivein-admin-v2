@@ -53,6 +53,7 @@ function parseOrderItem(raw: Record<string, unknown>): OrderItem {
     codItem: (raw.codItem ?? "") as string,
     name: (raw.name ?? "") as string,
     value: (raw.value ?? 0) as number,
+    quantity: (raw.quantity as number | undefined) ?? 1,
     photo: raw.photo as string | undefined,
     observation: raw.observation as string | undefined,
     additionals: (raw.additionals ?? []) as string[],

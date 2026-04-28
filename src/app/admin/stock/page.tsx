@@ -20,6 +20,7 @@ import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 import {
   FiBox,
@@ -630,7 +631,7 @@ function SubitemModal({
   onClose,
 }: {
   existing?: Subitem;
-  onSave: (data: SubitemForm, file: File | null) => Promise<void>;
+  onSave: (data: SubitemForm, file: File | null | undefined) => Promise<void>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<SubitemForm>({
@@ -638,7 +639,9 @@ function SubitemModal({
     description: existing?.description ?? "",
     isVisible: existing?.isVisible ?? true,
   });
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null | undefined>(
+    undefined,
+  );
   const [errors, setErrors] = useState<
     Partial<Record<keyof SubitemForm, string>>
   >({});
@@ -760,7 +763,7 @@ function ItemModal({
   existing?: StockItem;
   allSubitems: Subitem[];
   categories: string[];
-  onSave: (data: ItemForm, file: File | null) => Promise<void>;
+  onSave: (data: ItemForm, file: File | null | undefined) => Promise<void>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<ItemForm>({
@@ -778,7 +781,9 @@ function ItemModal({
     additionals_drink: existing?.additionals_drink ?? [],
     additionals_sweet: existing?.additionals_sweet ?? [],
   });
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null | undefined>(
+    undefined,
+  );
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [loading, setLoading] = useState(false);
 
@@ -946,11 +951,15 @@ function SubitemCard({
   onToggleVisibility,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
 }: {
   subitem: Subitem;
   onToggleVisibility: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   return (
     <div
@@ -970,7 +979,8 @@ function SubitemCard({
           <img
             src={subitem.photo}
             alt={subitem.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
+            style={{ backgroundColor: "var(--color-bg-base)" }}
           />
         ) : (
           <FiPackage size={16} style={{ color: "var(--color-text-muted)" }} />
@@ -1007,41 +1017,45 @@ function SubitemCard({
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <ToggleBtn active={subitem.isVisible} onToggle={onToggleVisibility} />
-        <button
-          onClick={onEdit}
-          title="Editar"
-          className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-          style={{
-            backgroundColor: "var(--color-bg-elevated)",
-            color: "var(--color-text-secondary)",
-            border: "1px solid var(--color-border)",
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.borderColor = "var(--color-primary)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.borderColor = "var(--color-border)")
-          }
-        >
-          <FiEdit2 size={13} />
-        </button>
-        <button
-          onClick={onDelete}
-          title="Excluir"
-          className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-          style={{
-            backgroundColor: "rgba(239,68,68,0.08)",
-            color: "var(--color-error)",
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)")
-          }
-        >
-          <FiTrash2 size={13} />
-        </button>
+        {canEdit && (
+          <button
+            onClick={onEdit}
+            title="Editar"
+            className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+            style={{
+              backgroundColor: "var(--color-bg-elevated)",
+              color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border)",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.borderColor = "var(--color-primary)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.borderColor = "var(--color-border)")
+            }
+          >
+            <FiEdit2 size={13} />
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={onDelete}
+            title="Excluir"
+            className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+            style={{
+              backgroundColor: "rgba(239,68,68,0.08)",
+              color: "var(--color-error)",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)")
+            }
+          >
+            <FiTrash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1049,230 +1063,275 @@ function SubitemCard({
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
 
+function ActionBtn({
+  onClick,
+  title,
+  active,
+  activeColor,
+  activeBg,
+  hoverColor,
+  hoverBg,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  active?: boolean;
+  activeColor?: string;
+  activeBg?: string;
+  hoverColor: string;
+  hoverBg: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="flex-1 h-8 rounded-[var(--radius-sm)] flex items-center justify-center cursor-pointer transition-all"
+      style={{
+        color: active ? activeColor : "var(--color-text-muted)",
+        backgroundColor: active ? activeBg : "transparent",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = hoverColor;
+        e.currentTarget.style.backgroundColor = hoverBg;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = active
+          ? (activeColor ?? "")
+          : "var(--color-text-muted)";
+        e.currentTarget.style.backgroundColor = active
+          ? (activeBg ?? "transparent")
+          : "transparent";
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ItemCard({
   item,
   onToggleVisibility,
   onToggleFeatured,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
 }: {
   item: StockItem;
   onToggleVisibility: () => void;
   onToggleFeatured: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
+  const stockColor =
+    item.quantity <= 0
+      ? "var(--color-error)"
+      : item.quantity <= 5
+        ? "var(--color-warning)"
+        : "var(--color-success)";
+  const stockBg =
+    item.quantity <= 0
+      ? "rgba(239,68,68,0.12)"
+      : item.quantity <= 5
+        ? "rgba(245,158,11,0.12)"
+        : "rgba(34,197,94,0.1)";
+
   return (
     <div
-      className="rounded-[var(--radius-lg)] overflow-hidden flex"
+      className="rounded-[var(--radius-lg)] overflow-hidden flex flex-col"
       style={{
-        backgroundColor: "var(--color-bg-elevated)",
+        backgroundColor: "var(--color-bg-surface)",
         border: "1px solid var(--color-border)",
-        opacity: item.isVisible ? 1 : 0.55,
+        opacity: item.isVisible ? 1 : 0.35,
+        transition: "border-color 0.15s, box-shadow 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--color-primary)";
+        e.currentTarget.style.boxShadow = "0 0 0 1px rgba(0,136,194,0.3)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "var(--color-border)";
+        e.currentTarget.style.boxShadow = "none";
       }}
     >
-      {/* Photo — proeminente, lado esquerdo */}
-      <div className="w-28 flex-shrink-0 relative" style={{ minHeight: 128 }}>
+      {/* ── Image area ── */}
+      <div
+        className="relative w-full"
+        style={{
+          aspectRatio: "1 / 1",
+          backgroundColor: "var(--color-bg-base)",
+        }}
+      >
         {item.photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={item.photo}
             alt={item.name}
-            className="w-full h-full object-cover"
-            style={{ minHeight: 128 }}
+            className="w-full h-full object-contain"
           />
         ) : (
-          <div
-            className="w-full h-full flex items-center justify-center"
-            style={{
-              minHeight: 128,
-              backgroundColor: "var(--color-bg-surface)",
-            }}
-          >
-            <FiBox size={28} style={{ color: "var(--color-text-muted)" }} />
+          <div className="w-full h-full flex items-center justify-center">
+            <FiBox size={36} style={{ color: "var(--color-border)" }} />
           </div>
         )}
-        {/* Destaque badge */}
+
+        {/* Category gradient + label */}
+        <div
+          className="absolute bottom-0 left-0 right-0 px-2.5 pt-6 pb-2"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)",
+          }}
+        >
+          <span
+            className="text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: "rgba(255,255,255,0.85)" }}
+          >
+            {item.category}
+          </span>
+        </div>
+
+        {/* Featured badge */}
         {item.isFeatured && (
           <div
-            className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full flex items-center justify-center"
+            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
             style={{
               backgroundColor: "var(--color-warning)",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+              color: "white",
+              boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
             }}
           >
-            <FiStar size={9} color="white" />
+            <FiStar size={9} />
+            Destaque
           </div>
         )}
-        {/* Invisível badge */}
+
+        {/* Hidden badge */}
         {!item.isVisible && (
           <div
-            className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+            className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+            style={{ backgroundColor: "rgba(0,0,0,0.72)", color: "white" }}
           >
-            <FiEyeOff size={9} color="white" />
+            <FiEyeOff size={9} />
+            Oculto
           </div>
         )}
       </div>
 
-      {/* Conteúdo */}
-      <div className="flex-1 min-w-0 flex flex-col p-3">
-        {/* Nome */}
+      {/* ── Body ── */}
+      <div className="flex flex-col gap-1.5 px-3 pt-2.5 pb-2 flex-1">
         <p
-          className="text-sm font-bold leading-snug mb-2.5"
+          className="text-[10px] font-mono"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          #{item.codItem}
+        </p>
+
+        <p
+          className="text-sm font-semibold leading-snug line-clamp-2"
           style={{ color: "var(--color-text-primary)" }}
         >
           {item.name}
         </p>
 
-        {/* Dados */}
-        <div className="flex flex-col gap-1 flex-1 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span style={{ color: "var(--color-text-muted)" }}>Código:</span>
+        {item.description && (
+          <p
+            className="text-xs line-clamp-1"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {item.description}
+          </p>
+        )}
+
+        {/* Price + stock */}
+        <div className="flex items-end justify-between mt-1">
+          <div className="flex flex-col gap-0">
             <span
-              className="font-medium"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              #{item.codItem}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span style={{ color: "var(--color-text-muted)" }}>
-              Quantidade:
-            </span>
-            <span
-              className="font-medium"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              {item.quantity}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span style={{ color: "var(--color-text-muted)" }}>Tipo:</span>
-            <span
-              className="font-medium truncate"
+              className="text-base font-bold leading-tight"
               style={{ color: "var(--color-primary)" }}
             >
-              {item.category}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span
-              className="font-bold text-sm"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              {formatBRL(item.value)}
+              {formatBRL(item.visibleValue ?? item.value)}
             </span>
             {item.visibleValue != null && item.visibleValue !== item.value && (
-              <span style={{ color: "var(--color-text-muted)" }}>
-                (cliente: {formatBRL(item.visibleValue)})
+              <span
+                className="text-[10px]"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                interno: {formatBRL(item.value)}
               </span>
             )}
           </div>
+
+          <div
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+            style={{ backgroundColor: stockBg, color: stockColor }}
+          >
+            <FiPackage size={10} />
+            {item.quantity}
+          </div>
         </div>
+      </div>
 
-        {/* Ações */}
-        <div
-          className="flex items-center gap-1 mt-2.5 pt-2"
-          style={{ borderTop: "1px solid var(--color-border)" }}
+      {/* ── Actions ── */}
+      <div
+        className="flex items-center gap-0.5 px-2 py-1.5"
+        style={{ borderTop: "1px solid var(--color-border)" }}
+      >
+        <ActionBtn
+          onClick={onToggleFeatured}
+          title={item.isFeatured ? "Remover destaque" : "Destacar"}
+          active={item.isFeatured}
+          activeColor="var(--color-warning)"
+          activeBg="rgba(245,158,11,0.12)"
+          hoverColor="var(--color-warning)"
+          hoverBg="rgba(245,158,11,0.15)"
         >
-          {/* Destaque */}
-          <button
-            onClick={onToggleFeatured}
-            title={item.isFeatured ? "Remover destaque" : "Destacar"}
-            className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-all"
-            style={{
-              color: item.isFeatured
-                ? "var(--color-warning)"
-                : "var(--color-text-muted)",
-              backgroundColor: item.isFeatured
-                ? "rgba(245,158,11,0.15)"
-                : "transparent",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(245,158,11,0.15)";
-              e.currentTarget.style.color = "var(--color-warning)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = item.isFeatured
-                ? "rgba(245,158,11,0.15)"
-                : "transparent";
-              e.currentTarget.style.color = item.isFeatured
-                ? "var(--color-warning)"
-                : "var(--color-text-muted)";
-            }}
-          >
-            <FiStar size={13} />
-          </button>
+          <FiStar size={13} />
+        </ActionBtn>
 
-          {/* Visibilidade */}
-          <button
-            onClick={onToggleVisibility}
-            title={item.isVisible ? "Ocultar" : "Exibir"}
-            className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-all"
-            style={{
-              color: item.isVisible
-                ? "var(--color-success)"
-                : "var(--color-text-muted)",
-              backgroundColor: item.isVisible
-                ? "rgba(34,197,94,0.12)"
-                : "transparent",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(34,197,94,0.12)";
-              e.currentTarget.style.color = "var(--color-success)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = item.isVisible
-                ? "rgba(34,197,94,0.12)"
-                : "transparent";
-              e.currentTarget.style.color = item.isVisible
-                ? "var(--color-success)"
-                : "var(--color-text-muted)";
-            }}
-          >
-            {item.isVisible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
-          </button>
+        <ActionBtn
+          onClick={onToggleVisibility}
+          title={item.isVisible ? "Ocultar" : "Exibir"}
+          active={item.isVisible}
+          activeColor="var(--color-success)"
+          activeBg="rgba(34,197,94,0.1)"
+          hoverColor="var(--color-success)"
+          hoverBg="rgba(34,197,94,0.15)"
+        >
+          {item.isVisible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
+        </ActionBtn>
 
-          <div className="flex-1" />
+        {(canEdit || canDelete) && (
+          <div
+            className="w-px h-4 mx-0.5 flex-shrink-0"
+            style={{ backgroundColor: "var(--color-border)" }}
+          />
+        )}
 
-          {/* Editar */}
-          <button
+        {canEdit && (
+          <ActionBtn
             onClick={onEdit}
             title="Editar"
-            className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-all"
-            style={{ color: "var(--color-text-muted)" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--color-primary)";
-              e.currentTarget.style.backgroundColor =
-                "var(--color-primary-light)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--color-text-muted)";
-              e.currentTarget.style.backgroundColor = "transparent";
-            }}
+            hoverColor="var(--color-primary)"
+            hoverBg="var(--color-primary-light)"
           >
             <FiEdit2 size={13} />
-          </button>
+          </ActionBtn>
+        )}
 
-          {/* Excluir */}
-          <button
+        {canDelete && (
+          <ActionBtn
             onClick={onDelete}
             title="Excluir"
-            className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-all"
-            style={{ color: "var(--color-text-muted)" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--color-error)";
-              e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.1)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--color-text-muted)";
-              e.currentTarget.style.backgroundColor = "transparent";
-            }}
+            hoverColor="var(--color-error)"
+            hoverBg="rgba(239,68,68,0.1)"
           >
             <FiTrash2 size={13} />
-          </button>
-        </div>
+          </ActionBtn>
+        )}
       </div>
     </div>
   );
@@ -1302,6 +1361,16 @@ function Spinner() {
   );
 }
 
+async function deletePhotoFromStorage(url: string | null | undefined) {
+  if (!url) return;
+  try {
+    const path = decodeURIComponent(url.split("/o/")[1]?.split("?")[0] ?? "");
+    if (path) await deleteObject(storageRef(storage, path));
+  } catch {
+    // silently ignore — photo may not exist or already deleted
+  }
+}
+
 async function uploadPhoto(file: File, folder: string): Promise<string> {
   const uid = crypto.randomUUID();
   const sRef = storageRef(storage, `${folder}/${uid}_${file.name}`);
@@ -1316,7 +1385,14 @@ type Tab = "items" | "subitems" | "categories";
 export default function StockPage() {
   const { appUser } = useAuth();
   const { success, error, info } = useToast();
-  const canAccess = can(appUser, "manage_stock");
+  const canAccess = can(appUser, "view_stock");
+  const canCreateItem = can(appUser, "create_item");
+  const canCreateSubitem = can(appUser, "create_subitem");
+  const canEditItem = can(appUser, "edit_item");
+  const canEditSubitem = can(appUser, "edit_subitem");
+  const canDeleteItem = can(appUser, "delete_item");
+  const canDeleteSubitem = can(appUser, "delete_subitem");
+  const canManageCategoryOrder = can(appUser, "manage_category_order");
   const actor = appUser
     ? { uid: appUser.uid, username: appUser.username }
     : { uid: "?", username: "?" };
@@ -1461,10 +1537,18 @@ export default function StockPage() {
   );
 
   // ── Item actions ──
-  async function handleSaveItem(form: ItemForm, file: File | null) {
+  async function handleSaveItem(form: ItemForm, file: File | null | undefined) {
     try {
-      let photoUrl: string | undefined = itemModal.editing?.photo;
-      if (file) photoUrl = await uploadPhoto(file, "items");
+      const oldPhoto = itemModal.editing?.photo;
+      let photoUrl: string | null | undefined = oldPhoto;
+      if (file instanceof File) {
+        if (oldPhoto) await deletePhotoFromStorage(oldPhoto);
+        photoUrl = await uploadPhoto(file, "items");
+      } else if (file === null) {
+        await deletePhotoFromStorage(oldPhoto);
+        photoUrl = null;
+      }
+      // file === undefined means no change — keep photoUrl as-is
 
       const data = {
         codItem: form.codItem.trim(),
@@ -1661,6 +1745,7 @@ export default function StockPage() {
   async function handleDeleteItem(item: StockItem) {
     setDeleteLoading(true);
     try {
+      if (item.photo) await deletePhotoFromStorage(item.photo);
       await deleteDoc(doc(db, "items", item.id));
       setItems((prev) => prev.filter((i) => i.id !== item.id));
       success("Item excluído", `"${item.name}" foi removido.`);
@@ -1682,12 +1767,19 @@ export default function StockPage() {
   // ── Subitem actions ──
   async function handleSaveSubitem(
     form: SubitemForm,
-    file: File | null,
+    file: File | null | undefined,
     editing?: Subitem,
   ) {
     try {
-      let photoUrl: string | undefined = editing?.photo;
-      if (file) photoUrl = await uploadPhoto(file, "subitems");
+      const oldPhoto = editing?.photo;
+      let photoUrl: string | null | undefined = oldPhoto;
+      if (file instanceof File) {
+        if (oldPhoto) await deletePhotoFromStorage(oldPhoto);
+        photoUrl = await uploadPhoto(file, "subitems");
+      } else if (file === null) {
+        await deletePhotoFromStorage(oldPhoto);
+        photoUrl = null;
+      }
 
       const data = {
         name: form.name.trim(),
@@ -1818,6 +1910,7 @@ export default function StockPage() {
       });
       batch.delete(doc(db, "subitems", subitem.id));
       await batch.commit();
+      if (subitem.photo) await deletePhotoFromStorage(subitem.photo);
 
       // Update local state
       setSubitems((prev) => prev.filter((s) => s.id !== subitem.id));
@@ -1936,7 +2029,7 @@ export default function StockPage() {
             Gerencie itens, subitens e categorias do cardápio.
           </p>
         </div>
-        {canAccess && tab === "items" && (
+        {canCreateItem && tab === "items" && (
           <button
             onClick={() => setItemModal({ open: true })}
             className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
@@ -1952,7 +2045,7 @@ export default function StockPage() {
             <FiPlus size={15} /> Novo item
           </button>
         )}
-        {canAccess && tab === "subitems" && (
+        {canCreateSubitem && tab === "subitems" && (
           <button
             onClick={() => setSubitemModal({ open: true })}
             className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
@@ -2127,7 +2220,7 @@ export default function StockPage() {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {filteredItems.map((item) => (
                     <ItemCard
                       key={item.id}
@@ -2138,6 +2231,8 @@ export default function StockPage() {
                       onToggleFeatured={() => handleToggleItemFeatured(item)}
                       onEdit={() => setItemModal({ open: true, editing: item })}
                       onDelete={() => setDeleteItem(item)}
+                      canEdit={canEditItem}
+                      canDelete={canDeleteItem}
                     />
                   ))}
                 </div>
@@ -2202,6 +2297,8 @@ export default function StockPage() {
                       }
                       onEdit={() => setSubitemModal({ open: true, editing: s })}
                       onDelete={() => setDeleteSubitem(s)}
+                      canEdit={canEditSubitem}
+                      canDelete={canDeleteSubitem}
                     />
                   ))}
                 </div>
@@ -2220,15 +2317,17 @@ export default function StockPage() {
                   Defina a ordem de exibição das categorias no cardápio. A
                   primeira categoria terá maior prioridade.
                 </p>
-                <button
-                  onClick={handleSaveCategoryOrder}
-                  disabled={savingCategories}
-                  className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0 disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-primary)" }}
-                >
-                  <FiCheck size={14} />
-                  {savingCategories ? "Salvando..." : "Salvar ordem"}
-                </button>
+                {canManageCategoryOrder && (
+                  <button
+                    onClick={handleSaveCategoryOrder}
+                    disabled={savingCategories}
+                    className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0 disabled:opacity-50"
+                    style={{ backgroundColor: "var(--color-primary)" }}
+                  >
+                    <FiCheck size={14} />
+                    {savingCategories ? "Salvando..." : "Salvar ordem"}
+                  </button>
+                )}
               </div>
 
               {/* Add category — dropdown de existentes + campo livre */}
