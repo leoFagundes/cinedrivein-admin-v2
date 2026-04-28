@@ -90,6 +90,8 @@ export interface Film {
 export interface SiteConfig {
   siteUrl: string;
   isClosed: boolean;
+  openingTime?: string;
+  closingTime?: string;
   isEvent: EventType;
   popUpEnabled: boolean;
   popUpImage?: string;
@@ -100,6 +102,26 @@ export interface SiteConfig {
   session2?: Film | null;
   session3?: Film | null;
   session4?: Film | null;
+}
+
+export interface DailyStats {
+  id: string;
+  date: string;
+  totalOrders: number;
+  finishedOrders: number;
+  canceledOrders: number;
+  revenue: {
+    total: number;
+    subtotal: number;
+    serviceFee: number;
+    money: number;
+    pix: number;
+    credit: number;
+    debit: number;
+    discount: number;
+  };
+  topItems: Array<{ codItem: string; name: string; quantity: number }>;
+  createdAt: Date;
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
