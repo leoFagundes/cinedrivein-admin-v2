@@ -206,8 +206,10 @@ function SubitemPicker({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const filtered = allSubitems.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()),
+  const filtered = allSubitems.filter(
+    (s) =>
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.description.toLowerCase().includes(search.toLowerCase()),
   );
   const selectedItems = allSubitems.filter((s) => selected.includes(s.id));
 
@@ -340,15 +342,22 @@ function SubitemPicker({
                     >
                       {checked && <FiCheck size={9} color="white" />}
                     </div>
-                    {s.photo && (
+                    {/* {s.photo && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={s.photo}
                         alt={s.name}
                         className="w-5 h-5 rounded-full object-cover flex-shrink-0"
                       />
-                    )}
-                    <span className="flex-1 truncate">{s.name}</span>
+                    )} */}
+                    <div className="flex items-center gap-2">
+                      <span className="">{s.name}</span>
+                      {s.description && (
+                        <span className="text-text-muted text-[10px] truncate">
+                          ({s.description})
+                        </span>
+                      )}
+                    </div>
                     {!s.isVisible && (
                       <span
                         className="inline-flex items-center gap-0.5 flex-shrink-0"
@@ -1469,6 +1478,7 @@ export default function StockPage() {
 
   // ── Load data ──
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingItems(true);
     const unsub = onSnapshot(
       query(collection(db, "items"), orderBy("createdAt", "desc")),
@@ -1557,7 +1567,8 @@ export default function StockPage() {
       const matchSearch =
         !search ||
         i.name.toLowerCase().includes(search.toLowerCase()) ||
-        i.codItem.toLowerCase().includes(search.toLowerCase());
+        i.codItem.toLowerCase().includes(search.toLowerCase()) ||
+        i.description.toLowerCase().includes(search.toLowerCase());
       const matchCat =
         filterCategory === "all" || i.category === filterCategory;
       const matchVis =
@@ -1571,7 +1582,10 @@ export default function StockPage() {
       return 0;
     });
   const filteredSubitems = subitems.filter(
-    (s) => !search || s.name.toLowerCase().includes(search.toLowerCase()),
+    (s) =>
+      !search ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.description.toLowerCase().includes(search.toLowerCase()),
   );
 
   // ── Item actions ──
@@ -2165,7 +2179,7 @@ export default function StockPage() {
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar por nome ou código..."
+                    placeholder="Buscar por nome, descrição ou código..."
                     className="w-full h-9 pl-8 pr-3 text-sm rounded-[var(--radius-md)] outline-none"
                     style={{
                       backgroundColor: "var(--color-bg-elevated)",
