@@ -565,7 +565,7 @@ export default function NewOrderModal({
   }, [stockItems, category, search, categoryOrderList]);
 
   const subtotal = draftItems.reduce(
-    (sum, d) => sum + (d.item.visibleValue ?? d.item.value) * d.quantity,
+    (sum, d) => sum + d.item.value * d.quantity,
     0,
   );
   const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE * 100) / 100;
@@ -629,20 +629,24 @@ export default function NewOrderModal({
     if (!validate() || !appUser) return;
     setSubmitting(true);
     const spot = parseInt(customerSpot, 10);
-    const itemsPayload = draftItems.map((d) => ({
-      itemId: d.item.id,
-      codItem: d.item.codItem,
-      name: d.item.name,
-      value: d.item.visibleValue ?? d.item.value,
-      quantity: d.quantity,
-      trackStock: d.item.trackStock ?? false,
-      photo: d.item.photo ?? undefined,
-      observation: d.observation || undefined,
-      additionals: d.additional ? [d.additional] : [],
-      additionals_sauce: d.additional_sauce ? [d.additional_sauce] : [],
-      additionals_drink: d.additional_drink ? [d.additional_drink] : [],
-      additionals_sweet: d.additional_sweet ? [d.additional_sweet] : [],
-    }));
+    const itemsPayload = draftItems.map((d) => {
+      const entry: Record<string, unknown> = {
+        itemId: d.item.id,
+        codItem: d.item.codItem,
+        name: d.item.name,
+        value: d.item.value,
+        quantity: d.quantity,
+        trackStock: d.item.trackStock ?? false,
+        additionals: d.additional ? [d.additional] : [],
+        additionals_sauce: d.additional_sauce ? [d.additional_sauce] : [],
+        additionals_drink: d.additional_drink ? [d.additional_drink] : [],
+        additionals_sweet: d.additional_sweet ? [d.additional_sweet] : [],
+      };
+      if (d.item.visibleValue != null) entry.visibleValue = d.item.visibleValue;
+      if (d.item.photo) entry.photo = d.item.photo;
+      if (d.observation) entry.observation = d.observation;
+      return entry;
+    });
 
     try {
       if (editOrder) {
@@ -996,11 +1000,16 @@ export default function NewOrderModal({
                         </span>
                         <div className="flex flex-col items-end flex-shrink-0">
                           <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                            {fmt(d.item.visibleValue ?? d.item.value)}
+                            {fmt(d.item.value)}
                           </span>
+                          {d.item.visibleValue != null && d.item.visibleValue !== d.item.value && (
+                            <span className="text-[10px]" style={{ color: "var(--color-primary)", opacity: 0.8 }}>
+                              cliente: {fmt(d.item.visibleValue)}
+                            </span>
+                          )}
                           {d.quantity > 1 && (
-                            <span className="text-[10px]" style={{ color: "var(--color-primary)" }}>
-                              total: {fmt((d.item.visibleValue ?? d.item.value) * d.quantity)}
+                            <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                              total: {fmt(d.item.value * d.quantity)}
                             </span>
                           )}
                         </div>

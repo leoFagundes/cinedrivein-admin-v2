@@ -11,6 +11,7 @@ import {
   doc,
   updateDoc,
   setDoc,
+  deleteDoc,
   where,
   writeBatch,
   serverTimestamp,
@@ -356,9 +357,23 @@ export default function DashboardPage() {
 
   const configLoaded = useRef(false);
 
-  // Initialize report date to today (deferred to avoid render-phase impurity)
+  // Initialize report date + default 7-day chart ranges
   useEffect(() => {
-    const id = setTimeout(() => setReportDate(todayStr()), 0);
+    const id = setTimeout(() => {
+      const today = todayStr();
+      setReportDate(today);
+      const d = new Date();
+      d.setDate(d.getDate() - 6);
+      const from = [
+        d.getFullYear(),
+        String(d.getMonth() + 1).padStart(2, "0"),
+        String(d.getDate()).padStart(2, "0"),
+      ].join("-");
+      setRevenueRange({ from, to: today });
+      setOrdersRange({ from, to: today });
+      setTopItemsRange({ from, to: today });
+      setPaymentRange({ from, to: today });
+    }, 0);
     return () => clearTimeout(id);
   }, []);
 
@@ -578,11 +593,17 @@ export default function DashboardPage() {
       });
 
       // Create/merge dailyStats per date
+      const ZERO_REVENUE = {
+        total: 0, subtotal: 0, serviceFee: 0,
+        money: 0, pix: 0, credit: 0, debit: 0, discount: 0,
+      };
+
       for (const [dateKey, dayOrders] of Object.entries(byDate)) {
         const finished = dayOrders.filter((o) => o.status === "finished");
         const canceled = dayOrders.filter((o) => o.status === "canceled");
 
-        const revenue = finished.reduce(
+        // Revenue from finished orders only
+        const newRevenue = finished.reduce(
           (acc, o) => ({
             total: acc.total + (o.total || 0),
             subtotal: acc.subtotal + (o.subtotal || 0),
@@ -593,53 +614,73 @@ export default function DashboardPage() {
             debit: acc.debit + (o.payment?.debit || 0),
             discount: acc.discount + (o.discount || 0),
           }),
-          {
-            total: 0,
-            subtotal: 0,
-            serviceFee: 0,
-            money: 0,
-            pix: 0,
-            credit: 0,
-            debit: 0,
-            discount: 0,
-          },
+          { ...ZERO_REVENUE },
         );
 
-        const itemMap: Record<
-          string,
-          { codItem: string; name: string; quantity: number }
-        > = {};
+        // Item counts: accumulate using actual ordered quantity
+        const newItemMap: Record<string, { codItem: string; name: string; quantity: number }> = {};
         finished.forEach((o) => {
           o.items.forEach((item) => {
             const key = item.itemId || item.name;
-            if (itemMap[key]) {
-              itemMap[key].quantity++;
+            const qty = item.quantity ?? 1;
+            if (newItemMap[key]) {
+              newItemMap[key].quantity += qty;
             } else {
-              itemMap[key] = {
-                codItem: item.codItem,
-                name: item.name,
-                quantity: 1,
-              };
+              newItemMap[key] = { codItem: item.codItem, name: item.name, quantity: qty };
             }
           });
         });
-        const topItems = Object.values(itemMap).sort(
-          (a, b) => b.quantity - a.quantity,
-        );
 
-        await setDoc(
-          doc(db, "dailyStats", dateKey),
-          {
-            date: dateKey,
-            totalOrders: dayOrders.length,
-            finishedOrders: finished.length,
-            canceledOrders: canceled.length,
-            revenue,
-            topItems,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
+        // Read existing stats — accumulate instead of replace
+        const existingSnap = await getDoc(doc(db, "dailyStats", dateKey));
+        let finalRevenue = newRevenue;
+        let finalTotal = dayOrders.length;
+        let finalFinished = finished.length;
+        let finalCanceled = canceled.length;
+        const mergedItemMap = { ...newItemMap };
+
+        if (existingSnap.exists()) {
+          const ed = existingSnap.data();
+          const er = (ed.revenue ?? ZERO_REVENUE) as typeof ZERO_REVENUE;
+          finalRevenue = {
+            total: er.total + newRevenue.total,
+            subtotal: er.subtotal + newRevenue.subtotal,
+            serviceFee: er.serviceFee + newRevenue.serviceFee,
+            money: er.money + newRevenue.money,
+            pix: er.pix + newRevenue.pix,
+            credit: er.credit + newRevenue.credit,
+            debit: er.debit + newRevenue.debit,
+            discount: er.discount + newRevenue.discount,
+          };
+          finalTotal += ed.totalOrders ?? 0;
+          finalFinished += ed.finishedOrders ?? 0;
+          finalCanceled += ed.canceledOrders ?? 0;
+
+          const existingItems = (ed.topItems ?? []) as Array<{ codItem: string; name: string; quantity: number }>;
+          existingItems.forEach((item) => {
+            const key = item.codItem || item.name;
+            if (mergedItemMap[key]) {
+              mergedItemMap[key].quantity += item.quantity;
+            } else {
+              mergedItemMap[key] = { ...item };
+            }
+          });
+        }
+
+        const topItems = Object.values(mergedItemMap).sort((a, b) => b.quantity - a.quantity);
+
+        await setDoc(doc(db, "dailyStats", dateKey), {
+          date: dateKey,
+          totalOrders: finalTotal,
+          finishedOrders: finalFinished,
+          canceledOrders: finalCanceled,
+          revenue: finalRevenue,
+          topItems,
+          createdAt: existingSnap.exists()
+            ? (existingSnap.data().createdAt ?? serverTimestamp())
+            : serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
       }
 
       // Delete archived orders in batches of 500
@@ -775,6 +816,26 @@ export default function DashboardPage() {
       if (range.to && s.date > range.to) return false;
       return true;
     });
+  }
+
+  async function handleDeleteDay(dateKey: string) {
+    try {
+      await deleteDoc(doc(db, "dailyStats", dateKey));
+      setStats((prev) => prev.filter((s) => s.date !== dateKey));
+      if (archivedStats?.date === dateKey) {
+        setArchivedStats(null);
+        setReportSource(null);
+      }
+      log({
+        action: "Dia zerado",
+        category: "orders",
+        description: `Estatísticas do dia ${dateKey} foram removidas`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+      });
+      success("Dia limpo", `Estatísticas de ${dateKey} removidas.`);
+    } catch {
+      toastError("Erro", "Não foi possível limpar o dia.");
+    }
   }
 
   async function handleClearStats(range: { from: string; to: string }) {
@@ -1187,7 +1248,7 @@ export default function DashboardPage() {
             border: "1px solid var(--color-border)",
           }}
         >
-          <button
+          <div
             onClick={() => setReportExpanded((v) => !v)}
             className="flex items-center justify-between px-5 py-4 w-full text-left cursor-pointer"
             style={{
@@ -1226,7 +1287,25 @@ export default function DashboardPage() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {reportSource === "archived" && canDeleteChartData && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteDay(reportDate);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs cursor-pointer transition-opacity hover:opacity-70"
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                    color: "var(--color-error)",
+                  }}
+                  title="Limpar estatísticas deste dia"
+                >
+                  <FiTrash2 size={11} />
+                  Limpar dia
+                </button>
+              )}
               {/* Date picker */}
               <div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] text-sm"
@@ -1257,7 +1336,7 @@ export default function DashboardPage() {
                 }}
               />
             </div>
-          </button>
+          </div>
 
           {reportExpanded && (
             <div className="p-5 flex flex-col gap-5">

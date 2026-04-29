@@ -41,6 +41,7 @@ import {
   FiPackage,
   FiList,
   FiTrendingDown,
+  FiDownload,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -402,10 +403,12 @@ function CategoryInput({
   value,
   onChange,
   categories,
+  error,
 }: {
   value: string;
   onChange: (v: string) => void;
   categories: string[];
+  error?: string;
 }) {
   const [open, setOpen] = useState(false);
   const suggestions = categories.filter(
@@ -425,6 +428,7 @@ function CategoryInput({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         autoComplete="off"
+        error={error}
       />
       {open && suggestions.length > 0 && (
         <div
@@ -875,8 +879,9 @@ function ItemModal({
       />
       <CategoryInput
         value={form.category}
-        onChange={(v) => set("category", v)}
+        onChange={(v) => { set("category", v); setErrors((p) => ({ ...p, category: undefined })); }}
         categories={categories}
+        error={errors.category}
       />
 
       <Section title="Preço" />
@@ -1591,6 +1596,14 @@ export default function StockPage() {
   // ── Item actions ──
   async function handleSaveItem(form: ItemForm, file: File | null | undefined) {
     try {
+      const codConflict = items.find(
+        (i) => i.codItem === form.codItem.trim() && i.id !== (itemModal.editing?.id ?? ""),
+      );
+      if (codConflict) {
+        error("Código duplicado", `"${form.codItem}" já pertence a "${codConflict.name}".`);
+        return;
+      }
+
       const oldPhoto = itemModal.editing?.photo;
       let photoUrl: string | null | undefined = oldPhoto;
       if (file instanceof File) {
@@ -1708,11 +1721,6 @@ export default function StockPage() {
         }
 
         await updateDoc(doc(db, "items", old.id), data);
-        setItems((prev) =>
-          prev.map((i) =>
-            i.id === old.id ? ({ ...i, ...data } as StockItem) : i,
-          ),
-        );
         success("Item atualizado", `"${data.name}" foi salvo.`);
         log({
           action: "update_item",
@@ -1727,14 +1735,6 @@ export default function StockPage() {
           ...data,
           createdAt: serverTimestamp(),
         });
-        const newItem: StockItem = {
-          id: ref.id,
-          ...data,
-          visibleValue: data.visibleValue ?? undefined,
-          photo: data.photo ?? undefined,
-          createdAt: new Date(),
-        };
-        setItems((prev) => [newItem, ...prev]);
         success("Item criado", `"${data.name}" foi adicionado ao estoque.`);
         log({
           action: "create_item",
@@ -1755,9 +1755,6 @@ export default function StockPage() {
     const next = !item.isVisible;
     try {
       await updateDoc(doc(db, "items", item.id), { isVisible: next });
-      setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, isVisible: next } : i)),
-      );
       info(
         next ? "Item visível" : "Item oculto",
         `"${item.name}" foi ${next ? "exibido" : "ocultado"}.`,
@@ -1779,9 +1776,6 @@ export default function StockPage() {
     const next = !item.isFeatured;
     try {
       await updateDoc(doc(db, "items", item.id), { isFeatured: next });
-      setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, isFeatured: next } : i)),
-      );
       info(next ? "Item em destaque" : "Destaque removido", `"${item.name}".`);
       log({
         action: "toggle_item_featured",
@@ -1800,7 +1794,6 @@ export default function StockPage() {
     try {
       if (item.photo) await deletePhotoFromStorage(item.photo);
       await deleteDoc(doc(db, "items", item.id));
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
       success("Item excluído", `"${item.name}" foi removido.`);
       log({
         action: "delete_item",
@@ -1965,23 +1958,7 @@ export default function StockPage() {
       await batch.commit();
       if (subitem.photo) await deletePhotoFromStorage(subitem.photo);
 
-      // Update local state
       setSubitems((prev) => prev.filter((s) => s.id !== subitem.id));
-      setItems((prev) =>
-        prev.map((i) => ({
-          ...i,
-          additionals: i.additionals.filter((id) => id !== subitem.id),
-          additionals_sauce: i.additionals_sauce.filter(
-            (id) => id !== subitem.id,
-          ),
-          additionals_drink: i.additionals_drink.filter(
-            (id) => id !== subitem.id,
-          ),
-          additionals_sweet: i.additionals_sweet.filter(
-            (id) => id !== subitem.id,
-          ),
-        })),
-      );
 
       success(
         "Subitem excluído",
@@ -2082,22 +2059,31 @@ export default function StockPage() {
             Gerencie itens, subitens e categorias do cardápio.
           </p>
         </div>
-        {canCreateItem && tab === "items" && (
-          <button
-            onClick={() => setItemModal({ open: true })}
-            className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
-            style={{ backgroundColor: "var(--color-primary)" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor =
-                "var(--color-primary-hover)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "var(--color-primary)")
-            }
+        <div className="flex items-center gap-2">
+          <a
+            href="/images/items-background.png"
+            download="items-background.png"
+            className="hidden sm:flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
           >
-            <FiPlus size={15} /> Novo item
-          </button>
-        )}
+            <FiDownload size={15} /> Item Background
+          </a>
+          {canCreateItem && tab === "items" && (
+            <button
+              onClick={() => setItemModal({ open: true })}
+              className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
+              style={{ backgroundColor: "var(--color-primary)" }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-primary-hover)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "var(--color-primary)")
+              }
+            >
+              <FiPlus size={15} /> Novo item
+            </button>
+          )}
+        </div>
         {canCreateSubitem && tab === "subitems" && (
           <button
             onClick={() => setSubitemModal({ open: true })}

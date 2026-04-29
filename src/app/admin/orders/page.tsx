@@ -344,6 +344,15 @@ function OrderCard({
                           unit: {fmt(item.value)}
                         </span>
                       )}
+                      {item.visibleValue != null && item.visibleValue !== item.value && (
+                        <span
+                          className="text-[10px]"
+                          style={{ color: "var(--color-primary)", opacity: 0.8 }}
+                          title="Valor visível ao cliente"
+                        >
+                          cliente: {fmt(item.visibleValue * (item.quantity ?? 1))}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {extras.length > 0 && (

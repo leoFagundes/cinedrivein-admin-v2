@@ -14,6 +14,9 @@ import {
   where,
   orderBy,
   onSnapshot,
+  doc,
+  getDoc,
+  updateDoc,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -55,6 +58,7 @@ function parseOrderItem(raw: Record<string, unknown>): OrderItem {
     name: (raw.name ?? "") as string,
     value: (raw.value ?? 0) as number,
     quantity: (raw.quantity as number | undefined) ?? 1,
+    visibleValue: raw.visibleValue != null ? (raw.visibleValue as number) : undefined,
     trackStock: (raw.trackStock as boolean | undefined) ?? false,
     photo: raw.photo as string | undefined,
     observation: raw.observation as string | undefined,
@@ -86,6 +90,50 @@ export function parseOrder(id: string, data: Record<string, unknown>): Order {
     createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
     finishedAt: (data.finishedAt as Timestamp)?.toDate(),
   };
+}
+
+async function normalizeOrderPrices(order: Order): Promise<void> {
+  let changed = false;
+  const normalized = await Promise.all(
+    order.items.map(async (item) => {
+      if (!item.itemId) return item;
+      try {
+        const snap = await getDoc(doc(db, "items", item.itemId));
+        if (!snap.exists()) return item;
+        const data = snap.data();
+        const internalValue = data.value as number;
+        const stockVisibleValue = data.visibleValue as number | undefined;
+        if (item.visibleValue != null) return item;
+        if (!stockVisibleValue || stockVisibleValue === internalValue) return item;
+        if (item.value !== internalValue) {
+          changed = true;
+          return { ...item, value: internalValue, visibleValue: item.value };
+        }
+      } catch { /* silent */ }
+      return item;
+    }),
+  );
+
+  if (!changed) return;
+
+  const cleanItems = normalized.map((item) =>
+    Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined)),
+  );
+
+  const newSubtotal = normalized.reduce(
+    (sum, item) => sum + item.value * (item.quantity ?? 1),
+    0,
+  );
+  const feeRate = order.subtotal > 0 ? order.serviceFee / order.subtotal : 0;
+  const newServiceFee = Math.round(newSubtotal * feeRate * 100) / 100;
+  const newTotal = newSubtotal + newServiceFee;
+
+  await updateDoc(doc(db, "orders", order.id), {
+    items: cleanItems,
+    subtotal: newSubtotal,
+    serviceFee: newServiceFee,
+    total: newTotal,
+  });
 }
 
 export function OrdersProvider({ children }: { children: ReactNode }) {
@@ -123,6 +171,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         initializedRef.current = true;
         setActiveOrders(orders);
         setUnseenCount(0);
+        // Normalize existing orders too (only writes if prices are wrong)
+        orders.forEach((o) => normalizeOrderPrices(o).catch(console.error));
         return;
       }
 
@@ -134,6 +184,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       unprocessed.forEach((o) => {
         stockProcessedRef.current.add(o.id);
         decreaseStock(o.items).catch(console.error);
+        normalizeOrderPrices(o).catch(console.error);
       });
     });
 

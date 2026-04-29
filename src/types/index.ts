@@ -173,6 +173,7 @@ export interface OrderItem {
   codItem: string;
   name: string;
   value: number;
+  visibleValue?: number;
   quantity?: number;
   trackStock?: boolean;
   photo?: string;
