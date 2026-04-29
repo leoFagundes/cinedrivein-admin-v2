@@ -1385,7 +1385,8 @@ export default function OrdersPage() {
 
   useEffect(() => {
     markAsSeen();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrders]);
 
   useEffect(() => {
     try {
