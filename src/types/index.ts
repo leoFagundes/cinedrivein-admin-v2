@@ -174,6 +174,7 @@ export interface OrderItem {
   name: string;
   value: number;
   quantity?: number;
+  trackStock?: boolean;
   photo?: string;
   observation?: string;
   additionals?: string[];
@@ -255,6 +256,7 @@ export interface StockItem {
   photo?: string;
   isVisible: boolean;
   isFeatured: boolean;
+  trackStock: boolean;
   additionals: string[];
   additionals_sauce: string[];
   additionals_drink: string[];

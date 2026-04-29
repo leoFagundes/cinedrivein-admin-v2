@@ -19,6 +19,7 @@ import {
 import { db } from "@/lib/firebase";
 import { Order, OrderItem } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { decreaseStock } from "@/lib/stock";
 
 interface OrdersContextValue {
   activeOrders: Order[];
@@ -54,6 +55,7 @@ function parseOrderItem(raw: Record<string, unknown>): OrderItem {
     name: (raw.name ?? "") as string,
     value: (raw.value ?? 0) as number,
     quantity: (raw.quantity as number | undefined) ?? 1,
+    trackStock: (raw.trackStock as boolean | undefined) ?? false,
     photo: raw.photo as string | undefined,
     observation: raw.observation as string | undefined,
     additionals: (raw.additionals ?? []) as string[],
@@ -91,6 +93,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const seenIdsRef = useRef<Set<string>>(new Set());
+  const stockProcessedRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -99,6 +102,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       setUnseenCount(0);
       initializedRef.current = false;
       seenIdsRef.current = new Set();
+      stockProcessedRef.current = new Set();
       return;
     }
 
@@ -115,6 +119,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
 
       if (!initializedRef.current) {
         seenIdsRef.current = new Set(orders.map((o) => o.id));
+        stockProcessedRef.current = new Set(orders.map((o) => o.id));
         initializedRef.current = true;
         setActiveOrders(orders);
         setUnseenCount(0);
@@ -124,6 +129,12 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       const newOnes = orders.filter((o) => !seenIdsRef.current.has(o.id));
       setActiveOrders(orders);
       setUnseenCount(newOnes.length);
+
+      const unprocessed = orders.filter((o) => !stockProcessedRef.current.has(o.id));
+      unprocessed.forEach((o) => {
+        stockProcessedRef.current.add(o.id);
+        decreaseStock(o.items).catch(console.error);
+      });
     });
 
     return unsub;

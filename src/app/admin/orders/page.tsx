@@ -41,6 +41,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { can } from "@/lib/access";
+import { decreaseStock, increaseStock } from "@/lib/stock";
 import { useOrders, parseOrder } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
@@ -1436,6 +1437,7 @@ export default function OrdersPage() {
         status: "canceled",
         finishedAt: serverTimestamp(),
       });
+      await increaseStock(cancelTarget.items);
       log({
         action: "Pedido cancelado",
         category: "orders",
@@ -1560,6 +1562,7 @@ export default function OrdersPage() {
         total: order.subtotal + order.serviceFee,
         finishedAt: deleteField(),
       });
+      await decreaseStock(order.items);
       log({
         action: "Pedido reativado",
         category: "orders",
@@ -1617,6 +1620,8 @@ export default function OrdersPage() {
         });
       });
       await batch.commit();
+      const allItems = activeOrders.flatMap((o) => o.items);
+      await increaseStock(allItems);
       log({
         action: "Pedidos ativos cancelados em massa",
         category: "orders",

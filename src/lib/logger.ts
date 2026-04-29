@@ -16,8 +16,11 @@ export interface LogEntry {
  * Fire-and-forget: não deve bloquear a ação principal.
  */
 export function log(entry: LogEntry): void {
-  addDoc(collection(db, "logs"), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  }).catch((err) => console.error("[logger] Falha ao salvar log:", err));
+  const raw = { ...entry, createdAt: serverTimestamp() };
+  const data = Object.fromEntries(
+    Object.entries(raw).filter(([, v]) => v !== undefined),
+  );
+  addDoc(collection(db, "logs"), data).catch((err) =>
+    console.error("[logger] Falha ao salvar log:", err),
+  );
 }

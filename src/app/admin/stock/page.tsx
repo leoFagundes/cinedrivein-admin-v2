@@ -15,6 +15,7 @@ import {
   orderBy,
   getDoc,
   setDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -39,6 +40,7 @@ import {
   FiCheck,
   FiPackage,
   FiList,
+  FiTrendingDown,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -731,6 +733,7 @@ interface ItemForm {
   quantity: string;
   isVisible: boolean;
   isFeatured: boolean;
+  trackStock: boolean;
   additionals: string[];
   additionals_sauce: string[];
   additionals_drink: string[];
@@ -776,6 +779,7 @@ function ItemModal({
     quantity: existing?.quantity?.toString() ?? "0",
     isVisible: existing?.isVisible ?? true,
     isFeatured: existing?.isFeatured ?? false,
+    trackStock: existing?.trackStock ?? false,
     additionals: existing?.additionals ?? [],
     additionals_sauce: existing?.additionals_sauce ?? [],
     additionals_drink: existing?.additionals_drink ?? [],
@@ -922,6 +926,24 @@ function ItemModal({
         >
           <FiStar size={14} />
           {form.isFeatured ? "Destaque" : "Sem destaque"}
+        </button>
+        <button
+          type="button"
+          onClick={() => set("trackStock", !form.trackStock)}
+          title="Se ativado, cada pedido deste item reduz 1 do estoque. Ao cancelar, o estoque é restaurado. Ao atingir 0, o item fica invisível."
+          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all"
+          style={{
+            backgroundColor: form.trackStock
+              ? "rgba(0,136,194,0.12)"
+              : "var(--color-bg-elevated)",
+            border: `1px solid ${form.trackStock ? "var(--color-primary)" : "var(--color-border)"}`,
+            color: form.trackStock
+              ? "var(--color-primary)"
+              : "var(--color-text-secondary)",
+          }}
+        >
+          <FiPackage size={14} />
+          {form.trackStock ? "Controle de estoque" : "Sem controle"}
         </button>
       </div>
 
@@ -1219,6 +1241,22 @@ function ItemCard({
             Oculto
           </div>
         )}
+
+        {/* Track stock badge */}
+        {item.trackStock && item.isVisible && (
+          <div
+            className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+            style={{
+              backgroundColor: "rgba(0,136,194,0.85)",
+              color: "white",
+              boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
+            }}
+            title="Controle de estoque ativo"
+          >
+            <FiTrendingDown size={9} />
+            Stock
+          </div>
+        )}
       </div>
 
       {/* ── Body ── */}
@@ -1431,12 +1469,10 @@ export default function StockPage() {
 
   // ── Load data ──
   useEffect(() => {
-    async function load() {
-      setLoadingItems(true);
-      try {
-        const snap = await getDocs(
-          query(collection(db, "items"), orderBy("createdAt", "desc")),
-        );
+    setLoadingItems(true);
+    const unsub = onSnapshot(
+      query(collection(db, "items"), orderBy("createdAt", "desc")),
+      (snap) => {
         setItems(
           snap.docs.map((d) => {
             const data = d.data();
@@ -1452,6 +1488,7 @@ export default function StockPage() {
               photo: data.photo ?? undefined,
               isVisible: data.isVisible ?? true,
               isFeatured: data.isFeatured ?? false,
+              trackStock: data.trackStock ?? false,
               additionals: data.additionals ?? [],
               additionals_sauce: data.additionals_sauce ?? [],
               additionals_drink: data.additionals_drink ?? [],
@@ -1460,13 +1497,14 @@ export default function StockPage() {
             } as StockItem;
           }),
         );
-      } catch {
-        error("Erro ao carregar itens", "Tente recarregar.");
-      } finally {
         setLoadingItems(false);
-      }
-    }
-    load();
+      },
+      () => {
+        error("Erro ao carregar itens", "Tente recarregar.");
+        setLoadingItems(false);
+      },
+    );
+    return unsub;
   }, []);
 
   useEffect(() => {
@@ -1561,6 +1599,7 @@ export default function StockPage() {
         photo: photoUrl ?? null,
         isVisible: form.isVisible,
         isFeatured: form.isFeatured,
+        trackStock: form.trackStock,
         additionals: form.additionals,
         additionals_sauce: form.additionals_sauce,
         additionals_drink: form.additionals_drink,
