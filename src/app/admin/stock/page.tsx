@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -50,7 +51,8 @@ import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
 import { StockItem, Subitem, AdditionalGroup } from "@/types";
 import Input from "@/components/ui/Input";
-
+import Image from "next/image";
+import itembg from "../../../../public/images/items-background.png";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ADDITIONAL_GROUPS: { key: AdditionalGroup; label: string }[] = [
@@ -594,6 +596,57 @@ function DeleteConfirm({
         >
           {loading ? "Excluindo..." : "Excluir"}
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+function DownloadConfirm({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title="Confirmar Download" onClose={onClose}>
+      <div className="flex flex-col items-start gap-3 px-4 rounded-[var(--radius-md)]">
+        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+          Baixe o <strong>fundo padrão</strong> das imagens do Cine Drive-in e
+          utilize como base para criar novos itens com o mesmo estilo visual do
+          cardápio.
+        </p>
+        <div className="flex items-center justify-center w-full py-2">
+          <Image
+            className="shadow-2xl"
+            src={itembg.src}
+            alt="background"
+            width={300}
+            height={300}
+          />
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={onClose}
+          className="flex-1 h-10 rounded-[var(--radius-md)] text-sm cursor-pointer"
+          style={{
+            backgroundColor: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-secondary)",
+          }}
+        >
+          Cancelar
+        </button>
+        <a href="/images/items-background.png" download="items-background.png">
+          <button
+            onClick={onConfirm}
+            className="flex items-center gap-2 px-4 flex-1 h-10 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-primary)" }}
+          >
+            <FiDownload size={15} /> Download
+          </button>
+        </a>
       </div>
     </Modal>
   );
@@ -1479,6 +1532,7 @@ export default function StockPage() {
     open: boolean;
     editing?: Subitem;
   }>({ open: false });
+  const [downloadModal, setDownloadModal] = useState(false);
   const [deleteItem, setDeleteItem] = useState<StockItem | null>(null);
   const [deleteSubitem, setDeleteSubitem] = useState<Subitem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -2069,14 +2123,21 @@ export default function StockPage() {
         </div>
         <div className="flex items-center gap-2">
           {tab === "items" && (
-            <a
-              href="/images/items-background.png"
-              download="items-background.png"
-              className="flex items-center flex-wrap w-fit justify-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
+            <button
+              onClick={() => setDownloadModal(true)}
+              className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
+              style={{ backgroundColor: "var(--color-primary)" }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-primary-hover)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "var(--color-primary)")
+              }
             >
               <FiDownload size={15} />{" "}
               <span className="hidden md:block">Baixar background do item</span>
-            </a>
+            </button>
           )}
 
           {canCreateItem && tab === "items" && (
@@ -2637,6 +2698,12 @@ export default function StockPage() {
           loading={deleteLoading}
           onConfirm={() => handleDeleteSubitem(deleteSubitem)}
           onClose={() => setDeleteSubitem(null)}
+        />
+      )}
+      {downloadModal && (
+        <DownloadConfirm
+          onConfirm={() => setDownloadModal(false)}
+          onClose={() => setDownloadModal(false)}
         />
       )}
     </div>
