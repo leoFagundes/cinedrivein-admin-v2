@@ -867,16 +867,16 @@ function ItemModal({
         onChange={(e) => set("name", e.target.value)}
         error={errors.name}
       />
-      <CategoryInput
-        value={form.category}
-        onChange={(v) => set("category", v)}
-        categories={categories}
-      />
       <Input
         label="Descrição"
         placeholder="Descrição do item"
         value={form.description}
         onChange={(e) => set("description", e.target.value)}
+      />
+      <CategoryInput
+        value={form.category}
+        onChange={(v) => set("category", v)}
+        categories={categories}
       />
 
       <Section title="Preço" />
