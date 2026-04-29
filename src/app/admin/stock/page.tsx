@@ -879,7 +879,10 @@ function ItemModal({
       />
       <CategoryInput
         value={form.category}
-        onChange={(v) => { set("category", v); setErrors((p) => ({ ...p, category: undefined })); }}
+        onChange={(v) => {
+          set("category", v);
+          setErrors((p) => ({ ...p, category: undefined }));
+        }}
         categories={categories}
         error={errors.category}
       />
@@ -1597,10 +1600,15 @@ export default function StockPage() {
   async function handleSaveItem(form: ItemForm, file: File | null | undefined) {
     try {
       const codConflict = items.find(
-        (i) => i.codItem === form.codItem.trim() && i.id !== (itemModal.editing?.id ?? ""),
+        (i) =>
+          i.codItem === form.codItem.trim() &&
+          i.id !== (itemModal.editing?.id ?? ""),
       );
       if (codConflict) {
-        error("Código duplicado", `"${form.codItem}" já pertence a "${codConflict.name}".`);
+        error(
+          "Código duplicado",
+          `"${form.codItem}" já pertence a "${codConflict.name}".`,
+        );
         return;
       }
 
@@ -2053,20 +2061,24 @@ export default function StockPage() {
             Estoque
           </h1>
           <p
-            className="text-sm mt-1"
+            className="text-sm mt-1 text-wrap hidden lg:block"
             style={{ color: "var(--color-text-muted)" }}
           >
             Gerencie itens, subitens e categorias do cardápio.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/images/items-background.png"
-            download="items-background.png"
-            className="hidden sm:flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
-          >
-            <FiDownload size={15} /> Item Background
-          </a>
+          {tab === "items" && (
+            <a
+              href="/images/items-background.png"
+              download="items-background.png"
+              className="flex items-center flex-wrap w-fit justify-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0"
+            >
+              <FiDownload size={15} />{" "}
+              <span className="hidden md:block">Baixar background do item</span>
+            </a>
+          )}
+
           {canCreateItem && tab === "items" && (
             <button
               onClick={() => setItemModal({ open: true })}
