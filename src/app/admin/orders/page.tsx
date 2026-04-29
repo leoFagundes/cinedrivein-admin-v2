@@ -1345,11 +1345,19 @@ export default function OrdersPage() {
 
   // Track which orders have fired their first snapshot (to seed seen times)
   const initializedOrdersRef = useRef<Set<string>>(new Set());
+  // Timestamp when each order's subscription started — used to detect messages sent during load
+  const subscriptionStartRef = useRef<Record<string, number>>({});
 
   // Subscribe to latest message per active order — badge for any sender that isn't you
   useEffect(() => {
     if (activeOrders.length === 0) return;
     const unsubs = activeOrders.map((order) => {
+      // Record when this subscription started so we can distinguish old vs new messages
+      if (!subscriptionStartRef.current[order.id]) {
+        subscriptionStartRef.current[order.id] = Date.now();
+      }
+      const subStart = subscriptionStartRef.current[order.id];
+
       const q = query(
         collection(db, "orders", order.id, "messages"),
         orderBy("createdAt", "desc"),
@@ -1370,12 +1378,13 @@ export default function OrdersPage() {
 
         setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: msgTs }));
 
-        // First snapshot: only seed seen time if we have NO existing record
-        // (no record = new order we've never seen; existing record = preserved from localStorage)
+        // First snapshot: seed seenTime only for messages that already existed
+        // before this subscription started (2s buffer for clock skew).
+        // Messages sent during/after page load must show as unread.
         if (!initializedOrdersRef.current.has(order.id)) {
           initializedOrdersRef.current.add(order.id);
           setChatSeenTimes((prev) => {
-            if (prev[order.id] == null && msgTs > 0) {
+            if (prev[order.id] == null && msgTs > 0 && ts < subStart - 2000) {
               return { ...prev, [order.id]: msgTs };
             }
             return prev;

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { can } from "@/lib/access";
 
 function LoadingScreen() {
   return (
@@ -55,7 +56,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Protege rotas públicas: redireciona para /admin se já autenticado e aprovado */
+/** Protege rotas públicas: redireciona para /admin/dashboard (ou /admin/profile) se já autenticado e aprovado */
 export function GuestGuard({ children }: { children: React.ReactNode }) {
   const { firebaseUser, appUser, loading } = useAuth();
   const router = useRouter();
@@ -63,7 +64,11 @@ export function GuestGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (firebaseUser && appUser?.status === "approved") {
-      router.replace("/admin");
+      const target =
+        appUser.isOwner || can(appUser, "view_dashboard")
+          ? "/admin/dashboard"
+          : "/admin/profile";
+      router.replace(target);
     }
   }, [loading, firebaseUser, appUser, router]);
 
