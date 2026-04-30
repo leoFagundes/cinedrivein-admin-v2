@@ -1086,7 +1086,7 @@ function ExtraSettings({
         border: "1px solid var(--color-border)",
       }}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2
           className="text-base font-semibold"
           style={{ color: "var(--color-text-primary)" }}
@@ -1096,7 +1096,7 @@ function ExtraSettings({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer disabled:opacity-50"
+          className="flex items-center justify-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer disabled:opacity-50 w-full sm:w-auto"
           style={{ backgroundColor: "var(--color-primary)" }}
         >
           <FiCheck size={14} />
@@ -1114,7 +1114,7 @@ function ExtraSettings({
         </p>
         <button
           onClick={() => setIsClosed((v) => !v)}
-          className="flex items-center gap-3 h-12 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all w-fit"
+          className="flex items-center gap-3 h-12 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all w-full sm:w-fit"
           style={{
             backgroundColor: isClosed
               ? "rgba(239,68,68,0.1)"
@@ -1180,7 +1180,7 @@ function ExtraSettings({
         }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <p className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
@@ -1209,7 +1209,7 @@ function ExtraSettings({
                 { label: "", days: [], meia: 0, inteira: 0 },
               ])
             }
-            className="flex items-center gap-1.5 h-9 px-3 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0 transition-all"
+            className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0 transition-all w-full sm:w-auto"
             style={{
               backgroundColor: "var(--color-primary-light)",
               color: "var(--color-primary)",
@@ -1281,8 +1281,11 @@ function ExtraSettings({
               </div>
 
               {/* Price fields */}
-              <div className="grid grid-cols-2 divide-x" style={{ borderColor: "var(--color-border)" }}>
-                <div className="flex flex-col gap-1 p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2">
+                <div
+                  className="flex flex-col gap-1 p-4"
+                  style={{ borderBottom: "1px solid var(--color-border)" }}
+                >
                   <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
                     Meia-entrada
                   </label>
@@ -1307,7 +1310,10 @@ function ExtraSettings({
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-1 p-4" style={{ borderLeftWidth: 1, borderLeftStyle: "solid", borderLeftColor: "var(--color-border)" }}>
+                <div
+                  className="flex flex-col gap-1 p-4"
+                  style={{ borderTop: "1px solid var(--color-border)" }}
+                >
                   <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
                     Inteira
                   </label>
@@ -1374,7 +1380,7 @@ function ExtraSettings({
 
       {/* Popup */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p
             className="text-xs font-semibold uppercase tracking-wide"
             style={{ color: "var(--color-text-muted)" }}
@@ -1418,7 +1424,7 @@ function ExtraSettings({
             style={{ borderLeft: "2px solid var(--color-border)" }}
           >
             {/* Preview + upload */}
-            <div className="flex items-start gap-3">
+            <div className="flex flex-col sm:flex-row items-start gap-3">
               {popUpPreview && (
                 <div
                   className="w-20 h-20 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0"
