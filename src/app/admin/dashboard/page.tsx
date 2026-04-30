@@ -342,6 +342,9 @@ export default function DashboardPage() {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closingDay, setClosingDay] = useState(false);
 
+  // ── Pending (not yet archived) stats ──
+  const [pendingStats, setPendingStats] = useState({ finished: 0, canceled: 0, revenue: 0 });
+
   // Chart date ranges
   const [revenueRange, setRevenueRange] = useState({ from: "", to: "" });
   const [ordersRange, setOrdersRange] = useState({ from: "", to: "" });
@@ -440,7 +443,7 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  // Count archivable orders
+  // Count archivable orders + breakdown for stat cards
   useEffect(() => {
     async function count() {
       try {
@@ -451,6 +454,13 @@ export default function DashboardPage() {
           ),
         );
         setArchivableCount(snap.size);
+        let finished = 0, canceled = 0, revenue = 0;
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.status === "finished") { finished++; revenue += data.total ?? 0; }
+          else { canceled++; }
+        });
+        setPendingStats({ finished, canceled, revenue });
       } catch {
         // silent
       }
@@ -945,10 +955,6 @@ export default function DashboardPage() {
     CHART_COLORS.warning,
   ];
 
-  const todayRevenue = activeOrders.reduce(
-    (s, o) => s + o.subtotal + o.serviceFee,
-    0,
-  );
 
   if (authLoading) return null;
 
@@ -984,22 +990,22 @@ export default function DashboardPage() {
           color={CHART_COLORS.primary}
         />
         <StatCard
-          label="Faturamento hoje"
-          value={fmtCurrency(todayRevenue)}
-          icon={<FiDollarSign size={18} />}
+          label="Finalizados"
+          value={String(pendingStats.finished)}
+          icon={<FiTrendingUp size={18} />}
           color={CHART_COLORS.success}
         />
         <StatCard
-          label="Dias registrados"
-          value={String(stats.length)}
+          label="Cancelados"
+          value={String(pendingStats.canceled)}
           icon={<FiArchive size={18} />}
-          color={CHART_COLORS.purple}
+          color={pendingStats.canceled > 0 ? CHART_COLORS.error : CHART_COLORS.text}
         />
         <StatCard
-          label="Para arquivar"
-          value={String(archivableCount)}
-          icon={<FiTrendingUp size={18} />}
-          color={archivableCount > 0 ? CHART_COLORS.warning : CHART_COLORS.text}
+          label="Faturamento"
+          value={fmtCurrency(pendingStats.revenue)}
+          icon={<FiDollarSign size={18} />}
+          color={CHART_COLORS.success}
         />
       </div>
 
