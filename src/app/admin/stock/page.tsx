@@ -789,6 +789,14 @@ function SubitemModal({
 
 // ─── Item Modal ───────────────────────────────────────────────────────────────
 
+function suggestNextCode(existingCodes: string[]): string {
+  const nums = existingCodes
+    .map((c) => parseInt(c.replace(/\D/g, ""), 10))
+    .filter((n) => !isNaN(n) && n > 0);
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return String(next).padStart(3, "0");
+}
+
 interface ItemForm {
   codItem: string;
   name: string;
@@ -826,12 +834,14 @@ function ItemModal({
   existing,
   allSubitems,
   categories,
+  existingCodes,
   onSave,
   onClose,
 }: {
   existing?: StockItem;
   allSubitems: Subitem[];
   categories: string[];
+  existingCodes: string[];
   onSave: (data: ItemForm, file: File | null | undefined) => Promise<void>;
   onClose: () => void;
 }) {
@@ -856,6 +866,7 @@ function ItemModal({
   );
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [loading, setLoading] = useState(false);
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
 
   function set<K extends keyof ItemForm>(k: K, v: ItemForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -876,6 +887,18 @@ function ItemModal({
     setLoading(true);
     await onSave(form, photoFile);
     setLoading(false);
+  }
+
+  function generateRandomCode(existingCodes: string[]): string {
+    let code = "";
+
+    do {
+      const length = Math.floor(Math.random() * 5) + 1; // 1 a 5 dígitos
+      const num = Math.floor(Math.random() * Math.pow(10, length));
+      code = String(num).padStart(length, "0");
+    } while (existingCodes.includes(code));
+
+    return code;
   }
 
   return (
@@ -900,14 +923,49 @@ function ItemModal({
     >
       <Section title="Informações básicas" />
       <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="Código do item"
-          placeholder="Ex: 001"
-          value={form.codItem}
-          onChange={(e) => set("codItem", e.target.value)}
-          error={errors.codItem}
-          autoFocus
-        />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 min-w-0">
+              <Input
+                label="Código do item"
+                placeholder="Ex: 001"
+                value={form.codItem}
+                onChange={(e) => set("codItem", e.target.value)}
+                error={errors.codItem}
+                autoFocus
+              />
+            </div>
+            {!existing && (
+              <button
+                type="button"
+                onClick={() => {
+                  const code = generateRandomCode([
+                    ...existingCodes,
+                    ...generatedCodes,
+                  ]);
+
+                  setGeneratedCodes((prev) => [...prev, code]);
+                  set("codItem", code);
+                }}
+                className="h-10 px-3 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-all flex-shrink-0"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-secondary)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--color-primary)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--color-border)")
+                }
+                title="Gerar próximo código disponível"
+              >
+                Gerar
+              </button>
+            )}
+          </div>
+        </div>
         <Input
           label="Quantidade"
           type="number"
@@ -2671,6 +2729,7 @@ export default function StockPage() {
           existing={itemModal.editing}
           allSubitems={subitems}
           categories={allCategories}
+          existingCodes={items.map((i) => i.codItem)}
           onSave={handleSaveItem}
           onClose={() => setItemModal({ open: false })}
         />

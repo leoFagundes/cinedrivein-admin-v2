@@ -596,7 +596,7 @@ export default function NewOrderModal({
   }
 
   function quickOrder() {
-    setCustomerName("Anônimo");
+    setCustomerName("Lanchonete do Cine Drive-in");
     setCustomerPhone(applyPhoneMask("99999999999"));
     setNameError("");
   }

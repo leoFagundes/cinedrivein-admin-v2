@@ -193,20 +193,28 @@ function OrderCard({
           {onChat && (
             <button
               onClick={onChat}
-              className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 relative"
+              className="relative flex items-center justify-center rounded cursor-pointer transition-all"
               style={{
-                color: hasUnread
-                  ? "var(--color-primary)"
-                  : "var(--color-text-muted)",
+                width: 26,
+                height: 26,
+                color: hasUnread ? "var(--color-error)" : "var(--color-text-muted)",
+                backgroundColor: hasUnread ? "rgba(239,68,68,0.12)" : "transparent",
+                border: hasUnread ? "1px solid rgba(239,68,68,0.3)" : "1px solid transparent",
               }}
               title="Chat"
             >
               <FiMessageSquare size={13} />
               {hasUnread && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                  style={{ backgroundColor: "var(--color-error)" }}
-                />
+                <>
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
+                    style={{ backgroundColor: "var(--color-error)", opacity: 0.6 }}
+                  />
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: "var(--color-error)" }}
+                  />
+                </>
               )}
             </button>
           )}
