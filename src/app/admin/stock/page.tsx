@@ -922,7 +922,7 @@ function ItemModal({
       }
     >
       <Section title="Informações básicas" />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-end gap-2">
             <div className="flex-1 min-w-0">
@@ -999,7 +999,7 @@ function ItemModal({
       />
 
       <Section title="Preço" />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 items-end gap-3">
         <Input
           label="Valor (R$)"
           type="number"
@@ -1020,7 +1020,7 @@ function ItemModal({
       </div>
 
       <Section title="Configurações" />
-      <div className="flex gap-3">
+      <div className="flex w-full flex-col sm:flex-row gap-3">
         <button
           type="button"
           onClick={() => set("isVisible", !form.isVisible)}
@@ -2157,7 +2157,7 @@ export default function StockPage() {
     {
       key: "categories",
       label: "Ordem das categorias",
-      icon: <FiList size={14} />,
+      icon: <FiList size={14} className="min-w-[14px]" />,
     },
   ];
 
