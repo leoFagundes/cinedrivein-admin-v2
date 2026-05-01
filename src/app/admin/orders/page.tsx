@@ -49,7 +49,11 @@ import NewOrderModal from "@/components/orders/NewOrderModal";
 import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
 import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
 import { Order, OrderPayment } from "@/types";
-import ThermalPrinterBar from "@/components/orders/ThermalPrinter";
+import ThermalPrinterBar, {
+  PrinterProvider,
+  PrintOrderButton,
+  useAutoPrint,
+} from "@/components/orders/ThermalPrinter";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -191,6 +195,10 @@ function OrderCard({
             />
             {fmtElapsed(elapsedMin)}
           </span>
+
+          {/* 🖨️ Print button — only shows when printer is connected */}
+          <PrintOrderButton order={order} />
+
           {onChat && (
             <button
               onClick={onChat}
@@ -580,7 +588,6 @@ function FinishedCard({
           </div>
         </button>
 
-        {/* Inline confirm actions */}
         {confirmReactivate ? (
           <div className="flex items-center gap-2 flex-shrink-0">
             <span
@@ -1140,7 +1147,6 @@ function FinalizeModal({
           )}
         </div>
 
-        {/* Mismatch warning */}
         {confirmStep && needsConfirm && (
           <div
             className="flex items-start gap-2.5 px-5 py-3"
@@ -1311,9 +1317,9 @@ function ConfirmModal({
   );
 }
 
-// ── OrdersPage ────────────────────────────────────────────────────────────────
+// ── Inner page (needs to be inside PrinterProvider) ───────────────────────────
 
-export default function OrdersPage() {
+function OrdersPageInner() {
   const { activeOrders, markAsSeen } = useOrders();
   const { appUser } = useAuth();
   const { success, error: toastError } = useToast();
@@ -1364,12 +1370,13 @@ export default function OrdersPage() {
   const [finishedStatusFilter, setFinishedStatusFilter] = useState<
     "all" | "finished" | "canceled"
   >("all");
-  const [finishedDateFilter, setFinishedDateFilter] = useState(""); // "" | "today" | "yesterday" | "YYYY-MM-DD"
+  const [finishedDateFilter, setFinishedDateFilter] = useState("");
 
-  // Track which orders have fired their first snapshot
   const initializedOrdersRef = useRef<Set<string>>(new Set());
 
-  // Subscribe to latest message per active order — badge for any sender that isn't you
+  // 🖨️ Auto-print hook — fires whenever a truly new order appears
+  useAutoPrint(activeOrders);
+
   useEffect(() => {
     if (activeOrders.length === 0) return;
     const unsubs = activeOrders.map((order) => {
@@ -1388,7 +1395,6 @@ export default function OrdersPage() {
         const ts = (d.createdAt as Timestamp)?.toMillis() ?? 0;
         const isFromOthers = d.senderName !== appUser?.username;
         const msgTs = isFromOthers ? ts : 0;
-
         setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: msgTs }));
         initializedOrdersRef.current.add(order.id);
       });
@@ -1726,8 +1732,10 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Header */}
+      {/* 🖨️ Printer bar — fixed top strip */}
       <ThermalPrinterBar />
+
+      {/* Header */}
       <div
         className="flex flex-col gap-3 p-4 sm:p-6"
         style={{ borderBottom: "1px solid var(--color-border)" }}
@@ -1954,9 +1962,7 @@ export default function OrdersPage() {
 
         {tab === "finished" && (
           <>
-            {/* Filters */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              {/* Status chips */}
               <div className="flex gap-1">
                 {(["all", "finished", "canceled"] as const).map((s) => (
                   <button
@@ -1987,7 +1993,6 @@ export default function OrdersPage() {
                 ))}
               </div>
 
-              {/* Date chips + picker */}
               <div className="flex items-center gap-1 flex-wrap">
                 {(["today", "yesterday"] as const).map((d) => (
                   <button
@@ -2004,7 +2009,7 @@ export default function OrdersPage() {
                       color:
                         finishedDateFilter === d
                           ? "white"
-                          : "var(--color-text-mPuted)",
+                          : "var(--color-text-muted)",
                       border:
                         finishedDateFilter === d
                           ? "none"
@@ -2046,7 +2051,6 @@ export default function OrdersPage() {
                     onClick={() => setFinishedDateFilter("")}
                     className="p-1 cursor-pointer transition-opacity hover:opacity-70"
                     style={{ color: "var(--color-text-muted)" }}
-                    title="Limpar data"
                   >
                     <FiX size={12} />
                   </button>
@@ -2054,7 +2058,6 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Toolbar */}
             {filteredFinished.length > 0 && (
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <div className="flex gap-1.5">
@@ -2216,5 +2219,15 @@ export default function OrdersPage() {
         <ChatTemplatesModal onClose={() => setShowTemplates(false)} />
       )}
     </div>
+  );
+}
+
+// ── OrdersPage — wraps everything in PrinterProvider ──────────────────────────
+
+export default function OrdersPage() {
+  return (
+    <PrinterProvider>
+      <OrdersPageInner />
+    </PrinterProvider>
   );
 }
