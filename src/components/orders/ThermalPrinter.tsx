@@ -646,3 +646,5 @@ export function PrintOrderButton({ order }: { order: Order }) {
     </button>
   );
 }
+
+//teste de impressão
