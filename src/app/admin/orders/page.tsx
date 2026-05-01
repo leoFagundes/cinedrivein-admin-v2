@@ -49,6 +49,7 @@ import NewOrderModal from "@/components/orders/NewOrderModal";
 import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
 import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
 import { Order, OrderPayment } from "@/types";
+import ThermalPrinterBar from "@/components/orders/ThermalPrinter";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -197,9 +198,15 @@ function OrderCard({
               style={{
                 width: 26,
                 height: 26,
-                color: hasUnread ? "var(--color-error)" : "var(--color-text-muted)",
-                backgroundColor: hasUnread ? "rgba(239,68,68,0.12)" : "transparent",
-                border: hasUnread ? "1px solid rgba(239,68,68,0.3)" : "1px solid transparent",
+                color: hasUnread
+                  ? "var(--color-error)"
+                  : "var(--color-text-muted)",
+                backgroundColor: hasUnread
+                  ? "rgba(239,68,68,0.12)"
+                  : "transparent",
+                border: hasUnread
+                  ? "1px solid rgba(239,68,68,0.3)"
+                  : "1px solid transparent",
               }}
               title="Chat"
             >
@@ -208,7 +215,10 @@ function OrderCard({
                 <>
                   <span
                     className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
-                    style={{ backgroundColor: "var(--color-error)", opacity: 0.6 }}
+                    style={{
+                      backgroundColor: "var(--color-error)",
+                      opacity: 0.6,
+                    }}
                   />
                   <span
                     className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
@@ -352,15 +362,20 @@ function OrderCard({
                           unit: {fmt(item.value)}
                         </span>
                       )}
-                      {item.visibleValue != null && item.visibleValue !== item.value && (
-                        <span
-                          className="text-[10px]"
-                          style={{ color: "var(--color-primary)", opacity: 0.8 }}
-                          title="Valor visível ao cliente"
-                        >
-                          cliente: {fmt(item.visibleValue * (item.quantity ?? 1))}
-                        </span>
-                      )}
+                      {item.visibleValue != null &&
+                        item.visibleValue !== item.value && (
+                          <span
+                            className="text-[10px]"
+                            style={{
+                              color: "var(--color-primary)",
+                              opacity: 0.8,
+                            }}
+                            title="Valor visível ao cliente"
+                          >
+                            cliente:{" "}
+                            {fmt(item.visibleValue * (item.quantity ?? 1))}
+                          </span>
+                        )}
                     </div>
                   </div>
                   {extras.length > 0 && (
@@ -1712,6 +1727,7 @@ export default function OrdersPage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
+      <ThermalPrinterBar />
       <div
         className="flex flex-col gap-3 p-4 sm:p-6"
         style={{ borderBottom: "1px solid var(--color-border)" }}
