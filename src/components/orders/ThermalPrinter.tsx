@@ -18,6 +18,10 @@ import {
   FiAlertTriangle,
   FiChevronDown,
   FiCheck,
+  FiInfo,
+  FiX,
+  FiCopy,
+  FiExternalLink,
 } from "react-icons/fi";
 import { Order } from "@/types";
 
@@ -939,6 +943,285 @@ function QzPrinterSelector() {
   );
 }
 
+// ── QZ Tray Tutorial Modal ───────────────────────────────────────────────────
+
+function CodeBlock({ children }: { children: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(children);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <div
+      className="relative rounded-[var(--radius-md)] px-3 py-2 text-xs font-mono mt-1 mb-1 group"
+      style={{
+        backgroundColor: "rgba(0,0,0,0.35)",
+        border: "1px solid var(--color-border)",
+        color: "#e2e8f0",
+        wordBreak: "break-all",
+      }}
+    >
+      <span className="pr-6 leading-relaxed whitespace-pre-wrap">
+        {children}
+      </span>
+      <button
+        onClick={copy}
+        className="absolute top-1.5 right-1.5 p-1 rounded cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
+        style={{
+          color: copied ? "var(--color-success)" : "var(--color-text-muted)",
+        }}
+        title="Copiar"
+      >
+        {copied ? <FiCheck size={11} /> : <FiCopy size={11} />}
+      </button>
+    </div>
+  );
+}
+
+function Step({
+  number,
+  title,
+  children,
+}: {
+  number: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span
+          className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold flex-shrink-0"
+          style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+        >
+          {number}
+        </span>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: "var(--color-text-primary)" }}
+        >
+          {title}
+        </span>
+      </div>
+      <div className="pl-7 flex flex-col gap-1">{children}</div>
+    </div>
+  );
+}
+
+function P({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="text-xs leading-relaxed"
+      style={{ color: "var(--color-text-secondary)" }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function QzTutorialModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full max-w-xl rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+          maxHeight: "90vh",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{
+            borderBottom: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-bg-elevated)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <FiPrinter size={16} style={{ color: "var(--color-primary)" }} />
+            <div>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                Tutorial — Configuração do QZ Tray
+              </p>
+              <p
+                className="text-[10px]"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Siga os passos abaixo para configurar a impressão em produção
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            <FiX size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex flex-col gap-5 px-5 py-5 overflow-y-auto">
+          {/* Step 0 */}
+          <Step number="0" title="Download do QZ Tray">
+            <P>
+              Baixe e instale o QZ Tray no computador que tem a impressora
+              conectada.
+            </P>
+            <a
+              href="https://qz.io/download/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-medium w-fit transition-opacity hover:opacity-70"
+              style={{ color: "var(--color-primary)" }}
+            >
+              <FiExternalLink size={11} />
+              qz.io/download
+            </a>
+            <P>
+              Depois crie a pasta no Git Bash (ajuste o caminho para o seu
+              usuário):
+            </P>
+            <CodeBlock>mkdir -p public/qz</CodeBlock>
+          </Step>
+
+          {/* Step 1 */}
+          <Step number="1" title="Gerar o certificado com OpenSSL">
+            <P>No Git Bash, na raiz do projeto, rode:</P>
+            <CodeBlock>
+              openssl req -x509 -newkey rsa:2048 -keyout
+              public/qz/private-key.pem -out public/qz/digital-certificate.pem
+              -days 3650 -nodes
+            </CodeBlock>
+            <P>O comando vai fazer perguntas. Responda assim:</P>
+            <CodeBlock>{`Country Name (2 letter code): BR
+State or Province Name: Goias
+Locality Name (city): Goiania
+Organization Name: CineDriveIn
+Common Name (domain): cinedrivein-admin-v2.vercel.app
+Email Address: (seu email)`}</CodeBlock>
+            <P>
+              Isso gera dois arquivos em{" "}
+              <code style={{ color: "var(--color-primary)" }}>public/qz/</code>:
+            </P>
+            <P>
+              • <strong>digital-certificate.pem</strong> — certificado público
+            </P>
+            <P>
+              • <strong>private-key.pem</strong> — chave privada (nunca
+              compartilhe)
+            </P>
+            <P>
+              Renomeie ambos para <strong>.txt</strong> e adicione ao projeto no
+              VS Code. O conteúdo não muda, só a extensão.
+            </P>
+          </Step>
+
+          {/* Step 2 */}
+          <Step number="2" title="Copiar o certificado para o QZ Tray">
+            <P>
+              Baixe o certificado e cole dentro da pasta de instalação do QZ
+              Tray:
+            </P>
+            <a
+              href="/qz/digital-certificate.txt"
+              download="digital-certificate.txt"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium w-fit transition-opacity hover:opacity-70 cursor-pointer"
+              style={{
+                backgroundColor: "rgba(0,136,194,0.1)",
+                color: "var(--color-primary)",
+                border: "1px solid rgba(0,136,194,0.25)",
+              }}
+            >
+              <FiExternalLink size={11} />
+              Baixar digital-certificate.txt
+            </a>
+            <P>Cole o arquivo baixado em:</P>
+            <CodeBlock>
+              C:\Program Files\QZ Tray\digital-certificate.txt
+            </CodeBlock>
+          </Step>
+
+          {/* Step 3 */}
+          <Step number="3" title={`Configurar o qz-tray.properties`}>
+            <P>Abra o arquivo abaixo com o Bloco de Notas:</P>
+            <CodeBlock>C:\Program Files\QZ Tray\qz-tray.properties</CodeBlock>
+            <P>Adicione essa linha no final do arquivo e salve:</P>
+            <CodeBlock>{`authcert.override=C\:\\Program Files\\QZ Tray\\digital-certificate.txt`}</CodeBlock>
+          </Step>
+
+          {/* Step 4 */}
+          <Step number="4" title="Reiniciar o QZ Tray">
+            <P>
+              Clique com o botão direito no ícone do QZ Tray na bandeja do
+              sistema → <strong>Exit</strong> → Abra o QZ Tray novamente.
+            </P>
+          </Step>
+
+          {/* Step 5 */}
+          <Step number="5" title="Primeira conexão">
+            <P>
+              Conecte via QZ Tray no painel. Um popup vai aparecer — marque{" "}
+              <strong>
+                {'"'}Remember this decision{'"'}
+              </strong>{" "}
+              e clique em <strong>Allow</strong>. Nunca mais vai pedir.
+            </P>
+          </Step>
+
+          {/* Troca de PC */}
+          <div
+            className="rounded-[var(--radius-md)] px-4 py-3 flex flex-col gap-1"
+            style={{
+              backgroundColor: "rgba(0,136,194,0.07)",
+              border: "1px solid rgba(0,136,194,0.2)",
+            }}
+          >
+            <p
+              className="text-xs font-semibold"
+              style={{ color: "var(--color-primary)" }}
+            >
+              Trocando de PC no futuro
+            </p>
+            <P>
+              O certificado dura 10 anos e não é vinculado ao hardware. Basta
+              instalar o QZ Tray no novo PC, copiar o{" "}
+              <strong>digital-certificate.txt</strong> e configurar o{" "}
+              <strong>qz-tray.properties</strong> novamente (passos 2, 3 e 4).
+            </P>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          className="px-5 py-3 flex-shrink-0"
+          style={{
+            borderTop: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-bg-elevated)",
+          }}
+        >
+          <button
+            onClick={onClose}
+            className="w-full py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
+            style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Chrome badge ──────────────────────────────────────────────────────────────
 
 function ChromeBadge() {
@@ -974,6 +1257,7 @@ export default function ThermalPrinterBar() {
     printHelloWorld,
   } = usePrinter();
 
+  const [showTutorial, setShowTutorial] = useState(false);
   const cfg = STATUS_CFG[status];
   const isBusy = status === "connecting" || status === "printing";
   const hasWarning = !!portWarning;
@@ -1138,10 +1422,28 @@ export default function ThermalPrinterBar() {
           </button>
         )}
 
-        {/* Chrome badge */}
-        <div className="ml-auto">
+        {/* Info + Chrome badge */}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowTutorial(true)}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
+            style={{
+              backgroundColor: "rgba(0,136,194,0.1)",
+              color: "var(--color-primary)",
+              border: "1px solid rgba(0,136,194,0.25)",
+            }}
+            title="Tutorial de configuração do QZ Tray"
+          >
+            <FiInfo size={10} />
+            Tutorial QZ
+          </button>
           <ChromeBadge />
         </div>
+
+        {/* Tutorial modal */}
+        {showTutorial && (
+          <QzTutorialModal onClose={() => setShowTutorial(false)} />
+        )}
       </div>
 
       {/* Warning strip */}
