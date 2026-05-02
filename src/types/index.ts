@@ -162,7 +162,12 @@ export interface DailyStats {
     debit: number;
     discount: number;
   };
-  topItems: Array<{ codItem: string; name: string; quantity: number }>;
+  topItems: Array<{
+    codItem: string;
+    name: string;
+    quantity: number;
+    additionals?: Record<string, number>; // adicional name -> total count
+  }>;
   createdAt: Date;
 }
 

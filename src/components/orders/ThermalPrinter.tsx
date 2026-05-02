@@ -296,6 +296,102 @@ export function buildOrderTicket(order: Order): Uint8Array {
   return concat(...parts);
 }
 
+// ── Report ticket builder ────────────────────────────────────────────────────
+
+export interface ReportTopItem {
+  codItem: string;
+  name: string;
+  quantity: number;
+  additionals?: Record<string, number>; // adicional name -> count
+}
+
+export interface ReportData {
+  date: string; // "2026-05-01"
+  finishedOrders: number;
+  canceledOrders: number;
+  revenue: {
+    money: number;
+    pix: number;
+    credit: number;
+    debit: number;
+    subtotal: number;
+    serviceFee: number;
+    total: number;
+  };
+  topItems: ReportTopItem[];
+}
+
+export function buildReportTicket(report: ReportData): Uint8Array {
+  const parts: Uint8Array[] = [];
+  const add = (...chunks: Uint8Array[]) => parts.push(...chunks);
+
+  // Format date "2026-05-01" → "01/05/2026"
+  const [y, m, d] = report.date.split("-");
+  const dateLabel = `${d}/${m}/${y}`;
+
+  add(CMD.init);
+
+  // ── Header: data grande e negrito ─────────────────────────────────────────
+  add(CMD.alignCenter, CMD.doubleHeight, CMD.bold(true));
+  add(CMD.text(dateLabel));
+  add(CMD.normal, CMD.bold(false));
+  add(CMD.alignCenter);
+  add(CMD.text("Relatorio Diario"));
+  add(CMD.text(DIVIDER));
+
+  // ── Resumo de pedidos ──────────────────────────────────────────────────────
+  add(CMD.alignLeft);
+  add(CMD.bold(true), CMD.text("PEDIDOS"), CMD.bold(false));
+  add(CMD.text(rowLR("Finalizados:", String(report.finishedOrders))));
+  add(CMD.text(rowLR("Cancelados:", String(report.canceledOrders))));
+  add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
+
+  // ── Pagamentos ────────────────────────────────────────────────────────────
+  add(CMD.bold(true), CMD.text("PAGAMENTOS"), CMD.bold(false));
+  if (report.revenue.money > 0)
+    add(CMD.text(rowLR("Dinheiro:", fmt(report.revenue.money))));
+  if (report.revenue.pix > 0)
+    add(CMD.text(rowLR("Pix:", fmt(report.revenue.pix))));
+  if (report.revenue.credit > 0)
+    add(CMD.text(rowLR("Credito:", fmt(report.revenue.credit))));
+  if (report.revenue.debit > 0)
+    add(CMD.text(rowLR("Debito:", fmt(report.revenue.debit))));
+  add(CMD.text(DIVIDER));
+  add(CMD.text(rowLR("Subtotal:", fmt(report.revenue.subtotal))));
+  add(CMD.text(rowLR("Taxa de servico:", fmt(report.revenue.serviceFee))));
+  add(CMD.bold(true));
+  add(CMD.text(rowLR("TOTAL:", fmt(report.revenue.total))));
+  add(CMD.bold(false));
+  add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
+
+  // ── Itens vendidos ────────────────────────────────────────────────────────
+  add(CMD.bold(true), CMD.text("ITENS VENDIDOS"), CMD.bold(false));
+
+  for (const item of report.topItems) {
+    // "2x  20  Esqueceram de Mim"
+    const codPart = item.codItem ? `${item.codItem}` : "";
+    add(CMD.bold(true));
+    add(CMD.text(`${item.quantity}x  (${codPart}) ${item.name}`));
+    add(CMD.bold(false));
+
+    // Adicionais: "+ Bacon (adicional): 1x"
+    if (item.additionals) {
+      for (const [adicName, count] of Object.entries(item.additionals)) {
+        add(CMD.text(`   + ${adicName}: ${count}x`));
+      }
+    }
+  }
+
+  // ── Rodapé ────────────────────────────────────────────────────────────────
+  add(CMD.alignCenter);
+  add(CMD.text(DIVIDER));
+  add(CMD.text("Cine Drive-in"));
+  add(CMD.feed(4));
+  add(CMD.feedAndCut);
+
+  return concat(...parts);
+}
+
 /** Converts a Uint8Array of ESC/POS bytes to a base64 string for QZ Tray */
 function escposToBase64(data: Uint8Array): string {
   let binary = "";

@@ -37,6 +37,7 @@ import {
   FiBookmark,
   FiShield,
   FiMapPin,
+  FiPrinter,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -52,7 +53,9 @@ import { Order, OrderPayment } from "@/types";
 import ThermalPrinterBar, {
   PrintOrderButton,
   useAutoPrint,
+  usePrinter,
 } from "@/components/orders/ThermalPrinter";
+import { SoundAlertButton, useAutoSound } from "@/components/orders/SoundAlert";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,6 +111,158 @@ function ItemPhoto({ photo, name }: { photo?: string; name: string }) {
       }}
     >
       <FiPackage size={16} />
+    </div>
+  );
+}
+
+// ── PrinterReminderModal ──────────────────────────────────────────────────────
+
+const PRINTER_SNOOZE_KEY = "cdi_printer_reminder_snoozed_until";
+
+function usePrinterReminderModal(isConnected: boolean) {
+  const [visible, setVisible] = useState(false);
+  const [dontShowToday, setDontShowToday] = useState(false);
+
+  useEffect(() => {
+    if (isConnected) return;
+    try {
+      const until = localStorage.getItem(PRINTER_SNOOZE_KEY);
+      if (until && Date.now() < Number(until)) return;
+    } catch {}
+    const id = setTimeout(() => setVisible(true), 400);
+    return () => clearTimeout(id);
+  }, [isConnected]);
+
+  function dismiss() {
+    if (dontShowToday) {
+      try {
+        localStorage.setItem(
+          PRINTER_SNOOZE_KEY,
+          String(Date.now() + 12 * 60 * 60 * 1000),
+        );
+      } catch {}
+    }
+    setVisible(false);
+  }
+
+  return { visible, dontShowToday, setDontShowToday, dismiss };
+}
+
+function PrinterReminderModal({
+  dontShowToday,
+  setDontShowToday,
+  onDismiss,
+}: {
+  dontShowToday: boolean;
+  setDontShowToday: (v: boolean) => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
+    >
+      <div
+        className="w-full max-w-sm rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+        }}
+      >
+        {/* Topo */}
+        <div
+          className="flex flex-col items-center gap-3 px-6 py-6"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(239,68,68,0.08) 100%)",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center"
+            style={{
+              backgroundColor: "rgba(245,158,11,0.15)",
+              border: "2px solid rgba(245,158,11,0.35)",
+            }}
+          >
+            <FiPrinter size={24} style={{ color: "var(--color-warning)" }} />
+          </div>
+          <div className="text-center">
+            <p
+              className="text-base font-bold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Impressora não conectada
+            </p>
+            <p
+              className="text-xs mt-1 leading-relaxed"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Novos pedidos não serão impressos automaticamente enquanto a
+              impressora estiver desconectada.
+            </p>
+          </div>
+        </div>
+
+        {/* Corpo */}
+        <div className="flex flex-col gap-3 px-6 py-5">
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            Para ligar a impressora, use a{" "}
+            <strong style={{ color: "var(--color-text-primary)" }}>
+              barra de impressão
+            </strong>{" "}
+            no topo da página e clique em{" "}
+            <strong style={{ color: "var(--color-text-primary)" }}>
+              {'"'}Conectar impressora{'"'}
+            </strong>
+            .
+          </p>
+
+          {/* Checkbox */}
+          <button
+            onClick={() => setDontShowToday(!dontShowToday)}
+            className="flex items-center gap-2.5 text-sm w-fit cursor-pointer transition-opacity hover:opacity-70 mt-1"
+          >
+            <div
+              className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors"
+              style={{
+                backgroundColor: dontShowToday
+                  ? "var(--color-primary)"
+                  : "var(--color-bg-base)",
+                border: dontShowToday
+                  ? "none"
+                  : "1px solid var(--color-border)",
+              }}
+            >
+              {dontShowToday && <FiCheck size={12} color="white" />}
+            </div>
+            <span style={{ color: "var(--color-text-secondary)" }}>
+              Não mostrar nas próximas 12 horas
+            </span>
+          </button>
+        </div>
+
+        {/* Ações */}
+        <div
+          className="px-6 py-4"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          <button
+            onClick={onDismiss}
+            className="w-full py-2.5 rounded-[var(--radius-md)] text-sm font-semibold cursor-pointer transition-opacity hover:opacity-80"
+            style={{
+              backgroundColor: "var(--color-primary)",
+              color: "white",
+            }}
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -932,7 +1087,7 @@ function PaymentInput({
           type="number"
           min="0"
           step="1"
-          value={value === "0" ? undefined : value}
+          value={value === "0" ? "" : value}
           onChange={(e) => onChange(e.target.value)}
           className="flex-1 bg-transparent text-sm outline-none"
           style={{ color: "var(--color-text-primary)" }}
@@ -1197,11 +1352,12 @@ function FinalizeModal({
                 setConfirmStep(true);
                 return;
               }
+              const moneyNet = change > 0 ? moneyVal - change : moneyVal;
               onConfirm({
                 payment: {
                   debit: debitVal,
                   credit: creditVal,
-                  money: moneyVal,
+                  money: moneyNet,
                   pix: pixVal,
                 },
                 discount: discountVal,
@@ -1375,6 +1531,18 @@ function OrdersPageInner() {
 
   // 🖨️ Auto-print hook — fires whenever a truly new order appears
   useAutoPrint(activeOrders);
+
+  // auto-sound
+  useAutoSound(activeOrders);
+
+  // 🖨️ Printer reminder modal
+  const { isConnected } = usePrinter();
+  const {
+    visible: showPrinterReminder,
+    dontShowToday,
+    setDontShowToday,
+    dismiss: dismissPrinterReminder,
+  } = usePrinterReminderModal(isConnected);
 
   useEffect(() => {
     if (activeOrders.length === 0) return;
@@ -2217,11 +2385,22 @@ function OrdersPageInner() {
       {showTemplates && (
         <ChatTemplatesModal onClose={() => setShowTemplates(false)} />
       )}
+
+      {/* 🖨️ Printer reminder modal */}
+      {showPrinterReminder && (
+        <PrinterReminderModal
+          dontShowToday={dontShowToday}
+          setDontShowToday={setDontShowToday}
+          onDismiss={dismissPrinterReminder}
+        />
+      )}
+
+      <SoundAlertButton />
     </div>
   );
 }
 
-// ── OrdersPage — wraps everything in PrinterProvider ──────────────────────────
+// ── OrdersPage ────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
   return <OrdersPageInner />;

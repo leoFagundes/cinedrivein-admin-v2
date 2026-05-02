@@ -1098,6 +1098,7 @@ function ItemModal({
 
 function SubitemCard({
   subitem,
+  usedByItems,
   onToggleVisibility,
   onEdit,
   onDelete,
@@ -1105,108 +1106,207 @@ function SubitemCard({
   canDelete,
 }: {
   subitem: Subitem;
+  usedByItems: StockItem[];
   onToggleVisibility: () => void;
   onEdit: () => void;
   onDelete: () => void;
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div
-      className="flex items-center gap-3 p-3 rounded-[var(--radius-lg)] transition-all"
+      className="flex flex-col rounded-[var(--radius-lg)] overflow-hidden transition-all"
       style={{
         backgroundColor: "var(--color-bg-surface)",
-        border: `1px solid ${subitem.isVisible ? "var(--color-border)" : "var(--color-border)"}`,
+        border: `1px solid var(--color-border)`,
         opacity: subitem.isVisible ? 1 : 0.45,
       }}
     >
-      <div
-        className="w-10 h-10 rounded-[var(--radius-md)] overflow-hidden flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: "var(--color-bg-elevated)" }}
-      >
-        {subitem.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={subitem.photo}
-            alt={subitem.name}
-            className="w-full h-full object-contain"
-            style={{ backgroundColor: "var(--color-bg-base)" }}
-          />
-        ) : (
-          <FiPackage size={16} style={{ color: "var(--color-text-muted)" }} />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p
-            className="text-sm font-medium truncate"
-            style={{ color: "var(--color-text-primary)" }}
-          >
-            {subitem.name}
-          </p>
-          {!subitem.isVisible && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs flex-shrink-0"
-              style={{
-                backgroundColor: "rgba(82,88,112,0.25)",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              <FiEyeOff size={10} /> oculto
-            </span>
+      {/* Linha principal */}
+      <div className="flex items-center gap-3 p-3">
+        <div
+          className="w-10 h-10 rounded-[var(--radius-md)] overflow-hidden flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "var(--color-bg-elevated)" }}
+        >
+          {subitem.photo ? (
+            <img
+              src={subitem.photo}
+              alt={subitem.name}
+              className="w-full h-full object-contain"
+              style={{ backgroundColor: "var(--color-bg-base)" }}
+            />
+          ) : (
+            <FiPackage size={16} style={{ color: "var(--color-text-muted)" }} />
           )}
         </div>
-        {subitem.description && (
-          <p
-            className="text-xs truncate"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            {subitem.description}
-          </p>
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <ToggleBtn active={subitem.isVisible} onToggle={onToggleVisibility} />
-        {canEdit && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p
+              className="text-sm font-medium truncate"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              {subitem.name}
+            </p>
+            {!subitem.isVisible && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs flex-shrink-0"
+                style={{
+                  backgroundColor: "rgba(82,88,112,0.25)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                <FiEyeOff size={10} /> oculto
+              </span>
+            )}
+          </div>
+          {subitem.description && (
+            <p
+              className="text-xs truncate"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              {subitem.description}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Botão de expandir */}
           <button
-            onClick={onEdit}
-            title="Editar"
+            onClick={() => setExpanded((v) => !v)}
             className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
             style={{
-              backgroundColor: "var(--color-bg-elevated)",
-              color: "var(--color-text-secondary)",
+              backgroundColor: expanded
+                ? "var(--color-primary-light)"
+                : "var(--color-bg-elevated)",
+              color: expanded
+                ? "var(--color-primary)"
+                : "var(--color-text-muted)",
               border: "1px solid var(--color-border)",
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.borderColor = "var(--color-primary)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.borderColor = "var(--color-border)")
-            }
+            title={`Usado em ${usedByItems.length} item(s)`}
           >
-            <FiEdit2 size={13} />
+            <FiList size={13} />
           </button>
-        )}
-        {canDelete && (
-          <button
-            onClick={onDelete}
-            title="Excluir"
-            className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-            style={{
-              backgroundColor: "rgba(239,68,68,0.08)",
-              color: "var(--color-error)",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)")
-            }
-          >
-            <FiTrash2 size={13} />
-          </button>
-        )}
+          <ToggleBtn active={subitem.isVisible} onToggle={onToggleVisibility} />
+          {canEdit && (
+            <button
+              onClick={onEdit}
+              title="Editar"
+              className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.borderColor = "var(--color-primary)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.borderColor = "var(--color-border)")
+              }
+            >
+              <FiEdit2 size={13} />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={onDelete}
+              title="Excluir"
+              className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+              style={{
+                backgroundColor: "rgba(239,68,68,0.08)",
+                color: "var(--color-error)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)")
+              }
+            >
+              <FiTrash2 size={13} />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Painel expansível — itens que usam este subitem */}
+      {expanded && (
+        <div
+          className="flex flex-col gap-1 px-3 pb-3"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          <p
+            className="text-[10px] font-semibold uppercase tracking-wide pt-2.5 pb-1"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Usado em {usedByItems.length} item
+            {usedByItems.length !== 1 ? "s" : ""}
+          </p>
+          {usedByItems.length === 0 ? (
+            <p
+              className="text-xs italic"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Nenhum item do cardápio utiliza este subitem.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {usedByItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  {item.photo ? (
+                    <img
+                      src={item.photo}
+                      alt={item.name}
+                      className="w-6 h-6 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                      style={{
+                        backgroundColor: "var(--color-bg-base)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
+                      <FiBox size={11} />
+                    </div>
+                  )}
+                  <span
+                    className="text-xs font-mono flex-shrink-0"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    #{item.codItem}
+                  </span>
+                  <span
+                    className="text-xs flex-1 min-w-0 truncate font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {item.name}
+                  </span>
+                  {!item.isVisible && (
+                    <FiEyeOff
+                      size={11}
+                      style={{
+                        color: "var(--color-text-muted)",
+                        flexShrink: 0,
+                      }}
+                      title="Item oculto"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2462,6 +2562,14 @@ export default function StockPage() {
                     <SubitemCard
                       key={s.id}
                       subitem={s}
+                      usedByItems={items.filter((item) =>
+                        [
+                          ...item.additionals,
+                          ...item.additionals_sauce,
+                          ...item.additionals_drink,
+                          ...item.additionals_sweet,
+                        ].includes(s.id),
+                      )}
                       onToggleVisibility={() =>
                         handleToggleSubitemVisibility(s)
                       }

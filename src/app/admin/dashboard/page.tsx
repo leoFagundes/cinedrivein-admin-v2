@@ -56,6 +56,11 @@ import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
 import { Order, DailyStats } from "@/types";
 import { parseOrder } from "@/contexts/OrdersContext";
+import {
+  buildReportTicket,
+  ReportData,
+  usePrinter,
+} from "@/components/orders/ThermalPrinter";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -314,6 +319,7 @@ export default function DashboardPage() {
   const { appUser, loading: authLoading } = useAuth();
   const { activeOrders } = useOrders();
   const { success, error: toastError, info } = useToast();
+  const { isConnected, print } = usePrinter();
 
   // ── Store control ──
   const [isOpen, setIsOpen] = useState(false);
@@ -343,7 +349,11 @@ export default function DashboardPage() {
   const [closingDay, setClosingDay] = useState(false);
 
   // ── Pending (not yet archived) stats ──
-  const [pendingStats, setPendingStats] = useState({ finished: 0, canceled: 0, revenue: 0 });
+  const [pendingStats, setPendingStats] = useState({
+    finished: 0,
+    canceled: 0,
+    revenue: 0,
+  });
 
   // Chart date ranges
   const [revenueRange, setRevenueRange] = useState({ from: "", to: "" });
@@ -454,11 +464,17 @@ export default function DashboardPage() {
           ),
         );
         setArchivableCount(snap.size);
-        let finished = 0, canceled = 0, revenue = 0;
+        let finished = 0,
+          canceled = 0,
+          revenue = 0;
         snap.docs.forEach((d) => {
           const data = d.data();
-          if (data.status === "finished") { finished++; revenue += data.total ?? 0; }
-          else { canceled++; }
+          if (data.status === "finished") {
+            finished++;
+            revenue += data.total ?? 0;
+          } else {
+            canceled++;
+          }
         });
         setPendingStats({ finished, canceled, revenue });
       } catch {
@@ -529,14 +545,20 @@ export default function DashboardPage() {
     setTogglingStore(true);
     try {
       const newVal = !isOpen;
-      await setDoc(doc(db, "storeConfig", "main"), { isOpen: newVal }, { merge: true });
+      await setDoc(
+        doc(db, "storeConfig", "main"),
+        { isOpen: newVal },
+        { merge: true },
+      );
       setIsOpen(newVal);
       log({
         action: newVal ? "Lanchonete aberta" : "Lanchonete fechada",
         category: "site",
         description: `Status da lanchonete alterado para ${newVal ? "aberto" : "fechado"}`,
         performedBy: { uid: appUser!.uid, username: appUser!.username },
-        changes: [{ field: "isOpen", from: String(!newVal), to: String(newVal) }],
+        changes: [
+          { field: "isOpen", from: String(!newVal), to: String(newVal) },
+        ],
       });
       success(
         newVal ? "Lanchonete aberta" : "Lanchonete fechada",
@@ -554,7 +576,11 @@ export default function DashboardPage() {
   async function handleSaveTimes() {
     setSavingTimes(true);
     try {
-      await setDoc(doc(db, "storeConfig", "main"), { openingTime, closingTime }, { merge: true });
+      await setDoc(
+        doc(db, "storeConfig", "main"),
+        { openingTime, closingTime },
+        { merge: true },
+      );
       log({
         action: "Horários atualizados",
         category: "site",
@@ -604,8 +630,14 @@ export default function DashboardPage() {
 
       // Create/merge dailyStats per date
       const ZERO_REVENUE = {
-        total: 0, subtotal: 0, serviceFee: 0,
-        money: 0, pix: 0, credit: 0, debit: 0, discount: 0,
+        total: 0,
+        subtotal: 0,
+        serviceFee: 0,
+        money: 0,
+        pix: 0,
+        credit: 0,
+        debit: 0,
+        discount: 0,
       };
 
       for (const [dateKey, dayOrders] of Object.entries(byDate)) {
@@ -628,16 +660,42 @@ export default function DashboardPage() {
         );
 
         // Item counts: accumulate using actual ordered quantity
-        const newItemMap: Record<string, { codItem: string; name: string; quantity: number }> = {};
+        const newItemMap: Record<
+          string,
+          {
+            codItem: string;
+            name: string;
+            quantity: number;
+            additionals: Record<string, number>;
+          }
+        > = {};
+
         finished.forEach((o) => {
           o.items.forEach((item) => {
             const key = item.itemId || item.name;
             const qty = item.quantity ?? 1;
-            if (newItemMap[key]) {
-              newItemMap[key].quantity += qty;
-            } else {
-              newItemMap[key] = { codItem: item.codItem, name: item.name, quantity: qty };
+
+            if (!newItemMap[key]) {
+              newItemMap[key] = {
+                codItem: item.codItem,
+                name: item.name,
+                quantity: 0,
+                additionals: {},
+              };
             }
+            newItemMap[key].quantity += qty;
+
+            // Aggregate all additionals
+            const allAdditionals = [
+              ...(item.additionals ?? []),
+              ...(item.additionals_sauce ?? []),
+              ...(item.additionals_drink ?? []),
+              ...(item.additionals_sweet ?? []),
+            ];
+            allAdditionals.forEach((adicName) => {
+              newItemMap[key].additionals[adicName] =
+                (newItemMap[key].additionals[adicName] ?? 0) + qty;
+            });
           });
         });
 
@@ -647,7 +705,15 @@ export default function DashboardPage() {
         let finalTotal = dayOrders.length;
         let finalFinished = finished.length;
         let finalCanceled = canceled.length;
-        const mergedItemMap = { ...newItemMap };
+        const mergedItemMap: Record<
+          string,
+          {
+            codItem: string;
+            name: string;
+            quantity: number;
+            additionals: Record<string, number>;
+          }
+        > = { ...newItemMap };
 
         if (existingSnap.exists()) {
           const ed = existingSnap.data();
@@ -666,18 +732,33 @@ export default function DashboardPage() {
           finalFinished += ed.finishedOrders ?? 0;
           finalCanceled += ed.canceledOrders ?? 0;
 
-          const existingItems = (ed.topItems ?? []) as Array<{ codItem: string; name: string; quantity: number }>;
+          const existingItems = (ed.topItems ?? []) as Array<{
+            codItem: string;
+            name: string;
+            quantity: number;
+            additionals?: Record<string, number>;
+          }>;
           existingItems.forEach((item) => {
             const key = item.codItem || item.name;
             if (mergedItemMap[key]) {
               mergedItemMap[key].quantity += item.quantity;
+              const existingAdds = item.additionals ?? {};
+              Object.entries(existingAdds).forEach(([adicName, count]) => {
+                mergedItemMap[key].additionals[adicName] =
+                  (mergedItemMap[key].additionals[adicName] ?? 0) + count;
+              });
             } else {
-              mergedItemMap[key] = { ...item };
+              mergedItemMap[key] = {
+                ...item,
+                additionals: item.additionals ?? {},
+              };
             }
           });
         }
 
-        const topItems = Object.values(mergedItemMap).sort((a, b) => b.quantity - a.quantity);
+        const topItems = Object.values(mergedItemMap).sort(
+          (a, b) => b.quantity - a.quantity,
+        );
 
         await setDoc(doc(db, "dailyStats", dateKey), {
           date: dateKey,
@@ -746,6 +827,17 @@ export default function DashboardPage() {
       );
       setShowCloseModal(false);
       setArchivableCount(0);
+
+      // Força o re-fetch do relatório do dia atual
+      setArchivedStats(null);
+      setReportSource(null);
+      setReportOrders([]);
+      setReportDate((prev) => {
+        // Seta para string vazia e logo em seguida restaura
+        // para disparar o useEffect de carregamento do relatório
+        setTimeout(() => setReportDate(prev), 0);
+        return "";
+      });
     } catch (err) {
       console.error(err);
       toastError(
@@ -796,23 +888,42 @@ export default function DashboardPage() {
     codItem: string;
     name: string;
     quantity: number;
+    additionals?: Record<string, number>;
   }> = archivedStats
     ? archivedStats.topItems
     : (() => {
         const map: Record<
           string,
-          { codItem: string; name: string; quantity: number }
+          {
+            codItem: string;
+            name: string;
+            quantity: number;
+            additionals: Record<string, number>;
+          }
         > = {};
         reportOrders.forEach((o) => {
           o.items.forEach((item) => {
             const key = item.itemId || item.name;
-            if (map[key]) map[key].quantity++;
-            else
+            const qty = item.quantity ?? 1;
+            if (!map[key]) {
               map[key] = {
                 codItem: item.codItem,
                 name: item.name,
-                quantity: 1,
+                quantity: 0,
+                additionals: {},
               };
+            }
+            map[key].quantity += qty;
+            const allAdds = [
+              ...(item.additionals ?? []),
+              ...(item.additionals_sauce ?? []),
+              ...(item.additionals_drink ?? []),
+              ...(item.additionals_sweet ?? []),
+            ];
+            allAdds.forEach((adicName) => {
+              map[key].additionals[adicName] =
+                (map[key].additionals[adicName] ?? 0) + qty;
+            });
           });
         });
         return Object.values(map).sort((a, b) => b.quantity - a.quantity);
@@ -883,7 +994,13 @@ export default function DashboardPage() {
         category: "orders",
         description: `${toDelete.length} dia${toDelete.length !== 1 ? "s" : ""} de estatísticas removido${toDelete.length !== 1 ? "s" : ""}${range.from || range.to ? ` (${range.from || "início"} → ${range.to || "fim"})` : ""}`,
         performedBy: { uid: appUser!.uid, username: appUser!.username },
-        changes: [{ field: "dailyStats_deletados", from: null, to: String(toDelete.length) }],
+        changes: [
+          {
+            field: "dailyStats_deletados",
+            from: null,
+            to: String(toDelete.length),
+          },
+        ],
       });
       success(
         "Dados zerados",
@@ -955,7 +1072,6 @@ export default function DashboardPage() {
     CHART_COLORS.warning,
   ];
 
-
   if (authLoading) return null;
 
   const canViewDashboard = can(appUser, "view_dashboard");
@@ -999,7 +1115,9 @@ export default function DashboardPage() {
           label="Cancelados"
           value={String(pendingStats.canceled)}
           icon={<FiArchive size={18} />}
-          color={pendingStats.canceled > 0 ? CHART_COLORS.error : CHART_COLORS.text}
+          color={
+            pendingStats.canceled > 0 ? CHART_COLORS.error : CHART_COLORS.text
+          }
         />
         <StatCard
           label="Faturamento"
@@ -1482,7 +1600,7 @@ export default function DashboardPage() {
                         {reportItems.map((item, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-3 px-4 p-2.5"
+                            className="flex flex-col"
                             style={{
                               borderBottom:
                                 i < reportItems.length - 1
@@ -1494,27 +1612,70 @@ export default function DashboardPage() {
                                   : "transparent",
                             }}
                           >
-                            <span
-                              className="text-sm font-bold w-10 flex-shrink-0 text-center"
-                              style={{ color: "var(--color-primary)" }}
-                            >
-                              {item.quantity}x
-                            </span>
-                            <span
-                              className="text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0"
-                              style={{
-                                backgroundColor: "var(--color-primary-light)",
-                                color: "var(--color-primary)",
-                              }}
-                            >
-                              {item.codItem || "—"} (código)
-                            </span>
-                            <span
-                              className="text-sm flex-1 min-w-0 truncate"
-                              style={{ color: "var(--color-text-primary)" }}
-                            >
-                              {item.name}
-                            </span>
+                            {/* Linha principal do item */}
+                            <div className="flex items-center gap-3 px-4 py-2.5">
+                              <span
+                                className="text-sm font-bold w-10 flex-shrink-0 text-center"
+                                style={{ color: "var(--color-primary)" }}
+                              >
+                                {item.quantity}x
+                              </span>
+                              <span
+                                className="text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0"
+                                style={{
+                                  backgroundColor: "var(--color-primary-light)",
+                                  color: "var(--color-primary)",
+                                }}
+                              >
+                                {item.codItem || "—"} (código)
+                              </span>
+                              <span
+                                className="text-sm flex-1 min-w-0 truncate"
+                                style={{ color: "var(--color-text-primary)" }}
+                              >
+                                {item.name}
+                              </span>
+                            </div>
+
+                            {/* Adicionais */}
+                            {item.additionals &&
+                              Object.keys(item.additionals).length > 0 && (
+                                <div className="flex flex-col gap-0.5 px-4 pb-2 pl-16">
+                                  {Object.entries(item.additionals)
+                                    .sort((a, b) => b[1] - a[1])
+                                    .map(([adicName, count]) => (
+                                      <div
+                                        key={adicName}
+                                        className="flex items-center gap-1.5"
+                                      >
+                                        <span
+                                          className="text-xs font-bold w-10 flex-shrink-0 text-center"
+                                          style={{
+                                            color: "var(--color-text-muted)",
+                                          }}
+                                        >
+                                          {count}x
+                                        </span>
+                                        <span
+                                          style={{
+                                            color: "var(--color-primary)",
+                                            fontSize: 11,
+                                          }}
+                                        >
+                                          +
+                                        </span>
+                                        <span
+                                          className="text-xs"
+                                          style={{
+                                            color: "var(--color-text-muted)",
+                                          }}
+                                        >
+                                          {adicName}
+                                        </span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
                           </div>
                         ))}
                       </div>
@@ -1524,16 +1685,41 @@ export default function DashboardPage() {
                   {/* Print button */}
                   <div className="flex justify-end">
                     <button
-                      onClick={() => window.print()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm cursor-pointer transition-opacity hover:opacity-70"
+                      onClick={() => {
+                        const reportData: ReportData = {
+                          date: reportDate,
+                          finishedOrders:
+                            archivedStats?.finishedOrders ??
+                            reportOrders.length,
+                          canceledOrders: archivedStats?.canceledOrders ?? 0,
+                          revenue: {
+                            money: reportRevenue.money,
+                            pix: reportRevenue.pix,
+                            credit: reportRevenue.credit,
+                            debit: reportRevenue.debit,
+                            subtotal: reportRevenue.subtotal,
+                            serviceFee: reportRevenue.serviceFee,
+                            total: reportRevenue.total,
+                          },
+                          topItems: reportItems,
+                        };
+                        print(buildReportTicket(reportData));
+                      }}
+                      disabled={!isConnected}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm cursor-pointer transition-opacity hover:opacity-70 disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{
                         backgroundColor: "var(--color-bg-elevated)",
                         color: "var(--color-text-secondary)",
                         border: "1px solid var(--color-border)",
                       }}
+                      title={
+                        !isConnected
+                          ? "Conecte a impressora para imprimir"
+                          : "Imprimir relatório na térmica"
+                      }
                     >
                       <FiPrinter size={14} />
-                      Imprimir
+                      {isConnected ? "Imprimir" : "Impressora desconectada"}
                     </button>
                   </div>
                 </>
@@ -1581,12 +1767,15 @@ export default function DashboardPage() {
                 title="Faturamento por dia"
                 range={revenueRange}
                 onRangeChange={setRevenueRange}
-                onClearClick={canDeleteChartData ? () =>
-                  setClearModal({
-                    label: "Faturamento por dia",
-                    range: revenueRange,
-                  })
-                : undefined}
+                onClearClick={
+                  canDeleteChartData
+                    ? () =>
+                        setClearModal({
+                          label: "Faturamento por dia",
+                          range: revenueRange,
+                        })
+                    : undefined
+                }
                 count={revenueStats.length}
               >
                 <ResponsiveContainer width="100%" height={220}>
@@ -1651,9 +1840,12 @@ export default function DashboardPage() {
                 title="Pedidos finalizados vs cancelados"
                 range={ordersRange}
                 onRangeChange={setOrdersRange}
-                onClearClick={canDeleteChartData ? () =>
-                  setClearModal({ label: "Pedidos", range: ordersRange })
-                : undefined}
+                onClearClick={
+                  canDeleteChartData
+                    ? () =>
+                        setClearModal({ label: "Pedidos", range: ordersRange })
+                    : undefined
+                }
                 count={ordersStats.length}
               >
                 <ResponsiveContainer width="100%" height={220}>
@@ -1702,12 +1894,15 @@ export default function DashboardPage() {
                 title="Itens mais vendidos"
                 range={topItemsRange}
                 onRangeChange={setTopItemsRange}
-                onClearClick={canDeleteChartData ? () =>
-                  setClearModal({
-                    label: "Itens mais vendidos",
-                    range: topItemsRange,
-                  })
-                : undefined}
+                onClearClick={
+                  canDeleteChartData
+                    ? () =>
+                        setClearModal({
+                          label: "Itens mais vendidos",
+                          range: topItemsRange,
+                        })
+                    : undefined
+                }
                 count={topItemsStats.length}
               >
                 {topItemsData.length === 0 ? (
@@ -1764,12 +1959,15 @@ export default function DashboardPage() {
                 title="Distribuição por pagamento"
                 range={paymentRange}
                 onRangeChange={setPaymentRange}
-                onClearClick={canDeleteChartData ? () =>
-                  setClearModal({
-                    label: "Distribuição por pagamento",
-                    range: paymentRange,
-                  })
-                : undefined}
+                onClearClick={
+                  canDeleteChartData
+                    ? () =>
+                        setClearModal({
+                          label: "Distribuição por pagamento",
+                          range: paymentRange,
+                        })
+                    : undefined
+                }
                 count={paymentStats.length}
               >
                 {paymentPieData.length === 0 ? (
