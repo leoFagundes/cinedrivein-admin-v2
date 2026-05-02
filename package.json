@@ -19,6 +19,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qz-tray": "^2.2.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/w3c-web-serial": "^1.0.8",
