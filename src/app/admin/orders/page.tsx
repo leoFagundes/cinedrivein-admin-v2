@@ -50,7 +50,6 @@ import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
 import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
 import { Order, OrderPayment } from "@/types";
 import ThermalPrinterBar, {
-  PrinterProvider,
   PrintOrderButton,
   useAutoPrint,
 } from "@/components/orders/ThermalPrinter";
@@ -2225,9 +2224,5 @@ function OrdersPageInner() {
 // ── OrdersPage — wraps everything in PrinterProvider ──────────────────────────
 
 export default function OrdersPage() {
-  return (
-    <PrinterProvider>
-      <OrdersPageInner />
-    </PrinterProvider>
-  );
+  return <OrdersPageInner />;
 }

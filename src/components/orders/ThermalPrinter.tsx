@@ -432,10 +432,10 @@ function useThermalPrinterCore() {
       if (!window.qz) throw new Error("QZ Tray não carregou corretamente.");
 
       // Configure security — assinatura client-side com jsrsasign
-      // Lê o certificado público (digital-certificate.txt) da pasta public/qz/
+      // Lê o certificado público (digital-certificate.pem) da pasta public/qz/
       window.qz.security.setCertificatePromise(
         (resolve: (v: string) => void, reject: (e: unknown) => void) => {
-          fetch("/qz/digital-certificate.txt", { cache: "no-store" })
+          fetch("/qz/digital-certificate.pem", { cache: "no-store" })
             .then((r) =>
               r.ok
                 ? r.text()
