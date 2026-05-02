@@ -435,7 +435,7 @@ function useThermalPrinterCore() {
       // Lê o certificado público (digital-certificate.pem) da pasta public/qz/
       window.qz.security.setCertificatePromise(
         (resolve: (v: string) => void, reject: (e: unknown) => void) => {
-          fetch("/qz/digital-certificate.pem", { cache: "no-store" })
+          fetch("/qz/digital-certificate.txt", { cache: "no-store" })
             .then((r) =>
               r.ok
                 ? r.text()
@@ -453,7 +453,7 @@ function useThermalPrinterCore() {
         return (resolve: (v: string) => void, reject: (e: unknown) => void) => {
           try {
             // Lê a chave privada do arquivo público (ok para uso local/intranet)
-            fetch("/qz/private-key.pem", { cache: "no-store" })
+            fetch("/qz/private-key.txt", { cache: "no-store" })
               .then((r) =>
                 r.ok
                   ? r.text()
