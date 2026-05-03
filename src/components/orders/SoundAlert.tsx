@@ -16,6 +16,7 @@ import {
   FiSliders,
   FiCheck,
   FiX,
+  FiMessageSquare,
 } from "react-icons/fi";
 import { Order } from "@/types";
 
@@ -27,6 +28,10 @@ interface SoundSettings {
   enabled: boolean;
   volume: number; // 0–1
   sound: SoundOption;
+  // Som específico para mensagens de chat
+  chatSoundEnabled: boolean;
+  chatSound: SoundOption;
+  chatVolume: number;
 }
 
 const STORAGE_KEY = "cdi_sound_alert";
@@ -51,10 +56,21 @@ function loadSettings(): SoundSettings {
         enabled: parsed.enabled ?? true,
         volume: typeof parsed.volume === "number" ? parsed.volume : 0.7,
         sound: parsed.sound ?? "som1",
+        chatSoundEnabled: parsed.chatSoundEnabled ?? true,
+        chatSound: parsed.chatSound ?? "som2",
+        chatVolume:
+          typeof parsed.chatVolume === "number" ? parsed.chatVolume : 0.6,
       };
     }
   } catch {}
-  return { enabled: true, volume: 0.7, sound: "som1" };
+  return {
+    enabled: true,
+    volume: 0.7,
+    sound: "som1",
+    chatSoundEnabled: true,
+    chatSound: "som2",
+    chatVolume: 0.6,
+  };
 }
 
 function saveSettings(s: SoundSettings) {
@@ -68,35 +84,55 @@ function saveSettings(s: SoundSettings) {
 function useSoundAlertCore() {
   const [settings, setSettings] = useState<SoundSettings>(loadSettings);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const chatAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Persist whenever settings change
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
 
-  // Rebuild audio element when sound changes
+  // Rebuild order audio when sound changes
   useEffect(() => {
     const audio = new Audio(`/music/${settings.sound}.mp3`);
     audio.volume = settings.volume;
     audioRef.current = audio;
   }, [settings.sound]);
 
-  // Sync volume
+  // Rebuild chat audio when chat sound changes
+  useEffect(() => {
+    const audio = new Audio(`/music/${settings.chatSound}.mp3`);
+    audio.volume = settings.chatVolume;
+    chatAudioRef.current = audio;
+  }, [settings.chatSound]);
+
+  // Sync volumes
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = settings.volume;
   }, [settings.volume]);
 
+  useEffect(() => {
+    if (chatAudioRef.current) chatAudioRef.current.volume = settings.chatVolume;
+  }, [settings.chatVolume]);
+
+  // Play order sound
   const play = useCallback(() => {
     if (!settings.enabled || !audioRef.current) return;
     audioRef.current.currentTime = 0;
     audioRef.current.play().catch(() => {});
   }, [settings.enabled]);
 
+  // Play chat sound
+  const playChat = useCallback(() => {
+    if (!settings.chatSoundEnabled || !chatAudioRef.current) return;
+    chatAudioRef.current.currentTime = 0;
+    chatAudioRef.current.play().catch(() => {});
+  }, [settings.chatSoundEnabled]);
+
   const update = useCallback((patch: Partial<SoundSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  return { settings, update, play };
+  return { settings, update, play, playChat };
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -105,6 +141,7 @@ interface SoundAlertContextValue {
   settings: SoundSettings;
   update: (patch: Partial<SoundSettings>) => void;
   play: () => void;
+  playChat: () => void;
 }
 
 const SoundAlertContext = createContext<SoundAlertContextValue | null>(null);
@@ -161,9 +198,12 @@ export function useAutoSound(orders: Order[]) {
 
 // ── Floating Button Component ─────────────────────────────────────────────────
 
+type PanelTab = "orders" | "chat";
+
 export function SoundAlertButton() {
-  const { settings, update, play } = useSoundAlert();
+  const { settings, update, play, playChat } = useSoundAlert();
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<PanelTab>("orders");
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -183,7 +223,13 @@ export function SoundAlertButton() {
     setTimeout(() => play(), 60);
   }
 
+  function previewChatSound(s: SoundOption) {
+    update({ chatSound: s });
+    setTimeout(() => playChat(), 60);
+  }
+
   const volumePct = Math.round(settings.volume * 100);
+  const chatVolumePct = Math.round(settings.chatVolume * 100);
 
   return (
     <div
@@ -195,7 +241,7 @@ export function SoundAlertButton() {
         <div
           className="flex flex-col rounded-[var(--radius-xl)] overflow-hidden"
           style={{
-            width: 260,
+            width: 280,
             backgroundColor: "var(--color-bg-surface)",
             border: "1px solid var(--color-border)",
             boxShadow:
@@ -249,48 +295,149 @@ export function SoundAlertButton() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-4 px-4 py-4">
-            {/* Enable / disable toggle */}
-            <div className="flex items-center justify-between">
-              <span
-                className="text-sm"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                {settings.enabled ? "Som ativado" : "Som desativado"}
-              </span>
+          {/* Tabs */}
+          <div
+            className="flex gap-0"
+            style={{ borderBottom: "1px solid var(--color-border)" }}
+          >
+            {(["orders", "chat"] as PanelTab[]).map((t) => (
               <button
-                onClick={() => update({ enabled: !settings.enabled })}
-                className="relative flex items-center cursor-pointer transition-all"
-                style={{ width: 44, height: 24 }}
-                title={settings.enabled ? "Desativar som" : "Ativar som"}
-              >
-                <span
-                  className="absolute inset-0 rounded-full transition-colors"
-                  style={{
-                    backgroundColor: settings.enabled
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium cursor-pointer transition-all"
+                style={{
+                  color:
+                    activeTab === t
                       ? "var(--color-primary)"
-                      : "var(--color-border)",
-                  }}
-                />
-                <span
-                  className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
-                  style={{
-                    transform: settings.enabled
-                      ? "translateX(24px)"
-                      : "translateX(4px)",
-                  }}
-                />
+                      : "var(--color-text-muted)",
+                  borderBottom: `2px solid ${activeTab === t ? "var(--color-primary)" : "transparent"}`,
+                  backgroundColor:
+                    activeTab === t ? "rgba(0,136,194,0.05)" : "transparent",
+                }}
+              >
+                {t === "orders" ? (
+                  <FiMusic size={11} />
+                ) : (
+                  <FiMessageSquare size={11} />
+                )}
+                {t === "orders" ? "Pedidos" : "Chat"}
               </button>
-            </div>
+            ))}
+          </div>
 
-            {/* Volume slider */}
-            <div
-              className="flex flex-col gap-2"
-              style={{ opacity: settings.enabled ? 1 : 0.4 }}
-            >
+          {/* Tab: Pedidos */}
+          {activeTab === "orders" && (
+            <div className="flex flex-col gap-4 px-4 py-4">
+              {/* Enable / disable toggle */}
               <div className="flex items-center justify-between">
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  {settings.enabled ? "Som ativado" : "Som desativado"}
+                </span>
+                <button
+                  onClick={() => update({ enabled: !settings.enabled })}
+                  className="relative flex items-center cursor-pointer transition-all"
+                  style={{ width: 44, height: 24 }}
+                  title={settings.enabled ? "Desativar som" : "Ativar som"}
+                >
+                  <span
+                    className="absolute inset-0 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: settings.enabled
+                        ? "var(--color-primary)"
+                        : "var(--color-border)",
+                    }}
+                  />
+                  <span
+                    className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: settings.enabled
+                        ? "translateX(24px)"
+                        : "translateX(4px)",
+                    }}
+                  />
+                </button>
+              </div>
+
+              {/* Volume slider */}
+              <div
+                className="flex flex-col gap-2"
+                style={{ opacity: settings.enabled ? 1 : 0.4 }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <FiSliders
+                      size={12}
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Volume
+                    </span>
+                  </div>
+                  <span
+                    className="text-xs font-semibold tabular-nums"
+                    style={{ color: "var(--color-primary)" }}
+                  >
+                    {volumePct}%
+                  </span>
+                </div>
+
+                <div
+                  className="relative flex items-center"
+                  style={{ height: 20 }}
+                >
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full"
+                    style={{
+                      left: 0,
+                      right: 0,
+                      height: 4,
+                      backgroundColor: "var(--color-bg-base)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full transition-all"
+                    style={{
+                      left: 0,
+                      width: `${volumePct}%`,
+                      height: 4,
+                      backgroundColor: "var(--color-primary)",
+                    }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={settings.volume}
+                    disabled={!settings.enabled}
+                    onChange={(e) =>
+                      update({ volume: parseFloat(e.target.value) })
+                    }
+                    className="relative w-full cursor-pointer"
+                    style={{
+                      height: 20,
+                      appearance: "none",
+                      background: "transparent",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Sound picker */}
+              <div
+                className="flex flex-col gap-1.5"
+                style={{ opacity: settings.enabled ? 1 : 0.4 }}
+              >
                 <div className="flex items-center gap-1.5">
-                  <FiSliders
+                  <FiMusic
                     size={12}
                     style={{ color: "var(--color-text-muted)" }}
                   />
@@ -298,146 +445,270 @@ export function SoundAlertButton() {
                     className="text-xs"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    Volume
+                    Som ao receber pedido
                   </span>
                 </div>
-                <span
-                  className="text-xs font-semibold tabular-nums"
-                  style={{ color: "var(--color-primary)" }}
-                >
-                  {volumePct}%
-                </span>
-              </div>
 
-              <div
-                className="relative flex items-center"
-                style={{ height: 20 }}
-              >
-                {/* Track background */}
-                <div
-                  className="absolute inset-y-0 my-auto rounded-full"
-                  style={{
-                    left: 0,
-                    right: 0,
-                    height: 4,
-                    backgroundColor: "var(--color-bg-base)",
-                    border: "1px solid var(--color-border)",
-                  }}
-                />
-                {/* Track fill */}
-                <div
-                  className="absolute inset-y-0 my-auto rounded-full transition-all"
-                  style={{
-                    left: 0,
-                    width: `${volumePct}%`,
-                    height: 4,
-                    backgroundColor: "var(--color-primary)",
-                  }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={settings.volume}
-                  disabled={!settings.enabled}
-                  onChange={(e) =>
-                    update({ volume: parseFloat(e.target.value) })
-                  }
-                  className="relative w-full cursor-pointer"
-                  style={{
-                    height: 20,
-                    appearance: "none",
-                    background: "transparent",
-                    outline: "none",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Sound picker */}
-            <div
-              className="flex flex-col gap-1.5"
-              style={{ opacity: settings.enabled ? 1 : 0.4 }}
-            >
-              <div className="flex items-center gap-1.5">
-                <FiMusic
-                  size={12}
-                  style={{ color: "var(--color-text-muted)" }}
-                />
-                <span
-                  className="text-xs"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  Som do alerta
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                {SOUNDS.map((s) => {
-                  const active = settings.sound === s;
-                  return (
-                    <button
-                      key={s}
-                      onClick={() =>
-                        settings.enabled ? previewSound(s) : undefined
-                      }
-                      disabled={!settings.enabled}
-                      className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
-                      style={{
-                        backgroundColor: active
-                          ? "rgba(0,136,194,0.12)"
-                          : "var(--color-bg-elevated)",
-                        border: active
-                          ? "1px solid rgba(0,136,194,0.35)"
-                          : "1px solid var(--color-border)",
-                        color: active
-                          ? "var(--color-primary)"
-                          : "var(--color-text-secondary)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                          style={{
-                            backgroundColor: active
-                              ? "var(--color-primary)"
-                              : "var(--color-bg-base)",
-                            border: active
-                              ? "none"
-                              : "1px solid var(--color-border)",
-                          }}
-                        >
-                          {active ? (
-                            <FiCheck size={10} color="white" />
-                          ) : (
-                            <FiMusic
-                              size={10}
-                              style={{ color: "var(--color-text-muted)" }}
-                            />
-                          )}
+                <div className="flex flex-col gap-1">
+                  {SOUNDS.map((s) => {
+                    const active = settings.sound === s;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() =>
+                          settings.enabled ? previewSound(s) : undefined
+                        }
+                        disabled={!settings.enabled}
+                        className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "rgba(0,136,194,0.12)"
+                            : "var(--color-bg-elevated)",
+                          border: active
+                            ? "1px solid rgba(0,136,194,0.35)"
+                            : "1px solid var(--color-border)",
+                          color: active
+                            ? "var(--color-primary)"
+                            : "var(--color-text-secondary)",
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{
+                              backgroundColor: active
+                                ? "var(--color-primary)"
+                                : "var(--color-bg-base)",
+                              border: active
+                                ? "none"
+                                : "1px solid var(--color-border)",
+                            }}
+                          >
+                            {active ? (
+                              <FiCheck size={10} color="white" />
+                            ) : (
+                              <FiMusic
+                                size={10}
+                                style={{ color: "var(--color-text-muted)" }}
+                              />
+                            )}
+                          </div>
+                          <span className="text-xs font-medium">
+                            {SOUND_LABELS[s]}
+                          </span>
                         </div>
-                        <span className="text-xs font-medium">
-                          {SOUND_LABELS[s]}
-                        </span>
-                      </div>
-                      {active && (
-                        <span
-                          className="text-[10px] font-medium"
-                          style={{
-                            color: "var(--color-primary)",
-                            opacity: 0.7,
-                          }}
-                        >
-                          ▶ preview
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                        {active && (
+                          <span
+                            className="text-[10px] font-medium"
+                            style={{
+                              color: "var(--color-primary)",
+                              opacity: 0.7,
+                            }}
+                          >
+                            ▶ preview
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Tab: Chat */}
+          {activeTab === "chat" && (
+            <div className="flex flex-col gap-4 px-4 py-4">
+              {/* Enable chat sound toggle */}
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  {settings.chatSoundEnabled ? "Som ativado" : "Som desativado"}
+                </span>
+                <button
+                  onClick={() =>
+                    update({ chatSoundEnabled: !settings.chatSoundEnabled })
+                  }
+                  className="relative flex items-center cursor-pointer transition-all"
+                  style={{ width: 44, height: 24 }}
+                >
+                  <span
+                    className="absolute inset-0 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: settings.chatSoundEnabled
+                        ? "var(--color-primary)"
+                        : "var(--color-border)",
+                    }}
+                  />
+                  <span
+                    className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: settings.chatSoundEnabled
+                        ? "translateX(24px)"
+                        : "translateX(4px)",
+                    }}
+                  />
+                </button>
+              </div>
+
+              {/* Chat volume slider */}
+              <div
+                className="flex flex-col gap-2"
+                style={{ opacity: settings.chatSoundEnabled ? 1 : 0.4 }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <FiSliders
+                      size={12}
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Volume
+                    </span>
+                  </div>
+                  <span
+                    className="text-xs font-semibold tabular-nums"
+                    style={{ color: "var(--color-primary)" }}
+                  >
+                    {chatVolumePct}%
+                  </span>
+                </div>
+
+                <div
+                  className="relative flex items-center"
+                  style={{ height: 20 }}
+                >
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full"
+                    style={{
+                      left: 0,
+                      right: 0,
+                      height: 4,
+                      backgroundColor: "var(--color-bg-base)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full transition-all"
+                    style={{
+                      left: 0,
+                      width: `${chatVolumePct}%`,
+                      height: 4,
+                      backgroundColor: "var(--color-primary)",
+                    }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={settings.chatVolume}
+                    disabled={!settings.chatSoundEnabled}
+                    onChange={(e) =>
+                      update({ chatVolume: parseFloat(e.target.value) })
+                    }
+                    className="relative w-full cursor-pointer"
+                    style={{
+                      height: 20,
+                      appearance: "none",
+                      background: "transparent",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Chat sound picker */}
+              <div
+                className="flex flex-col gap-1.5"
+                style={{ opacity: settings.chatSoundEnabled ? 1 : 0.4 }}
+              >
+                <div className="flex items-center gap-1.5">
+                  <FiMessageSquare
+                    size={12}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Som ao receber mensagem
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  {SOUNDS.map((s) => {
+                    const active = settings.chatSound === s;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() =>
+                          settings.chatSoundEnabled
+                            ? previewChatSound(s)
+                            : undefined
+                        }
+                        disabled={!settings.chatSoundEnabled}
+                        className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "rgba(0,136,194,0.12)"
+                            : "var(--color-bg-elevated)",
+                          border: active
+                            ? "1px solid rgba(0,136,194,0.35)"
+                            : "1px solid var(--color-border)",
+                          color: active
+                            ? "var(--color-primary)"
+                            : "var(--color-text-secondary)",
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{
+                              backgroundColor: active
+                                ? "var(--color-primary)"
+                                : "var(--color-bg-base)",
+                              border: active
+                                ? "none"
+                                : "1px solid var(--color-border)",
+                            }}
+                          >
+                            {active ? (
+                              <FiCheck size={10} color="white" />
+                            ) : (
+                              <FiMessageSquare
+                                size={10}
+                                style={{ color: "var(--color-text-muted)" }}
+                              />
+                            )}
+                          </div>
+                          <span className="text-xs font-medium">
+                            {SOUND_LABELS[s]}
+                          </span>
+                        </div>
+                        {active && (
+                          <span
+                            className="text-[10px] font-medium"
+                            style={{
+                              color: "var(--color-primary)",
+                              opacity: 0.7,
+                            }}
+                          >
+                            ▶ preview
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

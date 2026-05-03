@@ -55,7 +55,11 @@ import ThermalPrinterBar, {
   useAutoPrint,
   usePrinter,
 } from "@/components/orders/ThermalPrinter";
-import { SoundAlertButton, useAutoSound } from "@/components/orders/SoundAlert";
+import {
+  SoundAlertButton,
+  useAutoSound,
+  useSoundAlert,
+} from "@/components/orders/SoundAlert";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -435,7 +439,7 @@ function OrderCard({
                   : "var(--color-text-muted)",
             }}
           >
-            {Math.round(order.distanceMeters)} m da lanchonete
+            {Math.round(order.distanceMeters)}m da lanchonete
             {order.distanceMeters > 500 && " — verifique esta comanda"}
           </span>
         </div>
@@ -662,7 +666,17 @@ function FinishedCard({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReactivate, setConfirmReactivate] = useState(false);
+  const [justPrinted, setJustPrinted] = useState(false);
+
   const isCanceled = order.status === "canceled";
+  const { isConnected, printOrder, status } = usePrinter();
+
+  async function handleReprint(e: React.MouseEvent) {
+    e.stopPropagation();
+    await printOrder(order);
+    setJustPrinted(true);
+    setTimeout(() => setJustPrinted(false), 2000);
+  }
 
   return (
     <div
@@ -673,58 +687,44 @@ function FinishedCard({
       }}
     >
       <div
-        className="flex items-center gap-3 px-4 py-3"
+        className="flex items-start gap-2 px-4 py-3"
         style={{ backgroundColor: "var(--color-bg-elevated)" }}
       >
+        {/* Botão de toggle — ocupa todo espaço disponível */}
         <button
           onClick={onToggle}
-          className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+          className="flex flex-col flex-1 min-w-0 text-left cursor-pointer gap-1"
         >
-          <span
-            className="text-xs font-bold px-2 py-0.5 rounded flex-shrink-0"
-            style={{
-              backgroundColor: isCanceled
-                ? "rgba(239,68,68,0.15)"
-                : "rgba(34,197,94,0.15)",
-              color: isCanceled ? "var(--color-error)" : "var(--color-success)",
-            }}
-          >
-            #{order.orderNumber}
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="text-sm font-semibold"
-                style={{ color: "var(--color-text-primary)" }}
-              >
-                Vaga {order.spot}
-              </span>
-              <span
-                className="text-xs px-1.5 py-0.5 rounded"
-                style={{
-                  backgroundColor: isCanceled
-                    ? "rgba(239,68,68,0.1)"
-                    : "rgba(34,197,94,0.1)",
-                  color: isCanceled
-                    ? "var(--color-error)"
-                    : "var(--color-success)",
-                }}
-              >
-                {isCanceled ? "Cancelado" : "Finalizado"}
-              </span>
-            </div>
-            <p
-              className="text-xs mt-0.5 truncate"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              {order.username} · {order.items.length}{" "}
-              {order.items.length === 1 ? "item" : "itens"} ·{" "}
-              {fmt(order.total || order.subtotal + order.serviceFee)}
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Linha 1: número + badge status */}
+          <div className="flex items-center gap-2 flex-wrap">
             <span
-              className="text-xs"
+              className="text-xs font-bold px-2 py-0.5 rounded flex-shrink-0"
+              style={{
+                backgroundColor: isCanceled
+                  ? "rgba(239,68,68,0.15)"
+                  : "rgba(34,197,94,0.15)",
+                color: isCanceled
+                  ? "var(--color-error)"
+                  : "var(--color-success)",
+              }}
+            >
+              #{order.orderNumber}
+            </span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded flex-shrink-0"
+              style={{
+                backgroundColor: isCanceled
+                  ? "rgba(239,68,68,0.1)"
+                  : "rgba(34,197,94,0.1)",
+                color: isCanceled
+                  ? "var(--color-error)"
+                  : "var(--color-success)",
+              }}
+            >
+              {isCanceled ? "Cancelado" : "Finalizado"}
+            </span>
+            <span
+              className="text-xs flex-shrink-0 ml-auto"
               style={{ color: "var(--color-text-muted)" }}
             >
               {order.finishedAt
@@ -737,11 +737,31 @@ function FinishedCard({
                 color: "var(--color-text-muted)",
                 transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.2s",
+                flexShrink: 0,
               }}
             />
           </div>
+
+          {/* Linha 2: vaga + resumo truncado */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="text-sm font-semibold flex-shrink-0"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Vaga {order.spot}
+            </span>
+            <p
+              className="text-xs truncate"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              · {order.username} · {order.items.length}{" "}
+              {order.items.length === 1 ? "item" : "itens"} ·{" "}
+              {fmt(order.total || order.subtotal + order.serviceFee)}
+            </p>
+          </div>
         </button>
 
+        {/* Ações — nunca encolhem */}
         {confirmReactivate ? (
           <div className="flex items-center gap-2 flex-shrink-0">
             <span
@@ -808,6 +828,21 @@ function FinishedCard({
                 title="Chat"
               >
                 <FiMessageSquare size={13} />
+              </button>
+            )}
+            {isConnected && (
+              <button
+                onClick={handleReprint}
+                disabled={status === "printing"}
+                className="p-1.5 rounded cursor-pointer transition-all hover:opacity-70 disabled:opacity-40"
+                style={{
+                  color: justPrinted
+                    ? "var(--color-success)"
+                    : "var(--color-text-muted)",
+                }}
+                title={justPrinted ? "Impresso!" : "Reimprimir comanda"}
+              >
+                <FiPrinter size={13} />
               </button>
             )}
             <button
@@ -1493,6 +1528,9 @@ function OrdersPageInner() {
   const [spotFilter, setSpotFilter] = useState("");
   const [orderFilter, setOrderFilter] = useState("");
 
+  type SortOption = "newest" | "oldest" | "spot" | "value";
+  const [sortActive, setSortActive] = useState<SortOption>("newest");
+
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [finalizeTarget, setFinalizeTarget] = useState<Order | null>(null);
   const [editTarget, setEditTarget] = useState<Order | null>(null);
@@ -1528,12 +1566,19 @@ function OrdersPageInner() {
   const [finishedDateFilter, setFinishedDateFilter] = useState("");
 
   const initializedOrdersRef = useRef<Set<string>>(new Set());
+  const chatOrderIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    chatOrderIdRef.current = chatOrder?.id ?? null;
+  }, [chatOrder]);
 
   // 🖨️ Auto-print hook — fires whenever a truly new order appears
   useAutoPrint(activeOrders);
 
   // auto-sound
   useAutoSound(activeOrders);
+
+  const { playChat } = useSoundAlert();
 
   // 🖨️ Printer reminder modal
   const { isConnected } = usePrinter();
@@ -1553,17 +1598,34 @@ function OrdersPageInner() {
         limit(1),
       );
       return onSnapshot(q, (snap) => {
+        const alreadyInitialized = initializedOrdersRef.current.has(order.id);
+
         if (snap.empty) {
-          setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: 0 }));
           initializedOrdersRef.current.add(order.id);
+          setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: 0 }));
           return;
         }
+
         const d = snap.docs[0].data();
         const ts = (d.createdAt as Timestamp)?.toMillis() ?? 0;
         const isFromOthers = d.senderName !== appUser?.username;
         const msgTs = isFromOthers ? ts : 0;
+
+        const isChatOpen = chatOrderIdRef.current === order.id;
+
+        // alreadyInitialized garante que não toca no carregamento inicial
+        // mas agora captura corretamente a primeira mensagem nova
+        if (
+          isFromOthers &&
+          !isChatOpen &&
+          alreadyInitialized &&
+          msgTs > (customerMsgTimes[order.id] ?? 0)
+        ) {
+          playChat();
+        }
+
+        initializedOrdersRef.current.add(order.id); // ← marca DEPOIS da checagem
         setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: msgTs }));
-        initializedOrdersRef.current.add(order.id);
       });
     });
     return () => unsubs.forEach((u) => u());
@@ -1832,12 +1894,27 @@ function OrdersPageInner() {
     }
   }
 
-  const filteredActive = activeOrders.filter((o) => {
-    if (spotFilter && !String(o.spot).includes(spotFilter)) return false;
-    if (orderFilter && !String(o.orderNumber).includes(orderFilter))
-      return false;
-    return true;
-  });
+  const filteredActive = activeOrders
+    .filter((o) => {
+      if (spotFilter && !String(o.spot).includes(spotFilter)) return false;
+      if (orderFilter && !String(o.orderNumber).includes(orderFilter))
+        return false;
+      return true;
+    })
+    .sort((a, b) => {
+      switch (sortActive) {
+        case "oldest":
+          return a.createdAt.getTime() - b.createdAt.getTime();
+        case "newest":
+          return b.createdAt.getTime() - a.createdAt.getTime();
+        case "spot":
+          return Number(a.spot) - Number(b.spot);
+        case "value":
+          return b.subtotal + b.serviceFee - (a.subtotal + a.serviceFee);
+        default:
+          return 0;
+      }
+    });
 
   const filteredFinished = finishedOrders.filter((o) => {
     if (spotFilter && !String(o.spot).includes(spotFilter)) return false;
@@ -2044,6 +2121,43 @@ function OrdersPageInner() {
             )}
           </div>
         </div>
+        {tab === "active" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="text-xs flex-shrink-0"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Ordenar:
+            </span>
+            {(
+              [
+                { key: "newest", label: "Mais recente" },
+                { key: "oldest", label: "Mais antigo" },
+                { key: "spot", label: "Vaga" },
+                { key: "value", label: "Valor" },
+              ] as { key: SortOption; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setSortActive(opt.key)}
+                className="px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-all flex-shrink-0"
+                style={{
+                  backgroundColor:
+                    sortActive === opt.key
+                      ? "var(--color-primary)"
+                      : "var(--color-bg-elevated)",
+                  color:
+                    sortActive === opt.key
+                      ? "white"
+                      : "var(--color-text-muted)",
+                  border: `1px solid ${sortActive === opt.key ? "var(--color-primary)" : "var(--color-border)"}`,
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -2380,7 +2494,17 @@ function OrdersPageInner() {
         />
       )}
       {chatOrder && (
-        <OrderChatDrawer order={chatOrder} onClose={() => setChatOrder(null)} />
+        <OrderChatDrawer
+          order={chatOrder}
+          onClose={() => {
+            // Marca como visto no momento em que fecha
+            setChatSeenTimes((prev) => ({
+              ...prev,
+              [chatOrder.id]: Date.now(),
+            }));
+            setChatOrder(null);
+          }}
+        />
       )}
       {showTemplates && (
         <ChatTemplatesModal onClose={() => setShowTemplates(false)} />
