@@ -987,6 +987,7 @@ function ExtraSettings({
   );
   const [popupExpanded, setPopupExpanded] = useState(false);
   const [prices, setPrices] = useState<PriceRule[]>(config.prices ?? []);
+  const [pricesExpanded, setPricesExpanded] = useState(false);
 
   // Local copy of image history — syncs from config when Firestore updates
   const [imageHistory, setImageHistory] = useState<string[]>(
@@ -1173,214 +1174,278 @@ function ExtraSettings({
 
       {/* Prices */}
       <div
-        className="flex flex-col gap-5 p-5 rounded-[var(--radius-xl)]"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
+        className="rounded-[var(--radius-xl)] overflow-hidden"
+        style={{ border: "1px solid var(--color-border)" }}
       >
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <p className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                Tabela de Preços
-              </p>
+        {/* Header clicável */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none"
+          style={{ backgroundColor: "var(--color-bg-surface)" }}
+          onClick={() => setPricesExpanded((v) => !v)}
+        >
+          <div className="flex items-center gap-2.5">
+            <p
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Tabela de preços
+            </p>
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+              style={{
+                backgroundColor: "rgba(34,197,94,0.12)",
+                color: "var(--color-success)",
+                border: "1px solid rgba(34,197,94,0.25)",
+              }}
+            >
+              <FiGlobe size={9} /> Exibido no site
+            </span>
+            {prices.length > 0 && (
               <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium"
                 style={{
-                  backgroundColor: "rgba(34,197,94,0.12)",
-                  color: "var(--color-success)",
-                  border: "1px solid rgba(34,197,94,0.25)",
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-muted)",
                 }}
               >
-                <FiGlobe size={9} />
-                Exibido no site
+                {prices.length} regra{prices.length > 1 ? "s" : ""}
               </span>
-            </div>
-            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-              Esses preços aparecem na página pública do Cine Drive-in. Cada regra define os valores de meia e inteira para um período da semana.
-            </p>
+            )}
           </div>
-          <button
-            onClick={() =>
-              setPrices([
-                ...prices,
-                { label: "", days: [], meia: 0, inteira: 0 },
-              ])
-            }
-            className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0 transition-all w-full sm:w-auto"
-            style={{
-              backgroundColor: "var(--color-primary-light)",
-              color: "var(--color-primary)",
-              border: "1px solid rgba(0,136,194,0.35)",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(0,136,194,0.18)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-primary-light)")}
-          >
-            <FiPlus size={14} />
-            Nova regra
-          </button>
-        </div>
-
-        {/* Rules */}
-        <div className="flex flex-col gap-3">
-          {prices.map((p, i) => (
-            <div
-              key={i}
-              className="rounded-[var(--radius-lg)] overflow-hidden"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border)",
-              }}
-            >
-              {/* Card header */}
-              <div
-                className="flex items-center gap-3 px-4 py-3"
-                style={{ borderBottom: "1px solid var(--color-border)" }}
+          <div className="flex items-center gap-2.5">
+            {pricesExpanded && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPrices([
+                    ...prices,
+                    { label: "", days: [], meia: 0, inteira: 0 },
+                  ]);
+                }}
+                className="flex items-center gap-1.5 h-7 px-3 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-secondary)",
+                }}
               >
-                <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                  style={{
-                    backgroundColor: "var(--color-primary-light)",
-                    color: "var(--color-primary)",
-                    border: "1px solid rgba(0,136,194,0.3)",
-                  }}
-                >
-                  {i + 1}
-                </span>
-                <input
-                  value={p.label}
-                  onChange={(e) => {
-                    const copy = [...prices];
-                    copy[i].label = e.target.value;
-                    setPrices(copy);
-                  }}
-                  placeholder="Ex: Segunda e Terça"
-                  className="flex-1 bg-transparent text-sm outline-none font-medium"
-                  style={{
-                    color: p.label ? "var(--color-text-primary)" : "var(--color-text-muted)",
-                  }}
-                />
-                <button
-                  onClick={() => setPrices(prices.filter((_, idx) => idx !== i))}
-                  className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-all flex-shrink-0"
-                  style={{ color: "var(--color-text-muted)" }}
-                  title="Remover regra"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.1)";
-                    e.currentTarget.style.color = "var(--color-error)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.color = "var(--color-text-muted)";
-                  }}
-                >
-                  <FiX size={14} />
-                </button>
-              </div>
-
-              {/* Price fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-2">
-                <div
-                  className="flex flex-col gap-1 p-4"
-                  style={{ borderBottom: "1px solid var(--color-border)" }}
-                >
-                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
-                    Meia-entrada
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>R$</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={p.meia}
-                      onChange={(e) => {
-                        const copy = [...prices];
-                        copy[i].meia = Number(e.target.value);
-                        setPrices(copy);
-                      }}
-                      className="flex-1 bg-transparent text-xl font-bold outline-none"
-                      style={{ color: "var(--color-text-primary)" }}
-                    />
-                  </div>
-                  <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                    Estudantes, idosos e similares
-                  </p>
-                </div>
-
-                <div
-                  className="flex flex-col gap-1 p-4"
-                  style={{ borderTop: "1px solid var(--color-border)" }}
-                >
-                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
-                    Inteira
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>R$</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={p.inteira}
-                      onChange={(e) => {
-                        const copy = [...prices];
-                        copy[i].inteira = Number(e.target.value);
-                        setPrices(copy);
-                      }}
-                      className="flex-1 bg-transparent text-xl font-bold outline-none"
-                      style={{ color: "var(--color-text-primary)" }}
-                    />
-                  </div>
-                  <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                    Preço padrão
-                  </p>
-                </div>
-              </div>
-
-              {/* Preview */}
-              {(p.label || p.meia > 0 || p.inteira > 0) && (
-                <div
-                  className="flex items-center gap-2 px-4 py-2.5"
-                  style={{
-                    borderTop: "1px solid var(--color-border)",
-                    backgroundColor: "rgba(0,136,194,0.04)",
-                  }}
-                >
-                  <FiGlobe size={11} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
-                  <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                    Aparece no site como:{" "}
-                    <span className="font-medium" style={{ color: "var(--color-text-secondary)" }}>
-                      {p.label || "—"} · Meia R$ {p.meia.toFixed(2).replace(".", ",")} / Inteira R$ {p.inteira.toFixed(2).replace(".", ",")}
-                    </span>
-                  </p>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {prices.length === 0 && (
-            <div
-              className="flex flex-col items-center justify-center py-10 gap-3 rounded-[var(--radius-lg)]"
-              style={{
-                border: "1px dashed var(--color-border)",
-                color: "var(--color-text-muted)",
-              }}
+                <FiPlus size={12} /> Nova regra
+              </button>
+            )}
+            <span
+              className="flex items-center gap-1 text-xs"
+              style={{ color: "var(--color-text-muted)" }}
             >
-              <FiDollarSign size={24} style={{ opacity: 0.4 }} />
-              <div className="text-center">
-                <p className="text-sm font-medium">Nenhuma regra de preço cadastrada</p>
-                <p className="text-xs mt-0.5">Clique em &quot;Nova regra&quot; para adicionar uma tabela de preços.</p>
-              </div>
-            </div>
-          )}
+              {pricesExpanded ? (
+                <FiChevronUp size={14} />
+              ) : (
+                <FiChevronDown size={14} />
+              )}
+              {pricesExpanded ? "Recolher" : "Editar"}
+            </span>
+          </div>
         </div>
+
+        {/* Corpo expansível */}
+        {pricesExpanded && (
+          <div
+            className="flex flex-col gap-3 p-5"
+            style={{
+              borderTop: "1px solid var(--color-border)",
+              backgroundColor: "var(--color-bg-surface)",
+            }}
+          >
+            {prices.map((p, i) => (
+              <div
+                key={i}
+                className="rounded-[var(--radius-lg)] overflow-hidden"
+                style={{ border: "1px solid var(--color-border)" }}
+              >
+                {/* Label da regra */}
+                <div
+                  className="flex items-center gap-3 px-4 py-2.5"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                    style={{
+                      backgroundColor: "var(--color-bg-surface)",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                  <input
+                    value={p.label}
+                    onChange={(e) => {
+                      const copy = [...prices];
+                      copy[i].label = e.target.value;
+                      setPrices(copy);
+                    }}
+                    placeholder="Ex: Segunda e Terça"
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{
+                      color: p.label
+                        ? "var(--color-text-primary)"
+                        : "var(--color-text-muted)",
+                    }}
+                  />
+                  <button
+                    onClick={() =>
+                      setPrices(prices.filter((_, idx) => idx !== i))
+                    }
+                    className="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-all flex-shrink-0"
+                    style={{ color: "var(--color-text-muted)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor =
+                        "rgba(239,68,68,0.1)";
+                      e.currentTarget.style.color = "var(--color-error)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "var(--color-text-muted)";
+                    }}
+                  >
+                    <FiX size={13} />
+                  </button>
+                </div>
+
+                {/* Campos de preço */}
+                <div className="grid grid-cols-2">
+                  <div
+                    className="flex flex-col gap-1 p-4"
+                    style={{ borderRight: "1px solid var(--color-border)" }}
+                  >
+                    <label
+                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Meia-entrada
+                    </label>
+                    <div className="flex items-baseline gap-1">
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={p.meia}
+                        onChange={(e) => {
+                          const copy = [...prices];
+                          copy[i].meia = Number(e.target.value);
+                          setPrices(copy);
+                        }}
+                        className="bg-transparent text-xl font-bold outline-none w-20"
+                        style={{ color: "var(--color-text-primary)" }}
+                      />
+                    </div>
+                    <p
+                      className="text-[10px]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Estudantes, idosos
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1 p-4">
+                    <label
+                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Inteira
+                    </label>
+                    <div className="flex items-baseline gap-1">
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={p.inteira}
+                        onChange={(e) => {
+                          const copy = [...prices];
+                          copy[i].inteira = Number(e.target.value);
+                          setPrices(copy);
+                        }}
+                        className="bg-transparent text-xl font-bold outline-none w-20"
+                        style={{ color: "var(--color-text-primary)" }}
+                      />
+                    </div>
+                    <p
+                      className="text-[10px]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Preço padrão
+                    </p>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                {(p.label || p.meia > 0 || p.inteira > 0) && (
+                  <div
+                    className="flex items-center gap-2 px-4 py-2"
+                    style={{
+                      borderTop: "1px solid var(--color-border)",
+                      backgroundColor: "var(--color-bg-elevated)",
+                    }}
+                  >
+                    <div
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: "var(--color-text-muted)" }}
+                    />
+                    <p
+                      className="text-[11px]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      {p.label || "—"} · Meia R${" "}
+                      {p.meia.toFixed(2).replace(".", ",")} / Inteira R${" "}
+                      {p.inteira.toFixed(2).replace(".", ",")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {prices.length === 0 && (
+              <div
+                className="flex flex-col items-center justify-center py-10 gap-2 rounded-[var(--radius-lg)]"
+                style={{
+                  border: "1px dashed var(--color-border)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                <FiDollarSign size={20} style={{ opacity: 0.35 }} />
+                <p className="text-sm">Nenhuma regra cadastrada</p>
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Clique em &quot;Nova regra&quot; para adicionar.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Popup */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div
+        className="flex flex-col gap-3 rounded-[var(--radius-xl)] "
+        style={{ border: "1px solid var(--color-border)" }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-2">
           <p
             className="text-xs font-semibold uppercase tracking-wide"
             style={{ color: "var(--color-text-muted)" }}
@@ -2063,10 +2128,19 @@ export default function SitePage() {
           ) : (
             <div
               className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
             >
-              <FiLock size={16} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
-              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+              <FiLock
+                size={16}
+                style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+              />
+              <p
+                className="text-sm"
+                style={{ color: "var(--color-text-muted)" }}
+              >
                 Você não tem permissão para gerenciar filmes.
               </p>
             </div>
@@ -2082,10 +2156,19 @@ export default function SitePage() {
           ) : (
             <div
               className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
             >
-              <FiLock size={16} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
-              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+              <FiLock
+                size={16}
+                style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+              />
+              <p
+                className="text-sm"
+                style={{ color: "var(--color-text-muted)" }}
+              >
                 Você não tem permissão para gerenciar configurações extras.
               </p>
             </div>
