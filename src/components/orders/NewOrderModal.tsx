@@ -318,18 +318,35 @@ function ItemConfigurator({
       {/* Quantity stepper */}
       <div
         className="flex items-center gap-3 px-4 py-3"
-        style={{ borderTop: "1px solid var(--color-border)", backgroundColor: "var(--color-bg-elevated)" }}
+        style={{
+          borderTop: "1px solid var(--color-border)",
+          backgroundColor: "var(--color-bg-elevated)",
+        }}
       >
-        <span className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>Quantidade</span>
+        <span
+          className="text-xs font-medium"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          Quantidade
+        </span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
             className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center cursor-pointer transition-opacity hover:opacity-70"
-            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-secondary)",
+            }}
           >
             <FiMinus size={12} />
           </button>
-          <span className="w-6 text-center text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>{quantity}</span>
+          <span
+            className="w-6 text-center text-sm font-bold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            {quantity}
+          </span>
           <button
             onClick={() => setQuantity((q) => q + 1)}
             className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
@@ -339,8 +356,12 @@ function ItemConfigurator({
           </button>
         </div>
         {quantity > 1 && (
-          <span className="ml-auto text-xs font-semibold" style={{ color: "var(--color-primary)" }}>
-            = {`R$ ${((item.visibleValue ?? item.value) * quantity).toFixed(2).replace(".", ",")}`}
+          <span
+            className="ml-auto text-xs font-semibold"
+            style={{ color: "var(--color-primary)" }}
+          >
+            ={" "}
+            {`R$ ${((item.visibleValue ?? item.value) * quantity).toFixed(2).replace(".", ",")}`}
           </span>
         )}
       </div>
@@ -454,6 +475,7 @@ export default function NewOrderModal({
                 isVisible: data.isVisible ?? true,
                 isFeatured: data.isFeatured ?? false,
                 trackStock: data.trackStock ?? false,
+                printTwice: data.printTwice ?? false,
                 additionals: data.additionals ?? [],
                 additionals_sauce: data.additionals_sauce ?? [],
                 additionals_drink: data.additionals_drink ?? [],
@@ -514,6 +536,7 @@ export default function NewOrderModal({
               isVisible: true,
               isFeatured: false,
               trackStock: oi.trackStock ?? false,
+              printTwice: oi.printTwice ?? false,
               additionals: [],
               additionals_sauce: [],
               additionals_drink: [],
@@ -637,6 +660,7 @@ export default function NewOrderModal({
         value: d.item.value,
         quantity: d.quantity,
         trackStock: d.item.trackStock ?? false,
+        printTwice: d.item.printTwice ?? false,
         additionals: d.additional ? [d.additional] : [],
         additionals_sauce: d.additional_sauce ? [d.additional_sauce] : [],
         additionals_drink: d.additional_drink ? [d.additional_drink] : [],
@@ -918,8 +942,14 @@ export default function NewOrderModal({
               Itens
             </p>
             {draftItems.length > 0 && (
-              <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                {draftItems.reduce((s, d) => s + d.quantity, 0)} {draftItems.reduce((s, d) => s + d.quantity, 0) === 1 ? "item" : "itens"}
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {draftItems.reduce((s, d) => s + d.quantity, 0)}{" "}
+                {draftItems.reduce((s, d) => s + d.quantity, 0) === 1
+                  ? "item"
+                  : "itens"}
               </span>
             )}
           </div>
@@ -999,26 +1029,44 @@ export default function NewOrderModal({
                           {d.item.name}
                         </span>
                         <div className="flex flex-col items-end flex-shrink-0">
-                          <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                          <span
+                            className="text-xs font-semibold"
+                            style={{ color: "var(--color-text-primary)" }}
+                          >
                             {fmt(d.item.value)}
                           </span>
-                          {d.item.visibleValue != null && d.item.visibleValue !== d.item.value && (
-                            <span className="text-[10px]" style={{ color: "var(--color-primary)", opacity: 0.8 }}>
-                              cliente: {fmt(d.item.visibleValue)}
-                            </span>
-                          )}
+                          {d.item.visibleValue != null &&
+                            d.item.visibleValue !== d.item.value && (
+                              <span
+                                className="text-[10px]"
+                                style={{
+                                  color: "var(--color-primary)",
+                                  opacity: 0.8,
+                                }}
+                              >
+                                cliente: {fmt(d.item.visibleValue)}
+                              </span>
+                            )}
                           {d.quantity > 1 && (
-                            <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                            <span
+                              className="text-[10px]"
+                              style={{ color: "var(--color-text-muted)" }}
+                            >
                               total: {fmt(d.item.value * d.quantity)}
                             </span>
                           )}
                         </div>
                       </div>
-                      {extras.length > 0 && extras.map((e, j) => (
-                        <p key={j} className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
-                          + {e}
-                        </p>
-                      ))}
+                      {extras.length > 0 &&
+                        extras.map((e, j) => (
+                          <p
+                            key={j}
+                            className="text-[11px]"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            + {e}
+                          </p>
+                        ))}
                       {d.observation && (
                         <p
                           className="text-[11px] italic mt-0.5"
@@ -1033,17 +1081,27 @@ export default function NewOrderModal({
                       <button
                         onClick={() => updateQuantity(d.draftId, -1)}
                         className="w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-opacity hover:opacity-70"
-                        style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+                        style={{
+                          backgroundColor: "var(--color-bg-base)",
+                          border: "1px solid var(--color-border)",
+                          color: "var(--color-text-secondary)",
+                        }}
                       >
                         <FiMinus size={10} />
                       </button>
-                      <span className="w-5 text-center text-xs font-bold" style={{ color: "var(--color-text-primary)" }}>
+                      <span
+                        className="w-5 text-center text-xs font-bold"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
                         {d.quantity}
                       </span>
                       <button
                         onClick={() => updateQuantity(d.draftId, 1)}
                         className="w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
-                        style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                        style={{
+                          backgroundColor: "var(--color-primary)",
+                          color: "white",
+                        }}
                       >
                         <FiPlus size={10} />
                       </button>

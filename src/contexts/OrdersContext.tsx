@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import {
@@ -58,8 +59,10 @@ function parseOrderItem(raw: Record<string, unknown>): OrderItem {
     name: (raw.name ?? "") as string,
     value: (raw.value ?? 0) as number,
     quantity: (raw.quantity as number | undefined) ?? 1,
-    visibleValue: raw.visibleValue != null ? (raw.visibleValue as number) : undefined,
+    visibleValue:
+      raw.visibleValue != null ? (raw.visibleValue as number) : undefined,
     trackStock: (raw.trackStock as boolean | undefined) ?? false,
+    printTwice: (raw.printTwice as boolean | undefined) ?? false,
     photo: raw.photo as string | undefined,
     observation: raw.observation as string | undefined,
     additionals: (raw.additionals ?? []) as string[],
@@ -86,7 +89,8 @@ export function parseOrder(id: string, data: Record<string, unknown>): Order {
     discount: (data.discount as number) ?? 0,
     total: ((data.total ?? data.total_value) as number) ?? 0,
     payment: data.payment as Order["payment"],
-    distanceMeters: data.distanceMeters != null ? (data.distanceMeters as number) : null,
+    distanceMeters:
+      data.distanceMeters != null ? (data.distanceMeters as number) : null,
     createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
     finishedAt: (data.finishedAt as Timestamp)?.toDate(),
   };
@@ -94,6 +98,7 @@ export function parseOrder(id: string, data: Record<string, unknown>): Order {
 
 async function normalizeOrderPrices(order: Order): Promise<void> {
   let changed = false;
+
   const normalized = await Promise.all(
     order.items.map(async (item) => {
       if (!item.itemId) return item;
@@ -101,15 +106,29 @@ async function normalizeOrderPrices(order: Order): Promise<void> {
         const snap = await getDoc(doc(db, "items", item.itemId));
         if (!snap.exists()) return item;
         const data = snap.data();
-        const internalValue = data.value as number;
+        const realValue = data.value as number;
         const stockVisibleValue = data.visibleValue as number | undefined;
-        if (item.visibleValue != null) return item;
-        if (!stockVisibleValue || stockVisibleValue === internalValue) return item;
-        if (item.value !== internalValue) {
-          changed = true;
-          return { ...item, value: internalValue, visibleValue: item.value };
+
+        // Se o item tem visibleValue configurado no estoque
+        if (
+          stockVisibleValue != null &&
+          stockVisibleValue > 0 &&
+          stockVisibleValue !== realValue
+        ) {
+          // O value do pedido deveria ser o valor REAL e visibleValue o valor do cliente
+          // Se value está errado (igual ao visibleValue do cliente), corrige
+          if (item.value !== realValue) {
+            changed = true;
+            return {
+              ...item,
+              value: realValue,
+              visibleValue: stockVisibleValue,
+            };
+          }
         }
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
       return item;
     }),
   );
@@ -134,6 +153,36 @@ async function normalizeOrderPrices(order: Order): Promise<void> {
     serviceFee: newServiceFee,
     total: newTotal,
   });
+}
+
+async function normalizePrintTwice(order: Order): Promise<void> {
+  let changed = false;
+  const normalized = await Promise.all(
+    order.items.map(async (item) => {
+      if (!item.itemId) return item;
+      if (item.printTwice) return item; // já está correto
+      try {
+        const snap = await getDoc(doc(db, "items", item.itemId));
+        if (!snap.exists()) return item;
+        const printTwice = (snap.data().printTwice as boolean) ?? false;
+        if (printTwice) {
+          changed = true;
+          return { ...item, printTwice: true };
+        }
+      } catch {
+        /* silent */
+      }
+      return item;
+    }),
+  );
+
+  if (!changed) return;
+
+  // Atualiza o Firestore para que fique correto também
+  const cleanItems = normalized.map((item) =>
+    Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined)),
+  );
+  await updateDoc(doc(db, "orders", order.id), { items: cleanItems });
 }
 
 export function OrdersProvider({ children }: { children: ReactNode }) {
@@ -172,7 +221,11 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         setActiveOrders(orders);
         setUnseenCount(0);
         // Normalize existing orders too (only writes if prices are wrong)
-        orders.forEach((o) => normalizeOrderPrices(o).catch(console.error));
+        // Normalize existing orders too (only writes if prices are wrong)
+        orders.forEach((o) => {
+          normalizeOrderPrices(o).catch(console.error);
+          normalizePrintTwice(o).catch(console.error);
+        });
         return;
       }
 
@@ -180,12 +233,24 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       setActiveOrders(orders);
       setUnseenCount(newOnes.length);
 
-      const unprocessed = orders.filter((o) => !stockProcessedRef.current.has(o.id));
-      unprocessed.forEach((o) => {
-        stockProcessedRef.current.add(o.id);
-        decreaseStock(o.items).catch(console.error);
-        normalizeOrderPrices(o).catch(console.error);
-      });
+      const unprocessed = orders.filter(
+        (o) => !stockProcessedRef.current.has(o.id),
+      );
+
+      unprocessed.forEach((o) => stockProcessedRef.current.add(o.id));
+      setActiveOrders(orders);
+
+      if (unprocessed.length > 0) {
+        Promise.all(
+          unprocessed.map(async (o) => {
+            await decreaseStock(o.items).catch(console.error);
+            await Promise.all([
+              normalizeOrderPrices(o),
+              normalizePrintTwice(o),
+            ]).catch(console.error);
+          }),
+        ).catch(console.error);
+      }
     });
 
     return unsub;

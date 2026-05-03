@@ -44,6 +44,7 @@ import {
   FiTrendingDown,
   FiDownload,
   FiZap,
+  FiPrinter,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1420,6 +1421,7 @@ interface ItemForm {
   isVisible: boolean;
   isFeatured: boolean;
   trackStock: boolean;
+  printTwice: boolean;
   additionals: string[];
   additionals_sauce: string[];
   additionals_drink: string[];
@@ -1468,6 +1470,7 @@ function ItemModal({
     isVisible: existing?.isVisible ?? true,
     isFeatured: existing?.isFeatured ?? false,
     trackStock: existing?.trackStock ?? false,
+    printTwice: existing?.printTwice ?? false,
     additionals: existing?.additionals ?? [],
     additionals_sauce: existing?.additionals_sauce ?? [],
     additionals_drink: existing?.additionals_drink ?? [],
@@ -1684,6 +1687,24 @@ function ItemModal({
         >
           <FiPackage size={14} />
           {form.trackStock ? "Controle de estoque" : "Sem controle"}
+        </button>
+        <button
+          type="button"
+          onClick={() => set("printTwice", !form.printTwice)}
+          title="Se ativado, este item imprime duas vias quando sair em uma comanda."
+          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all"
+          style={{
+            backgroundColor: form.printTwice
+              ? "rgba(168,85,247,0.12)"
+              : "var(--color-bg-elevated)",
+            border: `1px solid ${form.printTwice ? "rgba(168,85,247,0.5)" : "var(--color-border)"}`,
+            color: form.printTwice
+              ? "rgb(168,85,247)"
+              : "var(--color-text-secondary)",
+          }}
+        >
+          <FiPrinter size={14} />
+          {form.printTwice ? "Imprime 2x" : "Impressão normal"}
         </button>
       </div>
 
@@ -2084,7 +2105,7 @@ function ItemCard({
           </div>
         )}
 
-        {/* Hidden badge */}
+        {/* Hidden badge
         {!item.isVisible && (
           <div
             className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
@@ -2093,23 +2114,48 @@ function ItemCard({
             <FiEyeOff size={9} />
             Oculto
           </div>
-        )}
+        )} */}
 
-        {/* Track stock badge */}
-        {item.trackStock && item.isVisible && (
-          <div
-            className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-            style={{
-              backgroundColor: "rgba(0,136,194,0.85)",
-              color: "white",
-              boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
-            }}
-            title="Controle de estoque ativo"
-          >
-            <FiTrendingDown size={9} />
-            Stock
-          </div>
-        )}
+        {/* Badges top-right: stack vertically */}
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+          {!item.isVisible && (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+              style={{ backgroundColor: "rgba(0,0,0,0.72)", color: "white" }}
+            >
+              <FiEyeOff size={9} />
+              Oculto
+            </div>
+          )}
+          {item.trackStock && (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+              style={{
+                backgroundColor: "rgba(0,136,194,0.85)",
+                color: "white",
+                boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
+              }}
+              title="Controle de estoque ativo"
+            >
+              <FiTrendingDown size={9} />
+              Stock
+            </div>
+          )}
+          {item.printTwice && (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+              style={{
+                backgroundColor: "rgba(168,85,247,0.85)",
+                color: "white",
+                boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
+              }}
+              title="Imprime 2 vias por comanda"
+            >
+              <FiPrinter size={9} />
+              2x
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Body ── */}
@@ -2344,6 +2390,7 @@ export default function StockPage() {
               isVisible: data.isVisible ?? true,
               isFeatured: data.isFeatured ?? false,
               trackStock: data.trackStock ?? false,
+              printTwice: data.printTwice ?? false,
               additionals: data.additionals ?? [],
               additionals_sauce: data.additionals_sauce ?? [],
               additionals_drink: data.additionals_drink ?? [],
@@ -2473,6 +2520,7 @@ export default function StockPage() {
         isVisible: form.isVisible,
         isFeatured: form.isFeatured,
         trackStock: form.trackStock,
+        printTwice: form.printTwice,
         additionals: form.additionals,
         additionals_sauce: form.additionals_sauce,
         additionals_drink: form.additionals_drink,

@@ -181,6 +181,7 @@ export interface OrderItem {
   visibleValue?: number;
   quantity?: number;
   trackStock?: boolean;
+  printTwice?: boolean;
   photo?: string;
   observation?: string;
   additionals?: string[];
@@ -264,6 +265,7 @@ export interface StockItem {
   isVisible: boolean;
   isFeatured: boolean;
   trackStock: boolean;
+  printTwice: boolean;
   additionals: string[];
   additionals_sauce: string[];
   additionals_drink: string[];

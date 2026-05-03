@@ -245,16 +245,17 @@ export function buildOrderTicket(order: Order): Uint8Array {
 
   for (const item of order.items) {
     const qty = item.quantity ?? 1;
-    const total = item.value * qty;
+    // Se tem visibleValue, o valor real é o value (já normalizado)
+    // Se não tem, usa value normalmente
+    const realValue = item.value;
+    const total = realValue * qty;
 
-    // Linha principal: "2x Nome item          R$ 20,00"
     add(CMD.bold(true));
     add(CMD.text(rowLR(`${qty}x ${item.name}`, fmt(total))));
     add(CMD.bold(false));
 
-    // Preço unitário se quantidade > 1
     if (qty > 1) {
-      add(CMD.text(`   unit: ${fmt(item.value)}`));
+      add(CMD.text(`   unit: ${fmt(realValue)}`));
     }
 
     // Adicionais
@@ -677,6 +678,12 @@ function useThermalPrinterCore() {
   const printOrder = useCallback(
     async (order: Order) => {
       await print(buildOrderTicket(order));
+
+      const shouldPrintTwice = order.items.some((item) => item.printTwice);
+      if (shouldPrintTwice) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        await print(buildOrderTicket(order));
+      }
     },
     [print],
   );
@@ -779,6 +786,10 @@ export function useAutoPrint(orders: Order[]) {
   const printedRef = useRef<Set<string>>(new Set());
   const prevIdsRef = useRef<Set<string>>(new Set());
   const baselineSetRef = useRef<Set<string> | null>(null);
+  // Ref sempre atualizada com os pedidos mais recentes
+  const ordersRef = useRef<Order[]>(orders);
+  // eslint-disable-next-line react-hooks/refs
+  ordersRef.current = orders;
 
   useEffect(() => {
     if (autoPrint && isConnected) {
@@ -801,7 +812,14 @@ export function useAutoPrint(orders: Order[]) {
 
       if (isNew && notInBaseline && notYetPrinted) {
         printedRef.current.add(order.id);
-        printOrder(order);
+        const orderId = order.id;
+        setTimeout(() => {
+          // Busca o pedido mais atualizado da ref no momento da impressão
+          const freshOrder = ordersRef.current.find((o) => o.id === orderId);
+          if (freshOrder) {
+            printOrder(freshOrder);
+          }
+        }, 4000);
       }
     }
 
