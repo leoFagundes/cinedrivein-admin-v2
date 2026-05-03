@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -43,6 +43,7 @@ import {
   FiList,
   FiTrendingDown,
   FiDownload,
+  FiZap,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -691,14 +692,603 @@ interface SubitemForm {
   name: string;
   description: string;
   isVisible: boolean;
+  linkedItemId: string;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   SUGESTÃO INTELIGENTE — utilitários (name + description, scoring 0-100%)
+   ──────────────────────────────────────────────────────────────────────── */
+
+const PT_STOPWORDS = new Set([
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "e",
+  "ou",
+  "com",
+  "sem",
+  "para",
+  "a",
+  "o",
+  "os",
+  "as",
+  "um",
+  "uma",
+  "uns",
+  "umas",
+  "no",
+  "na",
+  "nos",
+  "nas",
+  "em",
+  "ao",
+  "aos",
+  "à",
+  "às",
+  "por",
+  "pra",
+  "pro",
+]);
+
+function normalizeText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenize(s: string): string[] {
+  return normalizeText(s)
+    .split(" ")
+    .filter((t) => t.length >= 2 && !PT_STOPWORDS.has(t));
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  if (a.length < b.length) [a, b] = [b, a];
+  let prev: number[] = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    const curr: number[] = new Array(b.length + 1);
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
+function levenshteinSimilarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (!maxLen) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+function tokenMatchScore(qt: string, ct: string): number {
+  if (qt === ct) return 1;
+  if (qt.length < 3 || ct.length < 3) return 0;
+  if (ct.startsWith(qt) || qt.startsWith(ct)) return 0.85;
+  if (ct.includes(qt) || qt.includes(ct)) return 0.65;
+  const sim = levenshteinSimilarity(qt, ct);
+  return sim >= 0.7 ? sim * 0.8 : 0;
+}
+
+function fieldScore(queryTokens: string[], fieldText: string): number {
+  if (!queryTokens.length) return 0;
+  const fieldTokens = tokenize(fieldText);
+  if (!fieldTokens.length) return 0;
+  let total = 0;
+  for (const qt of queryTokens) {
+    let best = 0;
+    for (const ft of fieldTokens) {
+      const s = tokenMatchScore(qt, ft);
+      if (s > best) best = s;
+      if (best === 1) break;
+    }
+    total += best;
+  }
+  return total / queryTokens.length;
+}
+
+interface SuggestionScore {
+  score: number;
+  strong: boolean;
+  matchedOn: "nome" | "descrição" | "nome + descrição" | "aproximado";
+}
+
+function scoreItemForSubitem(
+  subitemName: string,
+  subitemDescription: string,
+  item: StockItem,
+): SuggestionScore {
+  const nameTokens = tokenize(subitemName);
+  const descTokens = tokenize(subitemDescription);
+
+  if (nameTokens.length === 0 && descTokens.length === 0) {
+    return { score: 0, strong: false, matchedOn: "aproximado" };
+  }
+
+  const WQ_NAME = 1.0;
+  const WQ_DESC = 0.5;
+  const WF_NAME = 1.0;
+  const WF_DESC = 0.5;
+
+  const itemName = item.name ?? "";
+  const itemDesc = item.description ?? "";
+
+  const sNameVsName = nameTokens.length ? fieldScore(nameTokens, itemName) : 0;
+  const sNameVsDesc = nameTokens.length ? fieldScore(nameTokens, itemDesc) : 0;
+  const sDescVsName = descTokens.length ? fieldScore(descTokens, itemName) : 0;
+  const sDescVsDesc = descTokens.length ? fieldScore(descTokens, itemDesc) : 0;
+
+  const qNameBest = Math.max(sNameVsName * WF_NAME, sNameVsDesc * WF_DESC);
+  const qDescBest = Math.max(sDescVsName * WF_NAME, sDescVsDesc * WF_DESC);
+
+  const totalWeight =
+    (nameTokens.length ? WQ_NAME : 0) + (descTokens.length ? WQ_DESC : 0);
+  if (totalWeight === 0) {
+    return { score: 0, strong: false, matchedOn: "aproximado" };
+  }
+  const raw =
+    (nameTokens.length ? qNameBest * WQ_NAME : 0) +
+    (descTokens.length ? qDescBest * WQ_DESC : 0);
+  const score = raw / totalWeight;
+
+  let matchedOn: SuggestionScore["matchedOn"] = "aproximado";
+  const nameHit = Math.max(sNameVsName, sDescVsName) >= 0.5;
+  const descHit = Math.max(sNameVsDesc, sDescVsDesc) >= 0.5;
+  if (nameHit && descHit) matchedOn = "nome + descrição";
+  else if (nameHit) matchedOn = "nome";
+  else if (descHit) matchedOn = "descrição";
+
+  return { score, strong: score >= 0.6, matchedOn };
+}
+
+function LinkedItemPicker({
+  value,
+  onChange,
+  allItems,
+  subitemName,
+  subitemDescription,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  allItems: StockItem[];
+  subitemName: string;
+  subitemDescription: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+
+  // Sugestões memoizadas: mapa id → SuggestionScore
+  const suggestions = useMemo(() => {
+    const hasQuery =
+      subitemName.trim().length >= 2 || subitemDescription.trim().length >= 3;
+    const map = new Map<string, SuggestionScore>();
+    if (!hasQuery) return map;
+    for (const it of allItems) {
+      const s = scoreItemForSubitem(subitemName, subitemDescription, it);
+      if (s.score >= 0.25) map.set(it.id, s);
+    }
+    return map;
+  }, [subitemName, subitemDescription, allItems]);
+
+  const suggestedCount = suggestions.size;
+  const strongCount = Array.from(suggestions.values()).filter(
+    (s) => s.strong,
+  ).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allItems;
+    return allItems.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        i.codItem.toLowerCase().includes(q) ||
+        (i.description ?? "").toLowerCase().includes(q),
+    );
+  }, [search, allItems]);
+
+  const sorted = useMemo(() => {
+    const withScore = filtered.map((i) => ({
+      item: i,
+      sug: suggestions.get(i.id),
+    }));
+    const sug = withScore
+      .filter((x) => x.sug)
+      .sort((a, b) => b.sug!.score - a.sug!.score);
+    const rest = withScore.filter((x) => !x.sug);
+    return [...sug, ...rest];
+  }, [filtered, suggestions]);
+
+  const selectedItem = allItems.find((i) => i.id === value);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <label
+          className="text-sm font-medium"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Vincular a item do estoque
+        </label>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="text-xs cursor-pointer transition-opacity hover:opacity-70"
+            style={{ color: "var(--color-error)" }}
+          >
+            Remover vínculo
+          </button>
+        )}
+      </div>
+
+      {/* Selected item display */}
+      {selectedItem ? (
+        <div
+          className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)]"
+          style={{
+            backgroundColor: "rgba(0,136,194,0.08)",
+            border: "1px solid rgba(0,136,194,0.3)",
+          }}
+        >
+          {selectedItem.photo ? (
+            <img
+              src={selectedItem.photo}
+              alt={selectedItem.name}
+              className="w-8 h-8 rounded object-cover flex-shrink-0"
+            />
+          ) : (
+            <div
+              className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
+              style={{
+                backgroundColor: "var(--color-bg-base)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              <FiBox size={13} />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-sm font-medium truncate"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              {selectedItem.name}
+            </p>
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              #{selectedItem.codItem} · estoque: {selectedItem.quantity}
+              {!selectedItem.trackStock && (
+                <span style={{ color: "var(--color-warning)" }}>
+                  {" "}
+                  · sem controle de estoque
+                </span>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="text-xs px-2 py-1 rounded cursor-pointer transition-opacity hover:opacity-70 flex-shrink-0"
+            style={{
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            Trocar
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all text-left w-full"
+          style={{
+            backgroundColor: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-muted)",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.borderColor = "var(--color-primary)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.borderColor = "var(--color-border)")
+          }
+        >
+          <FiPackage size={14} style={{ flexShrink: 0 }} />
+          <span>Selecionar item para vincular...</span>
+          {suggestedCount > 0 && (
+            <span
+              className="ml-auto text-xs px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1"
+              style={{
+                backgroundColor:
+                  strongCount > 0
+                    ? "rgba(0,136,194,0.18)"
+                    : "rgba(0,136,194,0.1)",
+                color: "var(--color-primary)",
+                fontWeight: 600,
+              }}
+            >
+              <FiZap size={10} />
+              {suggestedCount} sugerido{suggestedCount !== 1 ? "s" : ""}
+              {strongCount > 0 &&
+                ` · ${strongCount} forte${strongCount !== 1 ? "s" : ""}`}
+            </span>
+          )}
+        </button>
+      )}
+      {/* Dropdown */}
+      {open && (
+        <div
+          className="rounded-[var(--radius-md)] overflow-hidden"
+          style={{
+            border: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-bg-elevated)",
+          }}
+        >
+          {/* Search */}
+          <div
+            className="p-2"
+            style={{ borderBottom: "1px solid var(--color-border)" }}
+          >
+            <div className="relative">
+              <FiSearch
+                size={12}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2"
+                style={{ color: "var(--color-text-muted)" }}
+              />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome, código ou descrição..."
+                className="w-full h-7 pl-7 pr-2 text-xs outline-none rounded"
+                style={{
+                  backgroundColor: "transparent",
+                  color: "var(--color-text-primary)",
+                }}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="max-h-52 overflow-y-auto">
+            {sorted.length === 0 ? (
+              <p
+                className="p-3 text-xs text-center"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Nenhum item encontrado
+              </p>
+            ) : (
+              sorted.map(({ item, sug }, idx) => {
+                const isSuggested = !!sug;
+                const isSelected = item.id === value;
+                const prev = sorted[idx - 1];
+                const showDivider = !isSuggested && idx > 0 && !!prev?.sug;
+
+                return (
+                  <div key={item.id}>
+                    {showDivider && suggestedCount > 0 && (
+                      <div
+                        className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide"
+                        style={{
+                          color: "var(--color-text-muted)",
+                          borderTop: "1px solid var(--color-border)",
+                          backgroundColor: "var(--color-bg-surface)",
+                        }}
+                      >
+                        Outros itens
+                      </div>
+                    )}
+                    {isSuggested && idx === 0 && (
+                      <div
+                        className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1"
+                        style={{
+                          color: "var(--color-primary)",
+                          backgroundColor: "rgba(0,136,194,0.06)",
+                          borderBottom: "1px solid rgba(0,136,194,0.12)",
+                        }}
+                      >
+                        <FiZap size={10} /> Sugestões inteligentes
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(item.id);
+                        setOpen(false);
+                        setSearch("");
+                      }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-xs cursor-pointer transition-colors"
+                      style={{
+                        color: "var(--color-text-primary)",
+                        backgroundColor: isSelected
+                          ? "rgba(0,136,194,0.1)"
+                          : sug?.strong
+                            ? "rgba(0,136,194,0.06)"
+                            : isSuggested
+                              ? "rgba(0,136,194,0.03)"
+                              : "transparent",
+                        borderLeft: sug?.strong
+                          ? "2px solid var(--color-primary)"
+                          : "2px solid transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected)
+                          e.currentTarget.style.backgroundColor =
+                            "var(--color-bg-surface)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = isSelected
+                          ? "rgba(0,136,194,0.1)"
+                          : sug?.strong
+                            ? "rgba(0,136,194,0.06)"
+                            : isSuggested
+                              ? "rgba(0,136,194,0.03)"
+                              : "transparent";
+                      }}
+                    >
+                      {/* Checkbox */}
+                      <div
+                        className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                        style={{
+                          backgroundColor: isSelected
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          border: `1.5px solid ${isSelected ? "var(--color-primary)" : "var(--color-border)"}`,
+                        }}
+                      >
+                        {isSelected && <FiCheck size={9} color="white" />}
+                      </div>
+
+                      {/* Photo */}
+                      {item.photo ? (
+                        <img
+                          src={item.photo}
+                          alt={item.name}
+                          className="w-7 h-7 rounded object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div
+                          className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+                          style={{
+                            backgroundColor: "var(--color-bg-base)",
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          <FiBox size={11} />
+                        </div>
+                      )}
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium truncate">
+                            {item.name}
+                          </span>
+                          {sug && (
+                            <span
+                              className="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide flex-shrink-0 flex items-center gap-0.5"
+                              style={{
+                                backgroundColor: sug.strong
+                                  ? "rgba(0,136,194,0.2)"
+                                  : "rgba(0,136,194,0.1)",
+                                color: "var(--color-primary)",
+                              }}
+                              title={`Similaridade: ${Math.round(sug.score * 100)}% — match em ${sug.matchedOn}`}
+                            >
+                              <FiZap size={9} />
+                              {Math.round(sug.score * 100)}%
+                            </span>
+                          )}
+                          {!item.trackStock && (
+                            <span
+                              className="px-1.5 py-0.5 rounded-full text-[9px] flex-shrink-0"
+                              style={{
+                                backgroundColor: "rgba(245,158,11,0.12)",
+                                color: "var(--color-warning)",
+                              }}
+                            >
+                              sem controle
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className="font-mono"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          #{item.codItem} · qtd: {item.quantity}
+                          {sug && (
+                            <>
+                              {" · "}
+                              <span style={{ color: "var(--color-primary)" }}>
+                                match em {sug.matchedOn}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div
+            className="p-2 flex justify-end"
+            style={{ borderTop: "1px solid var(--color-border)" }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setSearch("");
+              }}
+              className="h-6 px-3 text-xs rounded cursor-pointer"
+              style={{
+                backgroundColor: "var(--color-primary)",
+                color: "white",
+              }}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Warning when linked item has no trackStock */}
+      {selectedItem && !selectedItem.trackStock && (
+        <div
+          className="flex items-start gap-2 px-3 py-2 rounded-[var(--radius-md)]"
+          style={{
+            backgroundColor: "rgba(245,158,11,0.08)",
+            border: "1px solid rgba(245,158,11,0.25)",
+          }}
+        >
+          <FiAlertTriangle
+            size={13}
+            style={{
+              color: "var(--color-warning)",
+              flexShrink: 0,
+              marginTop: 1,
+            }}
+          />
+          <p
+            className="text-xs"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            O item <strong>{selectedItem.name}</strong> não tem controle de
+            estoque ativo. O vínculo existe, mas o estoque não será alterado
+            quando este subitem for pedido — ative o controle de estoque no item
+            para que funcione.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SubitemModal({
   existing,
+  allItems,
   onSave,
   onClose,
 }: {
   existing?: Subitem;
+  allItems: StockItem[];
   onSave: (data: SubitemForm, file: File | null | undefined) => Promise<void>;
   onClose: () => void;
 }) {
@@ -706,6 +1296,7 @@ function SubitemModal({
     name: existing?.name ?? "",
     description: existing?.description ?? "",
     isVisible: existing?.isVisible ?? true,
+    linkedItemId: existing?.linkedItemId ?? "",
   });
   const [photoFile, setPhotoFile] = useState<File | null | undefined>(
     undefined,
@@ -783,19 +1374,40 @@ function SubitemModal({
           {form.isVisible ? "Visível" : "Oculto"}
         </button>
       </div>
+
+      {/* Separator */}
+      <div
+        style={{ borderTop: "1px solid var(--color-border)", paddingTop: 4 }}
+      >
+        <p
+          className="text-xs font-semibold uppercase tracking-wide mb-1 pt-1"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          Vínculo de estoque
+        </p>
+        <p
+          className="text-[8px] font-semibold uppercase tracking-wide mb-3"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          Ao ativar este vínculo, o estoque do item vinculado será reduzido
+          automaticamente sempre que esse subitem{" "}
+          {form.name ? <strong>`(${form.name})`</strong> : ""} for adicionado
+          como adicional em um pedido. Funciona apenas se o controle de estoque
+          estiver ativado no item principal vinculado.
+        </p>
+        <LinkedItemPicker
+          value={form.linkedItemId}
+          onChange={(id) => set("linkedItemId", id)}
+          allItems={allItems}
+          subitemName={form.name}
+          subitemDescription={form.description}
+        />
+      </div>
     </Modal>
   );
 }
 
 // ─── Item Modal ───────────────────────────────────────────────────────────────
-
-function suggestNextCode(existingCodes: string[]): string {
-  const nums = existingCodes
-    .map((c) => parseInt(c.replace(/\D/g, ""), 10))
-    .filter((n) => !isNaN(n) && n > 0);
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-  return String(next).padStart(3, "0");
-}
 
 interface ItemForm {
   codItem: string;
@@ -1158,6 +1770,19 @@ function SubitemCard({
                 }}
               >
                 <FiEyeOff size={10} /> oculto
+              </span>
+            )}
+            {subitem.linkedItemId && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs flex-shrink-0"
+                style={{
+                  backgroundColor: "rgba(0,136,194,0.12)",
+                  color: "var(--color-primary)",
+                  border: "1px solid rgba(0,136,194,0.25)",
+                }}
+                title={`Vinculado ao estoque`}
+              >
+                <FiPackage size={10} /> Vínculo de estoque
               </span>
             )}
           </div>
@@ -1752,6 +2377,7 @@ export default function StockPage() {
             isVisible: d.data().isVisible ?? true,
             photo: d.data().photo,
             createdAt: d.data().createdAt?.toDate() ?? new Date(),
+            linkedItemId: d.data().linkedItemId ?? undefined,
           })),
         );
       } catch {
@@ -2052,6 +2678,7 @@ export default function StockPage() {
         description: form.description.trim(),
         isVisible: form.isVisible,
         photo: photoUrl ?? null,
+        linkedItemId: form.linkedItemId || null,
       };
 
       if (editing) {
@@ -2081,12 +2708,29 @@ export default function StockPage() {
             from: editing.photo ? "foto anterior" : null,
             to: "atualizada",
           });
+        if ((data.linkedItemId ?? null) !== (editing.linkedItemId ?? null))
+          changes.push({
+            field: "Item vinculado",
+            from: editing.linkedItemId
+              ? (items.find((i) => i.id === editing.linkedItemId)?.name ??
+                editing.linkedItemId)
+              : null,
+            to: data.linkedItemId
+              ? (items.find((i) => i.id === data.linkedItemId)?.name ??
+                data.linkedItemId)
+              : null,
+          });
 
         await updateDoc(doc(db, "subitems", editing.id), data);
         setSubitems((prev) =>
           prev.map((s) =>
             s.id === editing.id
-              ? { ...s, ...data, photo: data.photo ?? undefined }
+              ? {
+                  ...s,
+                  ...data,
+                  photo: data.photo ?? undefined,
+                  linkedItemId: data.linkedItemId ?? undefined,
+                }
               : s,
           ),
         );
@@ -2108,6 +2752,7 @@ export default function StockPage() {
           id: ref.id,
           ...data,
           photo: data.photo ?? undefined,
+          linkedItemId: data.linkedItemId ?? undefined,
           createdAt: new Date(),
         };
         setSubitems((prev) => [...prev, newSub]);
@@ -2845,6 +3490,7 @@ export default function StockPage() {
       {subitemModal.open && (
         <SubitemModal
           existing={subitemModal.editing}
+          allItems={items}
           onSave={(form, file) =>
             handleSaveSubitem(form, file, subitemModal.editing)
           }

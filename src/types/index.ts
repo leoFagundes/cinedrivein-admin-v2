@@ -247,6 +247,7 @@ export interface Subitem {
   description: string;
   isVisible: boolean;
   photo?: string;
+  linkedItemId?: string;
   createdAt: Date;
 }
 

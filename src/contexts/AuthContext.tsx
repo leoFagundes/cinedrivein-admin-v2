@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   ReactNode,
+  useRef,
 } from "react";
 import {
   onAuthStateChanged,
@@ -20,7 +21,8 @@ import { AppUser, Permission } from "@/types";
 
 const SESSION_KEY = "cdi_session_start";
 const SESSION_EXPIRED_KEY = "cdi_session_expired";
-const SESSION_DURATION = 24 * 60 * 60 * 1000;
+const SESSION_DURATION = 15 * 60 * 60 * 1000;
+const CHECK_INTERVAL = 5 * 60 * 1000;
 
 interface SignUpData {
   username: string;
@@ -73,9 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const signingInRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (signingInRef.current) return;
+
       if (fbUser) {
         const sessionStart = localStorage.getItem(SESSION_KEY);
         if (
@@ -102,29 +107,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const sessionStart = localStorage.getItem(SESSION_KEY);
+
+      if (!sessionStart || !auth.currentUser) {
+        console.log("[Sessão] Sem sessão ativa ou usuário deslogado");
+        return;
+      }
+
+      const elapsed = Date.now() - parseInt(sessionStart);
+      const remaining = SESSION_DURATION - elapsed;
+
+      const expiresAt = new Date(parseInt(sessionStart) + SESSION_DURATION);
+      const startedAt = new Date(parseInt(sessionStart));
+
+      const fmt = (d: Date) =>
+        d.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+
+      console.log(
+        `[Sessão] Tempo decorrido: ${(elapsed / 1000).toFixed(0)}s | ` +
+          `Restante: ${(remaining / 1000).toFixed(0)}s | ` +
+          `Iniciou em: ${fmt(startedAt)} | ` +
+          `Expira em: ${fmt(expiresAt)}`,
+      );
+      if (remaining <= 0) {
+        console.log("[Sessão] ⚠️ Sessão expirada — deslogando...");
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.setItem(SESSION_EXPIRED_KEY, "1");
+        await signOut(auth);
+        setFirebaseUser(null);
+        setAppUser(null);
+      }
+    }, CHECK_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, []);
+
   async function signIn(identifier: string, password: string) {
-    let email = identifier;
-    if (!identifier.includes("@")) {
-      const snap = await getDoc(doc(db, "usernames", identifier));
-      if (!snap.exists()) throw new Error("USER_NOT_FOUND");
-      email = snap.data().email as string;
+    signingInRef.current = true;
+    try {
+      let email = identifier;
+      if (!identifier.includes("@")) {
+        const snap = await getDoc(doc(db, "usernames", identifier));
+        if (!snap.exists()) throw new Error("USER_NOT_FOUND");
+        email = snap.data().email as string;
+      }
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+      const userSnap = await getDoc(doc(db, "users", credential.user.uid));
+      if (!userSnap.exists()) {
+        await signOut(auth);
+        throw new Error("USER_NOT_FOUND");
+      }
+      const status = userSnap.data().status;
+      if (status === "pending") {
+        await signOut(auth);
+        throw new Error("PENDING");
+      }
+      if (status === "rejected") {
+        await signOut(auth);
+        throw new Error("REJECTED");
+      }
+      localStorage.setItem(SESSION_KEY, Date.now().toString());
+
+      // Carrega o appUser manualmente após login bem-sucedido
+      const appUserData = await loadAppUser(credential.user.uid);
+      setFirebaseUser(credential.user);
+      setAppUser(appUserData);
+    } finally {
+      signingInRef.current = false;
     }
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-    const userSnap = await getDoc(doc(db, "users", credential.user.uid));
-    if (!userSnap.exists()) {
-      await signOut(auth);
-      throw new Error("USER_NOT_FOUND");
-    }
-    const status = userSnap.data().status;
-    if (status === "pending") {
-      await signOut(auth);
-      throw new Error("PENDING");
-    }
-    if (status === "rejected") {
-      await signOut(auth);
-      throw new Error("REJECTED");
-    }
-    localStorage.setItem(SESSION_KEY, Date.now().toString());
   }
 
   async function signUp({ username, email, password }: SignUpData) {
