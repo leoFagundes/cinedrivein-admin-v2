@@ -24,6 +24,7 @@ import {
   FiExternalLink,
 } from "react-icons/fi";
 import { Order } from "@/types";
+import { useOrders } from "@/contexts/OrdersContext";
 
 // ── ESC/POS helpers ───────────────────────────────────────────────────────────
 
@@ -640,7 +641,6 @@ function useThermalPrinterCore() {
     }
     setStatus("disconnected");
     setErrorMsg(null);
-    setAutoPrint(false);
     setPortLabel(null);
     setPortWarning(null);
   }, [connectionMode]);
@@ -1553,7 +1553,7 @@ export default function ThermalPrinterBar() {
             <FiInfo size={10} />
             Tutorial QZ
           </button>
-          <ChromeBadge />
+          {connectionMode === "serial" && <ChromeBadge />}
         </div>
 
         {/* Tutorial modal */}
@@ -1585,6 +1585,7 @@ export default function ThermalPrinterBar() {
 
 export function PrintOrderButton({ order }: { order: Order }) {
   const { isConnected, printOrder, status } = usePrinter();
+  const { markAsPrinted } = useOrders();
   const [justPrinted, setJustPrinted] = useState(false);
 
   if (!isConnected) return null;
@@ -1592,6 +1593,7 @@ export function PrintOrderButton({ order }: { order: Order }) {
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
     await printOrder(order);
+    markAsPrinted(order.id);
     setJustPrinted(true);
     setTimeout(() => setJustPrinted(false), 2000);
   }

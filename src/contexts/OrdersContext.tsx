@@ -32,7 +32,11 @@ interface OrdersContextValue {
   unseenCount: number;
   markAsSeen: () => void;
   readyToPrintIds: Set<string>;
+  printedIds: Set<string>;
+  markAsPrinted: (orderId: string) => void;
 }
+
+const PRINTED_KEY = "cdi_printed_orders";
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);
 
@@ -187,6 +191,21 @@ async function normalizePrintTwice(order: Order): Promise<void> {
   await updateDoc(doc(db, "orders", order.id), { items: cleanItems });
 }
 
+function loadPrinted(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PRINTED_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function savePrinted(ids: Set<string>) {
+  try {
+    localStorage.setItem(PRINTED_KEY, JSON.stringify([...ids]));
+  } catch {}
+}
+
 export function OrdersProvider({ children }: { children: ReactNode }) {
   const { firebaseUser } = useAuth();
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
@@ -199,9 +218,12 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   );
   const readyRef = useRef<Set<string>>(new Set());
 
-  const printedRef = useRef<Set<string>>(new Set());
   const pendingRef = useRef<Set<string>>(new Set());
   const printBaselineRef = useRef<Set<string> | null>(null);
+  const printedRef = useRef<Set<string>>(loadPrinted());
+  const [printedIds, setPrintedIds] = useState<Set<string>>(() =>
+    loadPrinted(),
+  );
 
   const { autoPrint, isConnected, printOrder } = usePrinter();
 
@@ -238,6 +260,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       if (!freshOrder) continue;
 
       printedRef.current.add(orderId);
+      setPrintedIds(new Set(printedRef.current));
+      savePrinted(printedRef.current);
       pendingRef.current.delete(orderId);
       printOrder(freshOrder);
     }
@@ -268,6 +292,16 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         seenIdsRef.current = new Set(orders.map((o) => o.id));
         stockProcessedRef.current = new Set(orders.map((o) => o.id));
         initializedRef.current = true;
+
+        // Limpa do localStorage pedidos que não existem mais
+        const activeIds = new Set(orders.map((o) => o.id));
+        const cleaned = new Set(
+          [...printedRef.current].filter((id) => activeIds.has(id)),
+        );
+        printedRef.current = cleaned;
+        setPrintedIds(new Set(cleaned));
+        savePrinted(cleaned);
+
         setActiveOrders(orders);
         setUnseenCount(0);
         // Normalize existing orders too (only writes if prices are wrong)
@@ -315,6 +349,12 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     setUnseenCount(0);
   }
 
+  function markAsPrinted(orderId: string) {
+    printedRef.current.add(orderId);
+    setPrintedIds(new Set(printedRef.current));
+    savePrinted(printedRef.current);
+  }
+
   return (
     <OrdersContext.Provider
       value={{
@@ -323,6 +363,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         unseenCount,
         markAsSeen,
         readyToPrintIds,
+        printedIds,
+        markAsPrinted,
       }}
     >
       {children}

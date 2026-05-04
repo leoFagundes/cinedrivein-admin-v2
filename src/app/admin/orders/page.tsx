@@ -279,6 +279,7 @@ function OrderCard({
   onEdit,
   onChat,
   hasUnread,
+  isPrinted,
 }: {
   order: Order;
   onCancel?: () => void;
@@ -286,9 +287,11 @@ function OrderCard({
   onEdit?: () => void;
   onChat?: () => void;
   hasUnread: boolean;
+  isPrinted: boolean;
 }) {
   const [elapsedMin, setElapsedMin] = useState(0);
   const createdAtMs = order.createdAt.getTime();
+
   useEffect(() => {
     const tick = () =>
       setElapsedMin(Math.floor((Date.now() - createdAtMs) / 60_000));
@@ -310,99 +313,123 @@ function OrderCard({
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3"
+        className="flex flex-col px-4 py-3 gap-1.5"
         style={{
           backgroundColor: "var(--color-bg-elevated)",
           borderBottom: "1px solid var(--color-border)",
         }}
       >
-        <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-bold px-2 py-0.5 rounded"
-            style={{ backgroundColor: "var(--color-primary)", color: "white" }}
-          >
-            #{order.orderNumber}
-          </span>
-          <span
-            className="text-sm font-semibold"
-            style={{ color: "var(--color-text-primary)" }}
-          >
-            Vaga {order.spot}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="text-[10px]"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            {fmtTimeShort(order.createdAt)}
-          </span>
-          <span
-            className="text-xs font-medium"
-            style={{ color: elapsedColor(elapsedMin) }}
-            title={fmtTime(order.createdAt)}
-          >
-            <FiClock
-              size={11}
+        {/* Linha 1: número + vaga + horário + tempo */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="text-xs font-bold px-2 py-0.5 rounded flex-shrink-0"
               style={{
-                display: "inline",
-                marginRight: 2,
-                verticalAlign: "middle",
+                backgroundColor: "var(--color-primary)",
+                color: "white",
               }}
-            />
-            {fmtElapsed(elapsedMin)}
-          </span>
-
-          {/* 🖨️ Print button — only shows when printer is connected */}
-          <PrintOrderButton order={order} />
-
-          {onChat && (
-            <button
-              onClick={onChat}
-              className="relative flex items-center justify-center rounded cursor-pointer transition-all"
-              style={{
-                width: 26,
-                height: 26,
-                color: hasUnread
-                  ? "var(--color-error)"
-                  : "var(--color-text-muted)",
-                backgroundColor: hasUnread
-                  ? "rgba(239,68,68,0.12)"
-                  : "transparent",
-                border: hasUnread
-                  ? "1px solid rgba(239,68,68,0.3)"
-                  : "1px solid transparent",
-              }}
-              title="Chat"
             >
-              <FiMessageSquare size={13} />
-              {hasUnread && (
-                <>
-                  <span
-                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
-                    style={{
-                      backgroundColor: "var(--color-error)",
-                      opacity: 0.6,
-                    }}
-                  />
-                  <span
-                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: "var(--color-error)" }}
-                  />
-                </>
-              )}
-            </button>
-          )}
-          {onEdit && (
-            <button
-              onClick={onEdit}
-              className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+              #{order.orderNumber}
+            </span>
+            <span
+              className="text-sm font-semibold truncate"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Vaga {order.spot}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span
+              className="text-[10px]"
               style={{ color: "var(--color-text-muted)" }}
-              title="Editar pedido"
             >
-              <FiEdit2 size={13} />
-            </button>
-          )}
+              {fmtTimeShort(order.createdAt)}
+            </span>
+            <span
+              className="text-xs font-medium"
+              style={{ color: elapsedColor(elapsedMin) }}
+              title={fmtTime(order.createdAt)}
+            >
+              <FiClock
+                size={11}
+                style={{
+                  display: "inline",
+                  marginRight: 2,
+                  verticalAlign: "middle",
+                }}
+              />
+              {fmtElapsed(elapsedMin)}
+            </span>
+          </div>
+        </div>
+
+        {/* Linha 2: badge não impresso + ações */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex-1">
+            {!isPrinted && (
+              <span
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium w-fit"
+                style={{
+                  backgroundColor: "rgba(245,158,11,0.12)",
+                  color: "var(--color-warning)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                }}
+              >
+                <FiPrinter size={9} />
+                Não impresso
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <PrintOrderButton order={order} />
+            {onChat && (
+              <button
+                onClick={onChat}
+                className="relative flex items-center justify-center rounded cursor-pointer transition-all"
+                style={{
+                  width: 26,
+                  height: 26,
+                  color: hasUnread
+                    ? "var(--color-error)"
+                    : "var(--color-text-muted)",
+                  backgroundColor: hasUnread
+                    ? "rgba(239,68,68,0.12)"
+                    : "transparent",
+                  border: hasUnread
+                    ? "1px solid rgba(239,68,68,0.3)"
+                    : "1px solid transparent",
+                }}
+                title="Chat"
+              >
+                <FiMessageSquare size={13} />
+                {hasUnread && (
+                  <>
+                    <span
+                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
+                      style={{
+                        backgroundColor: "var(--color-error)",
+                        opacity: 0.6,
+                      }}
+                    />
+                    <span
+                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: "var(--color-error)" }}
+                    />
+                  </>
+                )}
+              </button>
+            )}
+            {onEdit && (
+              <button
+                onClick={onEdit}
+                className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+                title="Editar pedido"
+              >
+                <FiEdit2 size={13} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1509,7 +1536,7 @@ function ConfirmModal({
 // ── Inner page (needs to be inside PrinterProvider) ───────────────────────────
 
 function OrdersPageInner() {
-  const { activeOrders, markAsSeen, readyToPrintIds } = useOrders();
+  const { activeOrders, markAsSeen, readyToPrintIds, printedIds } = useOrders();
   const { appUser } = useAuth();
   const { success, error: toastError } = useToast();
 
@@ -2211,6 +2238,7 @@ function OrdersPageInner() {
                   <OrderCard
                     key={order.id}
                     order={order}
+                    isPrinted={printedIds.has(order.id)}
                     onCancel={
                       canCancelOrders ? () => setCancelTarget(order) : undefined
                     }
