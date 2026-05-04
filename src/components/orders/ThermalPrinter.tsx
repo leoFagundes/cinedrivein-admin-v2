@@ -781,12 +781,11 @@ export function usePrinter(): PrinterContextValue {
 
 // ── Auto-print hook ───────────────────────────────────────────────────────────
 
-export function useAutoPrint(orders: Order[]) {
+export function useAutoPrint(orders: Order[], readyToPrintIds: Set<string>) {
   const { autoPrint, isConnected, printOrder } = usePrinter();
   const printedRef = useRef<Set<string>>(new Set());
-  const prevIdsRef = useRef<Set<string>>(new Set());
+  const pendingRef = useRef<Set<string>>(new Set()); // ← aguardando ficar ready
   const baselineSetRef = useRef<Set<string> | null>(null);
-  // Ref sempre atualizada com os pedidos mais recentes
   const ordersRef = useRef<Order[]>(orders);
   // eslint-disable-next-line react-hooks/refs
   ordersRef.current = orders;
@@ -799,32 +798,35 @@ export function useAutoPrint(orders: Order[]) {
     } else {
       baselineSetRef.current = null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPrint, isConnected]);
 
   useEffect(() => {
     if (!autoPrint || !isConnected) return;
 
+    // 1. Detecta pedidos novos e coloca no pendingRef
     for (const order of orders) {
-      const isNew = !prevIdsRef.current.has(order.id);
       const notInBaseline = !baselineSetRef.current?.has(order.id);
       const notYetPrinted = !printedRef.current.has(order.id);
+      const notYetPending = !pendingRef.current.has(order.id);
 
-      if (isNew && notInBaseline && notYetPrinted) {
-        printedRef.current.add(order.id);
-        const orderId = order.id;
-        setTimeout(() => {
-          // Busca o pedido mais atualizado da ref no momento da impressão
-          const freshOrder = ordersRef.current.find((o) => o.id === orderId);
-          if (freshOrder) {
-            printOrder(freshOrder);
-          }
-        }, 4000);
+      if (notInBaseline && notYetPrinted && notYetPending) {
+        pendingRef.current.add(order.id); // marca como aguardando
       }
     }
 
-    prevIdsRef.current = new Set(orders.map((o) => o.id));
-  }, [orders, autoPrint, isConnected, printOrder]);
+    // 2. Imprime os que estão pending E já estão prontos
+    for (const orderId of pendingRef.current) {
+      if (!readyToPrintIds.has(orderId)) continue; // ainda normalizando
+      if (printedRef.current.has(orderId)) continue; // já imprimiu
+
+      const freshOrder = ordersRef.current.find((o) => o.id === orderId);
+      if (!freshOrder) continue;
+
+      printedRef.current.add(orderId);
+      pendingRef.current.delete(orderId);
+      printOrder(freshOrder);
+    }
+  }, [orders, readyToPrintIds, autoPrint, isConnected, printOrder]);
 }
 
 // ── Status config ─────────────────────────────────────────────────────────────

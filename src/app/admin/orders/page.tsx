@@ -1510,7 +1510,7 @@ function ConfirmModal({
 // ── Inner page (needs to be inside PrinterProvider) ───────────────────────────
 
 function OrdersPageInner() {
-  const { activeOrders, markAsSeen } = useOrders();
+  const { activeOrders, markAsSeen, readyToPrintIds } = useOrders();
   const { appUser } = useAuth();
   const { success, error: toastError } = useToast();
 
@@ -1573,7 +1573,7 @@ function OrdersPageInner() {
   }, [chatOrder]);
 
   // 🖨️ Auto-print hook — fires whenever a truly new order appears
-  useAutoPrint(activeOrders);
+  useAutoPrint(activeOrders, readyToPrintIds);
 
   // auto-sound
   useAutoSound(activeOrders);

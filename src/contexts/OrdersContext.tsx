@@ -30,6 +30,7 @@ interface OrdersContextValue {
   activeCount: number;
   unseenCount: number;
   markAsSeen: () => void;
+  readyToPrintIds: Set<string>;
 }
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);
@@ -192,6 +193,10 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const seenIdsRef = useRef<Set<string>>(new Set());
   const stockProcessedRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
+  const [readyToPrintIds, setReadyToPrintIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const readyRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -221,11 +226,12 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         setActiveOrders(orders);
         setUnseenCount(0);
         // Normalize existing orders too (only writes if prices are wrong)
-        // Normalize existing orders too (only writes if prices are wrong)
         orders.forEach((o) => {
           normalizeOrderPrices(o).catch(console.error);
           normalizePrintTwice(o).catch(console.error);
+          readyRef.current.add(o.id);
         });
+        setReadyToPrintIds(new Set(readyRef.current));
         return;
       }
 
@@ -236,7 +242,6 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       const unprocessed = orders.filter(
         (o) => !stockProcessedRef.current.has(o.id),
       );
-
       unprocessed.forEach((o) => stockProcessedRef.current.add(o.id));
       setActiveOrders(orders);
 
@@ -248,6 +253,10 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
               normalizeOrderPrices(o),
               normalizePrintTwice(o),
             ]).catch(console.error);
+
+            // ✅ Só sinaliza pronto DEPOIS que tudo terminou
+            readyRef.current = new Set([...readyRef.current, o.id]);
+            setReadyToPrintIds(new Set(readyRef.current));
           }),
         ).catch(console.error);
       }
@@ -268,6 +277,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         activeCount: activeOrders.length,
         unseenCount,
         markAsSeen,
+        readyToPrintIds,
       }}
     >
       {children}

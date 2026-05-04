@@ -132,7 +132,7 @@ function LoginForm() {
       localStorage.removeItem(SESSION_EXPIRED_KEY);
       warning(
         "Sessão expirada",
-        "Sua sessão de 24h expirou. Faça login novamente.",
+        "Sua sessão de 15h expirou. Faça login novamente.",
       );
     }
   }, []);
