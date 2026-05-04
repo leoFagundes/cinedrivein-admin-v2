@@ -113,6 +113,7 @@ export interface Film {
   language: string;
   displayDate: string;
   trailer: string;
+  avisos?: string[];
 }
 
 type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // domingo = 0

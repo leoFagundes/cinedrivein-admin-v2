@@ -99,6 +99,7 @@ const EMPTY_FILM: Film = {
   language: "Dublado",
   displayDate: "",
   trailer: "",
+  avisos: [],
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -278,6 +279,7 @@ interface FilmFormState {
   language: string;
   displayDate: string;
   trailer: string;
+  avisos: string;
 }
 
 function FilmModal({
@@ -306,6 +308,7 @@ function FilmModal({
     language: existing?.language ?? "Dublado",
     displayDate: existing?.displayDate ?? "",
     trailer: existing?.trailer ?? "",
+    avisos: (existing?.avisos ?? []).join("\n"),
   });
   const [errors, setErrors] = useState<
     Partial<Record<keyof FilmFormState, string>>
@@ -355,6 +358,10 @@ function FilmModal({
         language: form.language,
         displayDate: form.displayDate.trim(),
         trailer: form.trailer.trim(),
+        avisos: form.avisos
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean),
       };
       await onSave(film);
     } finally {
@@ -480,6 +487,38 @@ function FilmModal({
         value={form.synopsis}
         onChange={(e) => set("synopsis", e.target.value)}
       />
+      {/* Avisos */}
+      <div className="flex flex-col gap-1.5">
+        <label
+          className="text-sm font-medium"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Avisos <span className="text-text-muted">(opcional)</span>
+        </label>
+        <textarea
+          value={form.avisos}
+          onChange={(e) => set("avisos", e.target.value)}
+          placeholder={
+            "Ex: 28/06 — Não haverá sessão\nEx: Sessão especial às 21h"
+          }
+          rows={3}
+          className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] outline-none resize-y"
+          style={{
+            backgroundColor: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-primary)",
+          }}
+          onFocus={(e) =>
+            (e.currentTarget.style.borderColor = "var(--color-border-focus)")
+          }
+          onBlur={(e) =>
+            (e.currentTarget.style.borderColor = "var(--color-border)")
+          }
+        />
+        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+          Um aviso por linha. Serão exibidos no site principal.
+        </p>
+      </div>
 
       {/* Image */}
       <div className="flex flex-col gap-1.5">
@@ -1744,6 +1783,16 @@ export default function SitePage() {
             field: "Gêneros",
             from: arrStr(existing.genres),
             to: arrStr(film.genres),
+          });
+
+        const avisoStr = (a: string[] | undefined) =>
+          !a || a.length === 0 ? null : a.join(" | ");
+
+        if (avisoStr(film.avisos) !== avisoStr(existing.avisos))
+          changes.push({
+            field: "Avisos",
+            from: avisoStr(existing.avisos),
+            to: avisoStr(film.avisos),
           });
 
         log({
