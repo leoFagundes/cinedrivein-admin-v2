@@ -8,18 +8,6 @@ const AuthProvider = dynamic(
   { ssr: false, loading: () => null },
 );
 
-const OrdersProvider = dynamic(
-  () =>
-    import("@/contexts/OrdersContext").then((m) => ({
-      default: m.OrdersProvider,
-    })),
-  { ssr: false, loading: () => null },
-);
-
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <OrdersProvider>{children}</OrdersProvider>
-    </AuthProvider>
-  );
+  return <AuthProvider>{children}</AuthProvider>;
 }

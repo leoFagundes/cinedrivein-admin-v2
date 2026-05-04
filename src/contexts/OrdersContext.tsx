@@ -24,6 +24,7 @@ import { db } from "@/lib/firebase";
 import { Order, OrderItem } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { decreaseStock } from "@/lib/stock";
+import { usePrinter } from "@/components/orders/ThermalPrinter";
 
 interface OrdersContextValue {
   activeOrders: Order[];
@@ -197,6 +198,50 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     new Set(),
   );
   const readyRef = useRef<Set<string>>(new Set());
+
+  const printedRef = useRef<Set<string>>(new Set());
+  const pendingRef = useRef<Set<string>>(new Set());
+  const printBaselineRef = useRef<Set<string> | null>(null);
+
+  const { autoPrint, isConnected, printOrder } = usePrinter();
+
+  useEffect(() => {
+    if (autoPrint && isConnected) {
+      if (printBaselineRef.current === null) {
+        printBaselineRef.current = new Set(activeOrders.map((o) => o.id));
+      }
+    } else {
+      printBaselineRef.current = null;
+    }
+  }, [autoPrint, isConnected]);
+
+  useEffect(() => {
+    if (!autoPrint || !isConnected) return;
+
+    // 1. Pedidos novos entram no pending
+    for (const order of activeOrders) {
+      const notInBaseline = !printBaselineRef.current?.has(order.id);
+      const notYetPrinted = !printedRef.current.has(order.id);
+      const notYetPending = !pendingRef.current.has(order.id);
+
+      if (notInBaseline && notYetPrinted && notYetPending) {
+        pendingRef.current.add(order.id);
+      }
+    }
+
+    // 2. Imprime os que estão pending E prontos
+    for (const orderId of pendingRef.current) {
+      if (!readyToPrintIds.has(orderId)) continue;
+      if (printedRef.current.has(orderId)) continue;
+
+      const freshOrder = activeOrders.find((o) => o.id === orderId);
+      if (!freshOrder) continue;
+
+      printedRef.current.add(orderId);
+      pendingRef.current.delete(orderId);
+      printOrder(freshOrder);
+    }
+  }, [activeOrders, readyToPrintIds, autoPrint, isConnected, printOrder]);
 
   useEffect(() => {
     if (!firebaseUser) {

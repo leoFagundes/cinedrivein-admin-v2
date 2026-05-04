@@ -52,7 +52,6 @@ import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
 import { Order, OrderPayment } from "@/types";
 import ThermalPrinterBar, {
   PrintOrderButton,
-  useAutoPrint,
   usePrinter,
 } from "@/components/orders/ThermalPrinter";
 import {
@@ -1573,7 +1572,7 @@ function OrdersPageInner() {
   }, [chatOrder]);
 
   // 🖨️ Auto-print hook — fires whenever a truly new order appears
-  useAutoPrint(activeOrders, readyToPrintIds);
+  // useAutoPrint(activeOrders, readyToPrintIds);
 
   // auto-sound
   useAutoSound(activeOrders);
