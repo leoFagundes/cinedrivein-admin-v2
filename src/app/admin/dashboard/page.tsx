@@ -47,7 +47,9 @@ import {
   FiX,
   FiChevronDown,
   FiTrash2,
+  FiDownload,
 } from "react-icons/fi";
+import { generatePdfReport } from "@/lib/pdf-report";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
@@ -375,6 +377,9 @@ export default function DashboardPage() {
   } | null>(null);
   const [clearing, setClearing] = useState(false);
 
+  const [pdfRange, setPdfRange] = useState({ from: "", to: "" });
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
   const configLoaded = useRef(false);
 
   // Initialize report date + default 7-day chart ranges
@@ -393,6 +398,7 @@ export default function DashboardPage() {
       setOrdersRange({ from, to: today });
       setTopItemsRange({ from, to: today });
       setPaymentRange({ from, to: today });
+      setPdfRange({ from: today, to: today });
     }, 0);
     return () => clearTimeout(id);
   }, []);
@@ -1026,6 +1032,36 @@ export default function DashboardPage() {
       toastError("Erro", "Não foi possível zerar os dados.");
     } finally {
       setClearing(false);
+    }
+  }
+
+  // ── PDF Report ─────────────────────────────────────────────────────────────
+
+  async function handleDownloadPdf() {
+    if (!pdfRange.from || !pdfRange.to) return;
+    setGeneratingPdf(true);
+    try {
+      const rangeDays = stats.filter(
+        (s) => s.date >= pdfRange.from && s.date <= pdfRange.to,
+      );
+      const today = todayStr();
+      const todayInRange = pdfRange.from <= today && today <= pdfRange.to;
+      const todayArchived = rangeDays.some((s) => s.date === today);
+      const hasPending =
+        pendingStats.finished > 0 || pendingStats.canceled > 0;
+      const pending =
+        todayInRange && !todayArchived && hasPending ? pendingStats : null;
+
+      await generatePdfReport({
+        from: pdfRange.from,
+        to: pdfRange.to,
+        days: rangeDays,
+        pending,
+      });
+    } catch {
+      toastError("Erro", "Não foi possível gerar o relatório.");
+    } finally {
+      setGeneratingPdf(false);
     }
   }
 
@@ -1800,7 +1836,120 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Row 4: Charts */}
+      {/* Row 4: PDF Report */}
+      {canViewDashboard && (
+        <div
+          className="flex flex-col rounded-[var(--radius-xl)] overflow-hidden"
+          style={{
+            backgroundColor: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-4"
+            style={{ borderBottom: "1px solid var(--color-border)" }}
+          >
+            <div>
+              <p
+                className="font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                Relatório em PDF
+              </p>
+              <p
+                className="text-xs mt-0.5"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Gera um documento com faturamento, pedidos e itens vendidos do
+                período
+              </p>
+            </div>
+            <FiDownload
+              size={18}
+              style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-end gap-3 px-5 py-4">
+            {/* Date range */}
+            <div className="flex items-center gap-2 flex-1 flex-wrap">
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  De
+                </label>
+                <input
+                  type="date"
+                  value={pdfRange.from}
+                  onChange={(e) =>
+                    setPdfRange((r) => ({ ...r, from: e.target.value }))
+                  }
+                  className="h-8 px-2.5 text-sm rounded-[var(--radius-md)] outline-none cursor-pointer"
+                  style={{
+                    backgroundColor: pdfRange.from
+                      ? "var(--color-primary-light)"
+                      : "var(--color-bg-elevated)",
+                    border: `1px solid ${pdfRange.from ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                    color: pdfRange.from
+                      ? "var(--color-primary)"
+                      : "var(--color-text-muted)",
+                  }}
+                />
+              </div>
+              <span
+                className="text-xs mt-4"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                até
+              </span>
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Até
+                </label>
+                <input
+                  type="date"
+                  value={pdfRange.to}
+                  min={pdfRange.from}
+                  onChange={(e) =>
+                    setPdfRange((r) => ({ ...r, to: e.target.value }))
+                  }
+                  className="h-8 px-2.5 text-sm rounded-[var(--radius-md)] outline-none cursor-pointer"
+                  style={{
+                    backgroundColor: pdfRange.to
+                      ? "var(--color-primary-light)"
+                      : "var(--color-bg-elevated)",
+                    border: `1px solid ${pdfRange.to ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                    color: pdfRange.to
+                      ? "var(--color-primary)"
+                      : "var(--color-text-muted)",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Download button */}
+            <button
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf || !pdfRange.from || !pdfRange.to}
+              className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+              style={{
+                backgroundColor: "var(--color-primary)",
+                color: "white",
+              }}
+            >
+              <FiDownload size={15} />
+              {generatingPdf ? "Gerando..." : "Baixar PDF"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Row 5: Charts */}
       {stats.length === 0 && !loadingStats ? (
         <div
           className="flex flex-col items-center justify-center rounded-[var(--radius-xl)] py-16 gap-3"

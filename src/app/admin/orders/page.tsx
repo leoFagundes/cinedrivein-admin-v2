@@ -118,153 +118,134 @@ function ItemPhoto({ photo, name }: { photo?: string; name: string }) {
   );
 }
 
-// ── PrinterReminderModal ──────────────────────────────────────────────────────
+// ── PrinterReminderToast ──────────────────────────────────────────────────────
 
 const PRINTER_SNOOZE_KEY = "cdi_printer_reminder_snoozed_until";
+const PRINTER_DISMISSED_KEY = "cdi_printer_reminder_dismissed_at";
+const PRINTER_RESHOW_DELAY = 30_000;
 
-function usePrinterReminderModal(isConnected: boolean) {
+function usePrinterReminderToast(isConnected: boolean) {
   const [visible, setVisible] = useState(false);
-  const [dontShowToday, setDontShowToday] = useState(false);
+  const [snooze12h, setSnooze12h] = useState(false);
 
   useEffect(() => {
     if (isConnected) return;
     try {
-      const until = localStorage.getItem(PRINTER_SNOOZE_KEY);
-      if (until && Date.now() < Number(until)) return;
+      const snoozeUntil = localStorage.getItem(PRINTER_SNOOZE_KEY);
+      if (snoozeUntil && Date.now() < Number(snoozeUntil)) return;
+
+      const dismissedAt = Number(localStorage.getItem(PRINTER_DISMISSED_KEY) ?? 0);
+      const elapsed = Date.now() - dismissedAt;
+      const delay = dismissedAt === 0
+        ? 400
+        : Math.max(0, PRINTER_RESHOW_DELAY - elapsed);
+
+      const id = setTimeout(() => setVisible(true), delay);
+      return () => clearTimeout(id);
     } catch {}
-    const id = setTimeout(() => setVisible(true), 400);
-    return () => clearTimeout(id);
   }, [isConnected]);
 
   function dismiss() {
-    if (dontShowToday) {
-      try {
+    try {
+      if (snooze12h) {
         localStorage.setItem(
           PRINTER_SNOOZE_KEY,
           String(Date.now() + 12 * 60 * 60 * 1000),
         );
-      } catch {}
-    }
+      } else {
+        localStorage.setItem(PRINTER_DISMISSED_KEY, String(Date.now()));
+      }
+    } catch {}
     setVisible(false);
   }
 
-  return { visible, dontShowToday, setDontShowToday, dismiss };
+  return { visible, snooze12h, setSnooze12h, dismiss };
 }
 
-function PrinterReminderModal({
-  dontShowToday,
-  setDontShowToday,
+function PrinterReminderToast({
+  snooze12h,
+  setSnooze12h,
   onDismiss,
 }: {
-  dontShowToday: boolean;
-  setDontShowToday: (v: boolean) => void;
+  snooze12h: boolean;
+  setSnooze12h: (v: boolean) => void;
   onDismiss: () => void;
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
+      className="fixed bottom-4 left-4 z-40 w-full max-w-xs rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid rgba(245,158,11,0.35)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+      }}
     >
+      {/* Header */}
       <div
-        className="w-full max-w-sm rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+        className="flex items-center gap-3 px-4 py-3"
         style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          background:
+            "linear-gradient(135deg, rgba(245,158,11,0.1) 0%, rgba(245,158,11,0.04) 100%)",
+          borderBottom: "1px solid rgba(245,158,11,0.2)",
         }}
       >
-        {/* Topo */}
         <div
-          className="flex flex-col items-center gap-3 px-6 py-6"
+          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
           style={{
-            background:
-              "linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(239,68,68,0.08) 100%)",
-            borderBottom: "1px solid var(--color-border)",
+            backgroundColor: "rgba(245,158,11,0.15)",
+            border: "1px solid rgba(245,158,11,0.3)",
           }}
         >
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center"
-            style={{
-              backgroundColor: "rgba(245,158,11,0.15)",
-              border: "2px solid rgba(245,158,11,0.35)",
-            }}
-          >
-            <FiPrinter size={24} style={{ color: "var(--color-warning)" }} />
-          </div>
-          <div className="text-center">
-            <p
-              className="text-base font-bold"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              Impressora não conectada
-            </p>
-            <p
-              className="text-xs mt-1 leading-relaxed"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              Novos pedidos não serão impressos automaticamente enquanto a
-              impressora estiver desconectada.
-            </p>
-          </div>
+          <FiPrinter size={15} style={{ color: "var(--color-warning)" }} />
         </div>
-
-        {/* Corpo */}
-        <div className="flex flex-col gap-3 px-6 py-5">
-          <p
-            className="text-sm leading-relaxed"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            Para ligar a impressora, use a{" "}
-            <strong style={{ color: "var(--color-text-primary)" }}>
-              barra de impressão
-            </strong>{" "}
-            no topo da página e clique em{" "}
-            <strong style={{ color: "var(--color-text-primary)" }}>
-              {'"'}Conectar impressora{'"'}
-            </strong>
-            .
-          </p>
-
-          {/* Checkbox */}
-          <button
-            onClick={() => setDontShowToday(!dontShowToday)}
-            className="flex items-center gap-2.5 text-sm w-fit cursor-pointer transition-opacity hover:opacity-70 mt-1"
-          >
-            <div
-              className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors"
-              style={{
-                backgroundColor: dontShowToday
-                  ? "var(--color-primary)"
-                  : "var(--color-bg-base)",
-                border: dontShowToday
-                  ? "none"
-                  : "1px solid var(--color-border)",
-              }}
-            >
-              {dontShowToday && <FiCheck size={12} color="white" />}
-            </div>
-            <span style={{ color: "var(--color-text-secondary)" }}>
-              Não mostrar nas próximas 12 horas
-            </span>
-          </button>
-        </div>
-
-        {/* Ações */}
-        <div
-          className="px-6 py-4"
-          style={{ borderTop: "1px solid var(--color-border)" }}
+        <p
+          className="text-sm font-semibold flex-1"
+          style={{ color: "var(--color-text-primary)" }}
         >
-          <button
-            onClick={onDismiss}
-            className="w-full py-2.5 rounded-[var(--radius-md)] text-sm font-semibold cursor-pointer transition-opacity hover:opacity-80"
+          Impressora não conectada
+        </p>
+        <button
+          onClick={onDismiss}
+          className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 flex-shrink-0"
+          style={{ color: "var(--color-text-muted)" }}
+          title="Fechar"
+        >
+          <FiX size={15} />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <p
+          className="text-xs leading-relaxed"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Novos pedidos não serão impressos automaticamente. Use a{" "}
+          <strong style={{ color: "var(--color-text-primary)" }}>
+            barra de impressão
+          </strong>{" "}
+          no topo para conectar.
+        </p>
+
+        <button
+          onClick={() => setSnooze12h(!snooze12h)}
+          className="flex items-center gap-2 text-xs w-fit cursor-pointer transition-opacity hover:opacity-70"
+        >
+          <div
+            className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors"
             style={{
-              backgroundColor: "var(--color-primary)",
-              color: "white",
+              backgroundColor: snooze12h
+                ? "var(--color-primary)"
+                : "var(--color-bg-base)",
+              border: snooze12h ? "none" : "1px solid var(--color-border)",
             }}
           >
-            Entendi
-          </button>
-        </div>
+            {snooze12h && <FiCheck size={10} color="white" />}
+          </div>
+          <span style={{ color: "var(--color-text-muted)" }}>
+            Não mostrar nas próximas 12 horas
+          </span>
+        </button>
       </div>
     </div>
   );
@@ -1837,14 +1818,14 @@ function OrdersPageInner() {
 
   const { playChat } = useSoundAlert();
 
-  // 🖨️ Printer reminder modal
+  // 🖨️ Printer reminder toast
   const { isConnected } = usePrinter();
   const {
     visible: showPrinterReminder,
-    dontShowToday,
-    setDontShowToday,
+    snooze12h,
+    setSnooze12h,
     dismiss: dismissPrinterReminder,
-  } = usePrinterReminderModal(isConnected);
+  } = usePrinterReminderToast(isConnected);
 
   useEffect(() => {
     if (activeOrders.length === 0) return;
@@ -2803,11 +2784,11 @@ function OrdersPageInner() {
         <ChatTemplatesModal onClose={() => setShowTemplates(false)} />
       )}
 
-      {/* 🖨️ Printer reminder modal */}
-      {showPrinterReminder && (
-        <PrinterReminderModal
-          dontShowToday={dontShowToday}
-          setDontShowToday={setDontShowToday}
+      {/* 🖨️ Printer reminder toast */}
+      {showPrinterReminder && !isConnected && (
+        <PrinterReminderToast
+          snooze12h={snooze12h}
+          setSnooze12h={setSnooze12h}
           onDismiss={dismissPrinterReminder}
         />
       )}
