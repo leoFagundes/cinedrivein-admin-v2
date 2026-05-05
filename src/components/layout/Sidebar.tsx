@@ -12,8 +12,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
-import { db } from "@/lib/firebase";
+import { db, rtdb } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
+import { ref, onValue } from "firebase/database";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 
@@ -105,12 +106,19 @@ export default function Sidebar() {
   const onOrdersPage = pathname === "/admin/orders";
 
   const [storeOpen, setStoreOpen] = useState<boolean | null>(null);
+  const [activeUsers, setActiveUsers] = useState<number>(0);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
       if (snap.exists()) setStoreOpen(snap.data().isOpen ?? false);
     });
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    return onValue(ref(rtdb, "presence"), (snap) => {
+      setActiveUsers(snap.exists() ? Object.keys(snap.val()).length : 0);
+    });
   }, []);
 
   const sidebarContent = (
@@ -125,7 +133,7 @@ export default function Sidebar() {
 
       {storeOpen !== null && (
         <div
-          className="flex items-center gap-2 px-4 py-2"
+          className="flex items-center justify-between px-4 py-2"
           style={{
             backgroundColor: storeOpen
               ? "rgba(34,197,94,0.06)"
@@ -133,27 +141,38 @@ export default function Sidebar() {
             borderBottom: "1px solid var(--color-border)",
           }}
         >
-          <div
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{
-              backgroundColor: storeOpen
-                ? "var(--color-success)"
-                : "var(--color-error)",
-              boxShadow: storeOpen
-                ? "0 0 6px rgba(34,197,94,0.6)"
-                : "0 0 6px rgba(239,68,68,0.6)",
-            }}
-          />
-          <span
-            className="text-xs font-medium"
-            style={{
-              color: storeOpen
-                ? "var(--color-success)"
-                : "var(--color-error)",
-            }}
-          >
-            {storeOpen ? "Lanchonete aberta" : "Lanchonete fechada"}
-          </span>
+          <div className="flex items-center gap-2">
+            <div
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{
+                backgroundColor: storeOpen
+                  ? "var(--color-success)"
+                  : "var(--color-error)",
+                boxShadow: storeOpen
+                  ? "0 0 6px rgba(34,197,94,0.6)"
+                  : "0 0 6px rgba(239,68,68,0.6)",
+              }}
+            />
+            <span
+              className="text-xs font-medium"
+              style={{
+                color: storeOpen
+                  ? "var(--color-success)"
+                  : "var(--color-error)",
+              }}
+            >
+              {storeOpen ? "Lanchonete aberta" : "Lanchonete fechada"}
+            </span>
+          </div>
+          {activeUsers > 0 && (
+            <span
+              className="text-[10px] font-medium"
+              style={{ color: "var(--color-text-muted)" }}
+              title={`${activeUsers} ${activeUsers === 1 ? "pessoa navegando" : "pessoas navegando"} no app`}
+            >
+              {activeUsers} no app
+            </span>
+          )}
         </div>
       )}
 
