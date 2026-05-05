@@ -1374,26 +1374,10 @@ export default function ThermalPrinterBar() {
   } = usePrinter();
 
   const [showTutorial, setShowTutorial] = useState(false);
+  const [warningDismissed, setWarningDismissed] = useState(false);
   const cfg = STATUS_CFG[status];
   const isBusy = status === "connecting" || status === "printing";
-  const hasWarning = !!portWarning;
-
-  if (!isSerialSupported && connectionMode === "serial") {
-    return (
-      <div
-        className="flex items-center gap-2 px-4 sm:px-6 py-2 text-xs"
-        style={{
-          backgroundColor: "rgba(239,68,68,0.06)",
-          borderBottom: "1px solid rgba(239,68,68,0.2)",
-          color: "var(--color-error)",
-        }}
-      >
-        <FiWifiOff size={13} />
-        Impressora térmica via USB Serial requer Chrome ou Edge. Use QZ Tray
-        para outros navegadores.
-      </div>
-    );
-  }
+  const hasWarning = !!portWarning && !warningDismissed;
 
   return (
     <div className="flex flex-col">
@@ -1407,6 +1391,21 @@ export default function ThermalPrinterBar() {
       >
         {/* Mode selector — only when disconnected */}
         <ModeSelector />
+
+        {/* Aviso de Serial não suportado */}
+        {!isSerialSupported && connectionMode === "serial" && (
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-xs"
+            style={{
+              backgroundColor: "rgba(239,68,68,0.08)",
+              color: "var(--color-error)",
+              border: "1px solid rgba(239,68,68,0.2)",
+            }}
+          >
+            <FiWifiOff size={11} style={{ flexShrink: 0 }} />
+            Serial requer Chrome / Edge — use QZ Tray
+          </div>
+        )}
 
         {/* Status pill */}
         <div
@@ -1563,7 +1562,7 @@ export default function ThermalPrinterBar() {
       </div>
 
       {/* Warning strip */}
-      {hasWarning && (
+      {hasWarning && !warningDismissed && (
         <div
           className="flex items-center gap-2 px-4 sm:px-6 py-1.5 text-xs"
           style={{
@@ -1574,7 +1573,15 @@ export default function ThermalPrinterBar() {
           }}
         >
           <FiAlertTriangle size={12} style={{ flexShrink: 0 }} />
-          {portWarning}
+          <span className="flex-1">{portWarning}</span>
+          <button
+            onClick={() => setWarningDismissed(true)}
+            className="flex-shrink-0 p-0.5 rounded cursor-pointer transition-opacity hover:opacity-60"
+            style={{ color: "var(--color-warning)" }}
+            title="Fechar aviso"
+          >
+            <FiX size={12} />
+          </button>
         </div>
       )}
     </div>
