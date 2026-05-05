@@ -171,7 +171,10 @@ function StatCard({
           {value}
         </p>
         {note && (
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)", opacity: 0.7 }}>
+          <p
+            className="text-[10px] mt-0.5"
+            style={{ color: "var(--color-text-muted)", opacity: 0.7 }}
+          >
             {note}
           </p>
         )}
@@ -924,31 +927,33 @@ export default function DashboardPage() {
             additionals: Record<string, number>;
           }
         > = {};
-        reportOrders.filter((o) => o.status === "finished").forEach((o) => {
-          o.items.forEach((item) => {
-            const key = item.itemId || item.name;
-            const qty = item.quantity ?? 1;
-            if (!map[key]) {
-              map[key] = {
-                codItem: item.codItem,
-                name: item.name,
-                quantity: 0,
-                additionals: {},
-              };
-            }
-            map[key].quantity += qty;
-            const allAdds = [
-              ...(item.additionals ?? []),
-              ...(item.additionals_sauce ?? []),
-              ...(item.additionals_drink ?? []),
-              ...(item.additionals_sweet ?? []),
-            ];
-            allAdds.forEach((adicName) => {
-              map[key].additionals[adicName] =
-                (map[key].additionals[adicName] ?? 0) + qty;
+        reportOrders
+          .filter((o) => o.status === "finished")
+          .forEach((o) => {
+            o.items.forEach((item) => {
+              const key = item.itemId || item.name;
+              const qty = item.quantity ?? 1;
+              if (!map[key]) {
+                map[key] = {
+                  codItem: item.codItem,
+                  name: item.name,
+                  quantity: 0,
+                  additionals: {},
+                };
+              }
+              map[key].quantity += qty;
+              const allAdds = [
+                ...(item.additionals ?? []),
+                ...(item.additionals_sauce ?? []),
+                ...(item.additionals_drink ?? []),
+                ...(item.additionals_sweet ?? []),
+              ];
+              allAdds.forEach((adicName) => {
+                map[key].additionals[adicName] =
+                  (map[key].additionals[adicName] ?? 0) + qty;
+              });
             });
           });
-        });
         return Object.values(map).sort((a, b) => b.quantity - a.quantity);
       })();
 
@@ -1058,8 +1063,7 @@ export default function DashboardPage() {
       const today = todayStr();
       const todayInRange = pdfRange.from <= today && today <= pdfRange.to;
       const todayArchived = rangeDays.some((s) => s.date === today);
-      const hasPending =
-        pendingStats.finished > 0 || pendingStats.canceled > 0;
+      const hasPending = pendingStats.finished > 0 || pendingStats.canceled > 0;
       const pending =
         todayInRange && !todayArchived && hasPending ? pendingStats : null;
 
@@ -1293,7 +1297,7 @@ export default function DashboardPage() {
                       className="text-sm"
                       style={{ color: "var(--color-text-secondary)" }}
                     >
-                      Navegando no app agora
+                      Clientes navegando no site agora
                     </span>
                   </div>
                   <span
@@ -1594,12 +1598,19 @@ export default function DashboardPage() {
                   style={{ color: "var(--color-text-primary)" }}
                 />
               </div>
-              <div onClick={(e) => { e.stopPropagation(); setReportExpanded((v) => !v); }}>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReportExpanded((v) => !v);
+                }}
+              >
                 <FiChevronDown
                   size={16}
                   style={{
                     color: "var(--color-text-muted)",
-                    transform: reportExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transform: reportExpanded
+                      ? "rotate(180deg)"
+                      : "rotate(0deg)",
                     transition: "transform 0.2s",
                   }}
                 />
@@ -1625,9 +1636,9 @@ export default function DashboardPage() {
                     style={{ color: "var(--color-text-muted)" }}
                   >
                     Nenhum pedido finalizado em{" "}
-                  {reportDate
-                    ? reportDate.split("-").reverse().join("/")
-                    : "..."}
+                    {reportDate
+                      ? reportDate.split("-").reverse().join("/")
+                      : "..."}
                   </p>
                 </div>
               ) : (
