@@ -2,6 +2,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -25,6 +26,7 @@ function createDb() {
 export const auth    = getAuth(app);
 export const db      = createDb();
 export const storage = getStorage(app);
+export const rtdb    = getDatabase(app);
 
 export function getSecondaryAuth() {
   const existing = getApps().find((a) => a.name === "secondary");

@@ -50,7 +50,8 @@ import {
   FiDownload,
 } from "react-icons/fi";
 import { generatePdfReport } from "@/lib/pdf-report";
-import { db } from "@/lib/firebase";
+import { db, rtdb } from "@/lib/firebase";
+import { ref, onValue } from "firebase/database";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
@@ -379,6 +380,7 @@ export default function DashboardPage() {
 
   const [pdfRange, setPdfRange] = useState({ from: "", to: "" });
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [activeUsers, setActiveUsers] = useState<number | null>(null);
 
   const configLoaded = useRef(false);
 
@@ -1035,6 +1037,15 @@ export default function DashboardPage() {
     }
   }
 
+  // ── Active users (RTDB presence) ───────────────────────────────────────────
+
+  useEffect(() => {
+    const presenceRef = ref(rtdb, "presence");
+    return onValue(presenceRef, (snap) => {
+      setActiveUsers(snap.exists() ? Object.keys(snap.val()).length : 0);
+    });
+  }, []);
+
   // ── PDF Report ─────────────────────────────────────────────────────────────
 
   async function handleDownloadPdf() {
@@ -1254,6 +1265,50 @@ export default function DashboardPage() {
                   )}
                 </button>
               </div>
+
+              {/* Usuários ativos no app */}
+              {activeUsers !== null && (
+                <div
+                  className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        backgroundColor:
+                          activeUsers > 0
+                            ? "var(--color-success)"
+                            : "var(--color-text-muted)",
+                        boxShadow:
+                          activeUsers > 0
+                            ? "0 0 6px rgba(34,197,94,0.6)"
+                            : "none",
+                      }}
+                    />
+                    <span
+                      className="text-sm"
+                      style={{ color: "var(--color-text-secondary)" }}
+                    >
+                      Navegando no app agora
+                    </span>
+                  </div>
+                  <span
+                    className="text-sm font-bold"
+                    style={{
+                      color:
+                        activeUsers > 0
+                          ? "var(--color-success)"
+                          : "var(--color-text-muted)",
+                    }}
+                  >
+                    {activeUsers} {activeUsers === 1 ? "pessoa" : "pessoas"}
+                  </span>
+                </div>
+              )}
 
               {/* Status badge */}
               <div
