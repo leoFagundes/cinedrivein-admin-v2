@@ -163,12 +163,11 @@ export async function generatePdfReport(input: PdfReportInput) {
   doc.line(M, y + 1.5, M + 40, y + 1.5);
   y += 5;
 
-  const revRows: [string, string][] = [
-    ["Dinheiro", fmt(rev.money)],
-    ["Pix", fmt(rev.pix)],
-    ["Crédito", fmt(rev.credit)],
-    ["Débito", fmt(rev.debit)],
-  ].filter(([, v]) => v !== "R$ 0,00");
+  const revRows: [string, string][] = [];
+  if (rev.money > 0) revRows.push(["Dinheiro", fmt(rev.money)]);
+  if (rev.pix > 0) revRows.push(["Pix", fmt(rev.pix)]);
+  if (rev.credit > 0) revRows.push(["Crédito", fmt(rev.credit)]);
+  if (rev.debit > 0) revRows.push(["Débito", fmt(rev.debit)]);
 
   if (rev.discount > 0) {
     revRows.push(["Descontos", `- ${fmt(rev.discount)}`]);

@@ -1149,7 +1149,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 1: Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatCard
           label="Pedidos ativos"
           value={String(activeOrders.length)}
@@ -1178,6 +1178,36 @@ export default function DashboardPage() {
           icon={<FiDollarSign size={18} />}
           color={CHART_COLORS.success}
           note="não arquivado"
+        />
+        <StatCard
+          label="Ticket médio"
+          value={
+            pendingStats.finished > 0
+              ? fmtCurrency(pendingStats.revenue / pendingStats.finished)
+              : "—"
+          }
+          icon={<FiTrendingUp size={18} />}
+          color={CHART_COLORS.teal}
+          note="por pedido finalizado"
+        />
+        <StatCard
+          label="Taxa de cancelamento"
+          value={
+            pendingStats.finished + pendingStats.canceled > 0
+              ? `${((pendingStats.canceled / (pendingStats.finished + pendingStats.canceled)) * 100).toFixed(1)}%`
+              : "0%"
+          }
+          icon={<FiArchive size={18} />}
+          color={
+            pendingStats.canceled === 0
+              ? CHART_COLORS.success
+              : pendingStats.canceled /
+                    Math.max(1, pendingStats.finished + pendingStats.canceled) <
+                  0.2
+                ? CHART_COLORS.warning
+                : CHART_COLORS.error
+          }
+          note="cancelados ÷ total"
         />
       </div>
 
@@ -1428,14 +1458,15 @@ export default function DashboardPage() {
         >
           <div
             onClick={() => setReportExpanded((v) => !v)}
-            className="flex items-center justify-between px-5 py-4 w-full text-left cursor-pointer"
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-4 w-full text-left cursor-pointer gap-2"
             style={{
               borderBottom: reportExpanded
                 ? "1px solid var(--color-border)"
                 : "none",
             }}
           >
-            <div className="flex items-center gap-2">
+            {/* Título + badges */}
+            <div className="flex items-center gap-2 flex-wrap">
               <p
                 className="font-semibold"
                 style={{ color: "var(--color-text-primary)" }}
@@ -1465,7 +1496,12 @@ export default function DashboardPage() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+
+            {/* Controles */}
+            <div
+              className="flex items-center gap-2 flex-wrap"
+              onClick={(e) => e.stopPropagation()}
+            >
               {reportSource === "archived" && canDeleteChartData && (
                 <button
                   onClick={(e) => {
@@ -1484,14 +1520,12 @@ export default function DashboardPage() {
                   Limpar dia
                 </button>
               )}
-              {/* Date picker */}
               <div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] text-sm"
                 style={{
                   backgroundColor: "var(--color-bg-elevated)",
                   border: "1px solid var(--color-border)",
                 }}
-                onClick={(e) => e.stopPropagation()}
               >
                 <FiCalendar
                   size={13}
@@ -1505,14 +1539,16 @@ export default function DashboardPage() {
                   style={{ color: "var(--color-text-primary)" }}
                 />
               </div>
-              <FiChevronDown
-                size={16}
-                style={{
-                  color: "var(--color-text-muted)",
-                  transform: reportExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.2s",
-                }}
-              />
+              <div onClick={(e) => { e.stopPropagation(); setReportExpanded((v) => !v); }}>
+                <FiChevronDown
+                  size={16}
+                  style={{
+                    color: "var(--color-text-muted)",
+                    transform: reportExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -1870,9 +1906,9 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row items-end gap-3 px-5 py-4">
-            {/* Date range */}
-            <div className="flex items-center gap-2 flex-1 flex-wrap">
+          <div className="flex flex-col gap-4 px-5 py-4">
+            {/* Date range — sempre lado a lado */}
+            <div className="flex items-end gap-3 flex-wrap">
               <div className="flex flex-col gap-1">
                 <label
                   className="text-xs"
@@ -1886,7 +1922,7 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setPdfRange((r) => ({ ...r, from: e.target.value }))
                   }
-                  className="h-8 px-2.5 text-sm rounded-[var(--radius-md)] outline-none cursor-pointer"
+                  className="h-8 px-2.5 text-sm outline-none cursor-pointer rounded-[var(--radius-md)]"
                   style={{
                     backgroundColor: pdfRange.from
                       ? "var(--color-primary-light)"
@@ -1898,12 +1934,6 @@ export default function DashboardPage() {
                   }}
                 />
               </div>
-              <span
-                className="text-xs mt-4"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                até
-              </span>
               <div className="flex flex-col gap-1">
                 <label
                   className="text-xs"
@@ -1918,7 +1948,7 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setPdfRange((r) => ({ ...r, to: e.target.value }))
                   }
-                  className="h-8 px-2.5 text-sm rounded-[var(--radius-md)] outline-none cursor-pointer"
+                  className="h-8 px-2.5 text-sm outline-none cursor-pointer rounded-[var(--radius-md)]"
                   style={{
                     backgroundColor: pdfRange.to
                       ? "var(--color-primary-light)"
@@ -1933,18 +1963,20 @@ export default function DashboardPage() {
             </div>
 
             {/* Download button */}
-            <button
-              onClick={handleDownloadPdf}
-              disabled={generatingPdf || !pdfRange.from || !pdfRange.to}
-              className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-              style={{
-                backgroundColor: "var(--color-primary)",
-                color: "white",
-              }}
-            >
-              <FiDownload size={15} />
-              {generatingPdf ? "Gerando..." : "Baixar PDF"}
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={handleDownloadPdf}
+                disabled={generatingPdf || !pdfRange.from || !pdfRange.to}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  color: "white",
+                }}
+              >
+                <FiDownload size={15} />
+                {generatingPdf ? "Gerando..." : "Baixar PDF"}
+              </button>
+            </div>
           </div>
         </div>
       )}
