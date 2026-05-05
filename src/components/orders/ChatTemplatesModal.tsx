@@ -13,13 +13,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import {
-  FiX,
-  FiPlus,
-  FiEdit2,
-  FiTrash2,
-  FiArrowLeft,
-} from "react-icons/fi";
+import { FiX, FiPlus, FiEdit2, FiTrash2, FiArrowLeft } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { ChatTemplate } from "@/types";
 import { renderMarkdown } from "@/lib/chat-format";
@@ -91,12 +85,16 @@ export default function ChatTemplatesModal({
     const start = el.selectionStart ?? message.length;
     const end = el.selectionEnd ?? message.length;
     const selected = message.slice(start, end);
-    const newText = message.slice(0, start) + prefix + selected + suffix + message.slice(end);
+    const newText =
+      message.slice(0, start) + prefix + selected + suffix + message.slice(end);
     setMessage(newText);
     setMessageError("");
     setTimeout(() => {
       el.focus();
-      el.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+      el.setSelectionRange(
+        start + prefix.length,
+        start + prefix.length + selected.length,
+      );
     }, 0);
   }
 
@@ -193,7 +191,10 @@ export default function ChatTemplatesModal({
               <button
                 onClick={openCreate}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-                style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  color: "white",
+                }}
               >
                 <FiPlus size={14} />
                 Nova
@@ -214,19 +215,28 @@ export default function ChatTemplatesModal({
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-20">
-                <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
                   Carregando...
                 </p>
               </div>
             ) : templates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
                   Nenhuma mensagem criada
                 </p>
                 <button
                   onClick={openCreate}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-                  style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                  style={{
+                    backgroundColor: "var(--color-primary)",
+                    color: "white",
+                  }}
                 >
                   <FiPlus size={14} />
                   Criar primeira mensagem
@@ -377,7 +387,10 @@ export default function ChatTemplatesModal({
                   />
                 </div>
                 {triggerError && (
-                  <p className="text-xs" style={{ color: "var(--color-error)" }}>
+                  <p
+                    className="text-xs"
+                    style={{ color: "var(--color-error)" }}
+                  >
                     {triggerError}
                   </p>
                 )}
@@ -420,7 +433,9 @@ export default function ChatTemplatesModal({
                 </label>
                 <div
                   className="rounded-[var(--radius-md)] overflow-hidden"
-                  style={{ border: `1px solid ${messageError ? "var(--color-error)" : "var(--color-border)"}` }}
+                  style={{
+                    border: `1px solid ${messageError ? "var(--color-error)" : "var(--color-border)"}`,
+                  }}
                 >
                   <RichTextToolbar onFormat={insertFormat} />
                   <textarea
@@ -430,7 +445,9 @@ export default function ChatTemplatesModal({
                       setMessage(e.target.value);
                       setMessageError("");
                     }}
-                    placeholder={"Nossos molhos disponíveis são:\n• Catchup\n• Maionese\n• Barbecue\n• Mostarda"}
+                    placeholder={
+                      "Nossos molhos disponíveis são:\n• Catchup\n• Maionese\n• Barbecue\n• Mostarda"
+                    }
                     rows={6}
                     className="w-full px-3 py-2.5 text-sm outline-none resize-none"
                     style={{
@@ -441,7 +458,10 @@ export default function ChatTemplatesModal({
                   />
                 </div>
                 {messageError && (
-                  <p className="text-xs" style={{ color: "var(--color-error)" }}>
+                  <p
+                    className="text-xs"
+                    style={{ color: "var(--color-error)" }}
+                  >
                     {messageError}
                   </p>
                 )}
@@ -450,7 +470,10 @@ export default function ChatTemplatesModal({
               {/* Preview */}
               {message.trim() && (
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-xs font-medium uppercase tracking-wide"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Pré-visualização
                   </p>
                   <div
@@ -488,7 +511,10 @@ export default function ChatTemplatesModal({
                 onClick={save}
                 disabled={saving}
                 className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
-                style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  color: "white",
+                }}
               >
                 {saving
                   ? "Salvando..."
