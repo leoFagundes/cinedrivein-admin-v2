@@ -135,11 +135,13 @@ function StatCard({
   value,
   icon,
   color = "var(--color-primary)",
+  note,
 }: {
   label: string;
   value: string;
   icon: React.ReactNode;
   color?: string;
+  note?: string;
 }) {
   return (
     <div
@@ -165,6 +167,11 @@ function StatCard({
         >
           {value}
         </p>
+        {note && (
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)", opacity: 0.7 }}>
+            {note}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -519,9 +526,12 @@ export default function DashboardPage() {
           setReportSource("archived");
           return;
         }
-        // 2. No archive — query live finished orders for the operational day
+        // 2. No archive — query live finished+canceled orders for the operational day
         const snap = await getDocs(
-          query(collection(db, "orders"), where("status", "==", "finished")),
+          query(
+            collection(db, "orders"),
+            where("status", "in", ["finished", "canceled"]),
+          ),
         );
         const start = operationalDayStart(reportDate);
         const end = operationalDayEnd(reportDate);
@@ -861,28 +871,33 @@ export default function DashboardPage() {
         debit: archivedStats.revenue.debit,
         subtotal: archivedStats.revenue.subtotal,
         serviceFee: archivedStats.revenue.serviceFee,
+        discount: archivedStats.revenue.discount ?? 0,
         total: archivedStats.revenue.total,
       }
-    : reportOrders.reduce(
-        (acc, o) => ({
-          money: acc.money + (o.payment?.money || 0),
-          pix: acc.pix + (o.payment?.pix || 0),
-          credit: acc.credit + (o.payment?.credit || 0),
-          debit: acc.debit + (o.payment?.debit || 0),
-          subtotal: acc.subtotal + o.subtotal,
-          serviceFee: acc.serviceFee + o.serviceFee,
-          total: acc.total + o.total,
-        }),
-        {
-          money: 0,
-          pix: 0,
-          credit: 0,
-          debit: 0,
-          subtotal: 0,
-          serviceFee: 0,
-          total: 0,
-        },
-      );
+    : reportOrders
+        .filter((o) => o.status === "finished")
+        .reduce(
+          (acc, o) => ({
+            money: acc.money + (o.payment?.money || 0),
+            pix: acc.pix + (o.payment?.pix || 0),
+            credit: acc.credit + (o.payment?.credit || 0),
+            debit: acc.debit + (o.payment?.debit || 0),
+            subtotal: acc.subtotal + o.subtotal,
+            serviceFee: acc.serviceFee + o.serviceFee,
+            discount: acc.discount + (o.discount || 0),
+            total: acc.total + o.total,
+          }),
+          {
+            money: 0,
+            pix: 0,
+            credit: 0,
+            debit: 0,
+            subtotal: 0,
+            serviceFee: 0,
+            discount: 0,
+            total: 0,
+          },
+        );
 
   const reportItems: Array<{
     codItem: string;
@@ -901,7 +916,7 @@ export default function DashboardPage() {
             additionals: Record<string, number>;
           }
         > = {};
-        reportOrders.forEach((o) => {
+        reportOrders.filter((o) => o.status === "finished").forEach((o) => {
           o.items.forEach((item) => {
             const key = item.itemId || item.name;
             const qty = item.quantity ?? 1;
@@ -1110,6 +1125,7 @@ export default function DashboardPage() {
           value={String(pendingStats.finished)}
           icon={<FiTrendingUp size={18} />}
           color={CHART_COLORS.success}
+          note="não arquivados"
         />
         <StatCard
           label="Cancelados"
@@ -1118,12 +1134,14 @@ export default function DashboardPage() {
           color={
             pendingStats.canceled > 0 ? CHART_COLORS.error : CHART_COLORS.text
           }
+          note="não arquivados"
         />
         <StatCard
           label="Faturamento"
           value={fmtCurrency(pendingStats.revenue)}
           icon={<FiDollarSign size={18} />}
           color={CHART_COLORS.success}
+          note="não arquivado"
         />
       </div>
 
@@ -1479,11 +1497,48 @@ export default function DashboardPage() {
                     className="text-sm"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    Nenhum pedido finalizado em {reportDate || "..."}
+                    Nenhum pedido finalizado em{" "}
+                  {reportDate
+                    ? reportDate.split("-").reverse().join("/")
+                    : "..."}
                   </p>
                 </div>
               ) : (
                 <>
+                  {/* Resumo de pedidos */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium"
+                      style={{
+                        backgroundColor: "rgba(34,197,94,0.08)",
+                        color: "var(--color-success)",
+                        border: "1px solid rgba(34,197,94,0.2)",
+                      }}
+                    >
+                      {archivedStats?.finishedOrders ??
+                        reportOrders.filter((o) => o.status === "finished")
+                          .length}{" "}
+                      finalizados
+                    </div>
+                    {(archivedStats?.canceledOrders ??
+                      reportOrders.filter((o) => o.status === "canceled")
+                        .length) > 0 && (
+                      <div
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium"
+                        style={{
+                          backgroundColor: "rgba(239,68,68,0.08)",
+                          color: "var(--color-error)",
+                          border: "1px solid rgba(239,68,68,0.2)",
+                        }}
+                      >
+                        {archivedStats?.canceledOrders ??
+                          reportOrders.filter((o) => o.status === "canceled")
+                            .length}{" "}
+                        cancelados
+                      </div>
+                    )}
+                  </div>
+
                   {/* Financial grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
@@ -1534,7 +1589,7 @@ export default function DashboardPage() {
 
                   {/* Totals */}
                   <div
-                    className="grid grid-cols-3 gap-3 p-4 rounded-[var(--radius-md)]"
+                    className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-[var(--radius-md)]"
                     style={{
                       backgroundColor: "var(--color-bg-elevated)",
                       border: "1px solid var(--color-border)",
@@ -1568,6 +1623,22 @@ export default function DashboardPage() {
                         {fmtCurrency(reportRevenue.serviceFee)}
                       </span>
                     </div>
+                    {reportRevenue.discount > 0 && (
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className="text-xs"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          Descontos
+                        </span>
+                        <span
+                          className="font-semibold text-sm"
+                          style={{ color: "var(--color-error)" }}
+                        >
+                          − {fmtCurrency(reportRevenue.discount)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex flex-col gap-0.5">
                       <span
                         className="text-xs font-bold"
@@ -1627,7 +1698,7 @@ export default function DashboardPage() {
                                   color: "var(--color-primary)",
                                 }}
                               >
-                                {item.codItem || "—"} (código)
+                                {item.codItem || "—"}
                               </span>
                               <span
                                 className="text-sm flex-1 min-w-0 truncate"
@@ -1830,6 +1901,18 @@ export default function DashboardPage() {
                       fill="url(#gradTotal)"
                       strokeWidth={2}
                       dot={false}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="Subtotal"
+                      stroke={CHART_COLORS.teal}
+                      fill="none"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 3"
+                      dot={false}
+                    />
+                    <Legend
+                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

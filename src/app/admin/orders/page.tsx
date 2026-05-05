@@ -319,7 +319,7 @@ function OrderCard({
           borderBottom: "1px solid var(--color-border)",
         }}
       >
-        {/* Linha 1: número + vaga + horário + tempo */}
+        {/* Linha 1: número + vaga + contagem + horário + tempo */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span
@@ -332,10 +332,17 @@ function OrderCard({
               #{order.orderNumber}
             </span>
             <span
-              className="text-sm font-semibold truncate"
+              className="text-sm font-semibold flex-shrink-0"
               style={{ color: "var(--color-text-primary)" }}
             >
               Vaga {order.spot}
+            </span>
+            <span
+              className="text-xs shrink-0"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              · {order.items.length}{" "}
+              {order.items.length === 1 ? "item" : "itens"}
             </span>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -704,90 +711,134 @@ function FinishedCard({
     setTimeout(() => setJustPrinted(false), 2000);
   }
 
+  const statusColor = isCanceled ? "var(--color-error)" : "var(--color-success)";
+  const statusBg = isCanceled ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)";
+
+  const paymentChips = !isCanceled && order.payment
+    ? ([
+        order.payment.pix > 0 && { label: "Pix", color: "var(--color-success)" },
+        order.payment.credit > 0 && { label: "Crédito", color: "var(--color-primary)" },
+        order.payment.debit > 0 && { label: "Débito", color: "var(--color-primary)" },
+        order.payment.money > 0 && { label: "Dinheiro", color: "var(--color-text-secondary)" },
+      ] as ({ label: string; color: string } | false)[]).filter(
+        (x): x is { label: string; color: string } => !!x,
+      )
+    : [];
+
   return (
     <div
       className="rounded-[var(--radius-lg)] overflow-hidden"
       style={{
         backgroundColor: "var(--color-bg-surface)",
         border: "1px solid var(--color-border)",
+        borderLeft: `3px solid ${statusColor}`,
       }}
     >
+      {/* Header */}
       <div
         className="flex items-start gap-2 px-4 py-3"
         style={{ backgroundColor: "var(--color-bg-elevated)" }}
       >
-        {/* Botão de toggle — ocupa todo espaço disponível */}
+        {/* Toggle */}
         <button
           onClick={onToggle}
-          className="flex flex-col flex-1 min-w-0 text-left cursor-pointer gap-1"
+          className="flex flex-col flex-1 min-w-0 text-left cursor-pointer gap-1.5"
         >
-          {/* Linha 1: número + badge status */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Linha 1: número + vaga + nome + status + chevron */}
+          <div className="flex items-center gap-2 min-w-0">
             <span
               className="text-xs font-bold px-2 py-0.5 rounded flex-shrink-0"
-              style={{
-                backgroundColor: isCanceled
-                  ? "rgba(239,68,68,0.15)"
-                  : "rgba(34,197,94,0.15)",
-                color: isCanceled
-                  ? "var(--color-error)"
-                  : "var(--color-success)",
-              }}
+              style={{ backgroundColor: statusBg, color: statusColor }}
             >
               #{order.orderNumber}
             </span>
-            <span
-              className="text-xs px-1.5 py-0.5 rounded flex-shrink-0"
-              style={{
-                backgroundColor: isCanceled
-                  ? "rgba(239,68,68,0.1)"
-                  : "rgba(34,197,94,0.1)",
-                color: isCanceled
-                  ? "var(--color-error)"
-                  : "var(--color-success)",
-              }}
-            >
-              {isCanceled ? "Cancelado" : "Finalizado"}
-            </span>
-            <span
-              className="text-xs flex-shrink-0 ml-auto"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              {order.finishedAt
-                ? fmtTime(order.finishedAt)
-                : fmtTime(order.createdAt)}
-            </span>
-            <FiChevronDown
-              size={14}
-              style={{
-                color: "var(--color-text-muted)",
-                transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s",
-                flexShrink: 0,
-              }}
-            />
-          </div>
-
-          {/* Linha 2: vaga + resumo truncado */}
-          <div className="flex items-center gap-1.5 min-w-0">
             <span
               className="text-sm font-semibold flex-shrink-0"
               style={{ color: "var(--color-text-primary)" }}
             >
               Vaga {order.spot}
             </span>
-            <p
-              className="text-xs truncate"
+            <span
+              className="text-sm truncate"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              {order.username}
+            </span>
+            <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: statusBg, color: statusColor }}
+              >
+                {isCanceled ? "Cancelado" : "Finalizado"}
+              </span>
+              <FiChevronDown
+                size={13}
+                style={{
+                  color: "var(--color-text-muted)",
+                  transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s",
+                  flexShrink: 0,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Linha 2: itens + total + chips de pagamento + horários */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="text-xs"
               style={{ color: "var(--color-text-muted)" }}
             >
-              · {order.username} · {order.items.length}{" "}
-              {order.items.length === 1 ? "item" : "itens"} ·{" "}
+              {order.items.length}{" "}
+              {order.items.length === 1 ? "item" : "itens"}
+            </span>
+            <span style={{ color: "var(--color-border)" }}>·</span>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {fmt(order.total || order.subtotal + order.serviceFee)}
-            </p>
+            </span>
+            {paymentChips.map((chip, i) => (
+              <span
+                key={i}
+                className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                style={{
+                  backgroundColor: "var(--color-bg-base)",
+                  color: chip.color,
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                {chip.label}
+              </span>
+            ))}
+            <div
+              className="ml-auto flex items-center gap-1 text-[10px] flex-shrink-0"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              <FiClock size={9} />
+              <span>{fmtTimeShort(order.createdAt)}</span>
+              {order.finishedAt && (
+                <>
+                  <span>→</span>
+                  <span>{fmtTimeShort(order.finishedAt)}</span>
+                  <span style={{ color: "var(--color-border)" }}>·</span>
+                  <span>
+                    {fmtElapsed(
+                      Math.round(
+                        (order.finishedAt.getTime() -
+                          order.createdAt.getTime()) /
+                          60_000,
+                      ),
+                    )}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </button>
 
-        {/* Ações — nunca encolhem */}
+        {/* Ações */}
         {confirmReactivate ? (
           <div className="flex items-center gap-2 flex-shrink-0">
             <span
@@ -899,70 +950,119 @@ function FinishedCard({
         )}
       </div>
 
+      {/* Conteúdo expandido */}
       {expanded && (
-        <div className="px-4 py-3 flex flex-col gap-2">
+        <div className="flex flex-col">
+          {/* Telefone */}
           {order.phone && (
-            <a
-              href={`https://wa.me/55${order.phone.replace(/\D/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs w-fit transition-opacity hover:opacity-70"
-              style={{ color: "var(--color-success)" }}
+            <div
+              className="px-4 py-2.5"
+              style={{ borderTop: "1px solid var(--color-border)" }}
             >
-              <FiPhone size={12} />
-              {order.phone}
-            </a>
+              <a
+                href={`https://wa.me/55${order.phone.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs w-fit transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-success)" }}
+              >
+                <FiPhone size={12} />
+                {order.phone}
+              </a>
+            </div>
           )}
-          {order.items.map((item, i) => (
-            <div key={i} className="flex items-start gap-3">
-              {item.photo ? (
-                <img
-                  src={item.photo}
-                  alt={item.name}
-                  className="w-8 h-8 rounded-[var(--radius-sm)] object-cover flex-shrink-0"
-                />
-              ) : (
+
+          {/* Itens */}
+          <div style={{ borderTop: "1px solid var(--color-border)" }}>
+            {order.items.map((item, i) => {
+              const extras = [
+                ...(item.additionals ?? []).map((a) => `${a} (adicional)`),
+                ...(item.additionals_sauce ?? []).map((a) => `${a} (molho)`),
+                ...(item.additionals_drink ?? []).map((a) => `${a} (bebida)`),
+                ...(item.additionals_sweet ?? []).map((a) => `${a} (doce)`),
+              ].filter(Boolean);
+
+              return (
                 <div
-                  className="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"
+                  key={i}
+                  className="px-4 py-2.5 flex items-start gap-3"
                   style={{
-                    backgroundColor: "var(--color-bg-base)",
-                    color: "var(--color-text-muted)",
+                    borderBottom:
+                      i < order.items.length - 1
+                        ? "1px solid var(--color-border)"
+                        : undefined,
                   }}
                 >
-                  <FiPackage size={12} />
+                  <ItemPhoto photo={item.photo} name={item.name} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className="text-sm font-medium leading-snug"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        <span
+                          className="font-bold"
+                          style={{ color: "var(--color-primary)" }}
+                        >
+                          {item.quantity ?? 1}x{" "}
+                        </span>
+                        {item.name}
+                      </span>
+                      <div className="flex flex-col items-end flex-shrink-0">
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: "var(--color-text-primary)" }}
+                        >
+                          {fmt(item.value * (item.quantity ?? 1))}
+                        </span>
+                        {(item.quantity ?? 1) > 1 && (
+                          <span
+                            className="text-[10px]"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            unit: {fmt(item.value)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {extras.length > 0 && (
+                      <div className="flex flex-col gap-0.5 mt-0.5">
+                        {extras.map((e, j) => (
+                          <p
+                            key={j}
+                            className="text-xs flex items-center gap-1"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            <span style={{ color: "var(--color-primary)" }}>
+                              +
+                            </span>{" "}
+                            {e}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {item.observation && (
+                      <p
+                        className="text-xs mt-0.5 italic"
+                        style={{ color: "var(--color-warning)" }}
+                      >
+                        Obs: {item.observation}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between gap-2">
-                  <span
-                    className="text-sm"
-                    style={{ color: "var(--color-text-secondary)" }}
-                  >
-                    1x {item.name}
-                  </span>
-                  <span
-                    className="text-sm flex-shrink-0"
-                    style={{ color: "var(--color-text-muted)" }}
-                  >
-                    {fmt(item.value)}
-                  </span>
-                </div>
-                {item.observation && (
-                  <p
-                    className="text-xs italic mt-0.5"
-                    style={{ color: "var(--color-warning)" }}
-                  >
-                    Obs: {item.observation}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
 
+          {/* Pagamento */}
           {!isCanceled && (
             <div
-              className="mt-2 pt-2 flex flex-col gap-1.5"
-              style={{ borderTop: "1px solid var(--color-border)" }}
+              className="px-4 py-3 flex flex-col gap-1.5"
+              style={{
+                borderTop: "1px solid var(--color-border)",
+                backgroundColor: "var(--color-bg-elevated)",
+              }}
             >
               {order.payment?.debit != null && order.payment.debit > 0 && (
                 <div
@@ -1010,8 +1110,11 @@ function FinishedCard({
                 </div>
               )}
               <div
-                className="flex justify-between text-sm font-semibold mt-0.5"
-                style={{ color: "var(--color-text-primary)" }}
+                className="flex justify-between text-sm font-semibold pt-1.5 mt-0.5"
+                style={{
+                  color: "var(--color-text-primary)",
+                  borderTop: "1px solid var(--color-border)",
+                }}
               >
                 <span>Total</span>
                 <span>{fmt(order.total)}</span>
@@ -1024,7 +1127,8 @@ function FinishedCard({
                     : "var(--color-text-muted)",
                 }}
               >
-                Taxa de serviço: {order.serviceFeePaid ? "paga" : "não cobrada"}
+                Taxa de serviço:{" "}
+                {order.serviceFeePaid ? "paga" : "não cobrada"}
               </p>
             </div>
           )}
@@ -1047,31 +1151,47 @@ function CancelModal({
   onClose: () => void;
   loading: boolean;
 }) {
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [loading, onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
     >
       <div
-        className="w-full max-w-sm rounded-[var(--radius-xl)] p-6 flex flex-col gap-4"
+        className="w-full max-w-sm rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
         style={{
           backgroundColor: "var(--color-bg-surface)",
           border: "1px solid var(--color-border)",
         }}
       >
-        <div className="flex items-center gap-3">
+        {/* Header */}
+        <div
+          className="flex flex-col items-center gap-3 px-6 py-6"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.04) 100%)",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+            className="w-12 h-12 rounded-full flex items-center justify-center"
             style={{
               backgroundColor: "rgba(239,68,68,0.12)",
-              color: "var(--color-error)",
+              border: "2px solid rgba(239,68,68,0.25)",
             }}
           >
-            <FiAlertTriangle size={18} />
+            <FiAlertTriangle size={20} style={{ color: "var(--color-error)" }} />
           </div>
-          <div>
+          <div className="text-center">
             <p
-              className="font-semibold"
+              className="font-semibold text-base"
               style={{ color: "var(--color-text-primary)" }}
             >
               Cancelar pedido #{order.orderNumber}
@@ -1084,15 +1204,26 @@ function CancelModal({
             </p>
           </div>
         </div>
-        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Tem certeza que deseja cancelar este pedido? Esta ação não pode ser
-          desfeita.
-        </p>
-        <div className="flex gap-2 mt-1">
+
+        {/* Body */}
+        <div className="px-6 py-5">
+          <p
+            className="text-sm leading-relaxed text-center"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            Tem certeza que deseja cancelar este pedido?
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div
+          className="flex gap-2 px-6 py-4"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
+            className="flex-1 py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
             style={{
               backgroundColor: "var(--color-bg-elevated)",
               color: "var(--color-text-secondary)",
@@ -1104,10 +1235,10 @@ function CancelModal({
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
+            className="flex-1 py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
             style={{ backgroundColor: "var(--color-error)", color: "white" }}
           >
-            {loading ? "Cancelando..." : "Confirmar"}
+            {loading ? "Cancelando..." : "Confirmar cancelamento"}
           </button>
         </div>
       </div>
@@ -1121,15 +1252,20 @@ function PaymentInput({
   label,
   value,
   onChange,
+  remaining,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  remaining?: number;
 }) {
+  const numVal = parseFloat(value) || 0;
+  const isEmpty = numVal === 0;
+
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <span
-        className="text-sm w-24 flex-shrink-0"
+        className="text-sm w-20 flex-shrink-0"
         style={{ color: "var(--color-text-secondary)" }}
       >
         {label}
@@ -1147,14 +1283,43 @@ function PaymentInput({
         <input
           type="number"
           min="0"
-          step="1"
-          value={value === "0" ? "" : value}
+          step="0.01"
+          value={isEmpty ? "" : value}
           onChange={(e) => onChange(e.target.value)}
           className="flex-1 bg-transparent text-sm outline-none"
           style={{ color: "var(--color-text-primary)" }}
           placeholder="0,00"
         />
+        {!isEmpty && (
+          <button
+            onClick={() => onChange("0")}
+            tabIndex={-1}
+            className="flex-shrink-0 cursor-pointer transition-opacity hover:opacity-70"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            <FiX size={11} />
+          </button>
+        )}
       </div>
+      {isEmpty && remaining != null && remaining > 0 ? (
+        <button
+          onClick={() => onChange(remaining.toFixed(2))}
+          tabIndex={-1}
+          className="text-[11px] font-medium px-2 py-1.5 rounded-[var(--radius-sm)] flex-shrink-0 cursor-pointer transition-opacity hover:opacity-70"
+          style={{
+            backgroundColor: "var(--color-bg-elevated)",
+            color: "var(--color-primary)",
+            border: "1px solid var(--color-border)",
+            minWidth: 76,
+            textAlign: "right" as const,
+          }}
+          title="Preencher com o valor restante"
+        >
+          {fmt(remaining)}
+        </button>
+      ) : (
+        <div style={{ minWidth: 76 }} />
+      )}
     </div>
   );
 }
@@ -1189,7 +1354,15 @@ function FinalizeModal({
   const pixVal = parseFloat(pix) || 0;
   const discountVal = parseFloat(discount) || 0;
 
-  const { success, error: toastError } = useToast();
+  const { success } = useToast();
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [loading, onClose]);
 
   const finalTotal = Math.max(
     0,
@@ -1198,19 +1371,24 @@ function FinalizeModal({
   const amountPaid = debitVal + creditVal + moneyVal + pixVal;
   const change =
     moneyVal > 0 && amountPaid > finalTotal ? amountPaid - finalTotal : 0;
+  const remaining = Math.max(0, finalTotal - amountPaid);
 
   const paidRounded = Math.round(amountPaid * 100);
   const totalRounded = Math.round(finalTotal * 100);
   const isMismatch = paidRounded !== totalRounded;
   const isNormalChange = amountPaid > finalTotal && moneyVal > 0;
-  const needsConfirm = isMismatch && !isNormalChange;
+  const needsConfirm = isMismatch;
+  const isOver = amountPaid > finalTotal && !isNormalChange;
+  const isPartial = amountPaid > 0 && amountPaid < finalTotal;
 
   const mismatchMessage =
     amountPaid === 0
       ? "Nenhum valor de pagamento foi informado."
-      : amountPaid < finalTotal
-        ? `Valor informado ${fmt(amountPaid)} é menor que o total ${fmt(finalTotal)}.`
-        : `Valor informado ${fmt(amountPaid)} excede o total sem troco em dinheiro.`;
+      : isNormalChange
+        ? `Troco de ${fmt(change)} em dinheiro.`
+        : amountPaid < finalTotal
+          ? `Valor informado ${fmt(amountPaid)} é menor que o total ${fmt(finalTotal)}.`
+          : `Valor informado ${fmt(amountPaid)} excede o total sem troco em dinheiro.`;
 
   function resetAndSet(setter: (v: string) => void) {
     return (v: string) => {
@@ -1218,6 +1396,17 @@ function FinalizeModal({
       setConfirmStep(false);
     };
   }
+
+  const paidColor =
+    amountPaid === 0
+      ? "var(--color-text-muted)"
+      : paidRounded === totalRounded
+        ? "var(--color-success)"
+        : isOver
+          ? "var(--color-error)"
+          : isPartial
+            ? "var(--color-warning)"
+            : "var(--color-text-secondary)";
 
   return (
     <div
@@ -1232,6 +1421,7 @@ function FinalizeModal({
           maxHeight: "90vh",
         }}
       >
+        {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-4"
           style={{ borderBottom: "1px solid var(--color-border)" }}
@@ -1248,7 +1438,9 @@ function FinalizeModal({
               style={{ color: "var(--color-text-muted)" }}
             >
               Vaga {order.spot} · {order.username} ·{" "}
-              {fmt(order.subtotal + order.serviceFee)}
+              <span style={{ color: "var(--color-text-primary)" }}>
+                {fmt(finalTotal)}
+              </span>
             </p>
           </div>
           <button
@@ -1260,59 +1452,86 @@ function FinalizeModal({
           </button>
         </div>
 
-        <div className="flex flex-col gap-3 px-5 py-4 overflow-y-auto">
-          <PaymentInput
-            label="Débito"
-            value={debit}
-            onChange={resetAndSet(setDebit)}
-          />
-          <PaymentInput
-            label="Crédito"
-            value={credit}
-            onChange={resetAndSet(setCredit)}
-          />
-          <PaymentInput
-            label="Dinheiro"
-            value={money}
-            onChange={resetAndSet(setMoney)}
-          />
-          <PaymentInput
-            label="Pix"
-            value={pix}
-            onChange={resetAndSet(setPix)}
-          />
-          <PaymentInput
-            label="Desconto"
-            value={discount}
-            onChange={resetAndSet(setDiscount)}
-          />
-
-          <button
-            onClick={() => {
-              setServiceFeePaid((v) => !v);
-              setConfirmStep(false);
-            }}
-            className="flex items-center gap-2 text-sm mt-1 cursor-pointer transition-opacity hover:opacity-70"
-          >
-            <div
-              className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors"
-              style={{
-                backgroundColor: serviceFeePaid
-                  ? "var(--color-primary)"
-                  : "var(--color-bg-base)",
-                border: serviceFeePaid
-                  ? "none"
-                  : "1px solid var(--color-border)",
-              }}
+        {/* Inputs */}
+        <div className="flex flex-col px-5 py-4 overflow-y-auto gap-4">
+          {/* Formas de pagamento */}
+          <div className="flex flex-col gap-3">
+            <span
+              className="text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: "var(--color-text-muted)" }}
             >
-              {serviceFeePaid && <FiCheck size={12} color="white" />}
-            </div>
-            <span style={{ color: "var(--color-text-secondary)" }}>
-              Taxa de serviço foi paga
+              Pagamento
             </span>
-          </button>
+            <PaymentInput
+              label="Débito"
+              value={debit}
+              onChange={resetAndSet(setDebit)}
+              remaining={remaining}
+            />
+            <PaymentInput
+              label="Crédito"
+              value={credit}
+              onChange={resetAndSet(setCredit)}
+              remaining={remaining}
+            />
+            <PaymentInput
+              label="Dinheiro"
+              value={money}
+              onChange={resetAndSet(setMoney)}
+              remaining={remaining}
+            />
+            <PaymentInput
+              label="Pix"
+              value={pix}
+              onChange={resetAndSet(setPix)}
+              remaining={remaining}
+            />
+          </div>
+
+          {/* Divider */}
+          <div style={{ borderTop: "1px solid var(--color-border)" }} />
+
+          {/* Ajustes */}
+          <div className="flex flex-col gap-3">
+            <span
+              className="text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Ajustes
+            </span>
+            <PaymentInput
+              label="Desconto"
+              value={discount}
+              onChange={resetAndSet(setDiscount)}
+            />
+            <button
+              onClick={() => {
+                setServiceFeePaid((v) => !v);
+                setConfirmStep(false);
+              }}
+              className="flex items-center gap-2 text-sm cursor-pointer transition-opacity hover:opacity-70 w-fit"
+            >
+              <div
+                className="w-5 h-5 rounded flex items-center justify-center shrink-0 transition-colors"
+                style={{
+                  backgroundColor: serviceFeePaid
+                    ? "var(--color-primary)"
+                    : "var(--color-bg-base)",
+                  border: serviceFeePaid
+                    ? "none"
+                    : "1px solid var(--color-border)",
+                }}
+              >
+                {serviceFeePaid && <FiCheck size={12} color="white" />}
+              </div>
+              <span style={{ color: "var(--color-text-secondary)" }}>
+                Taxa de serviço foi paga
+              </span>
+            </button>
+          </div>
         </div>
 
+        {/* Resumo */}
         <div
           className="px-5 py-3 flex flex-col gap-1.5"
           style={{
@@ -1326,13 +1545,14 @@ function FinalizeModal({
             </span>
             <span
               onClick={() => {
-                navigator.clipboard.writeText(fmt(finalTotal));
+                navigator.clipboard.writeText(finalTotal.toFixed(2));
                 success(
-                  `Valor de R$ ${finalTotal.toFixed(2)} foi copiado com sucesso`,
+                  `Valor de R$ ${finalTotal.toFixed(2)} copiado`,
                 );
               }}
-              className="font-semibold cursor-pointer hover:font-bold hover:underline"
+              className="font-semibold cursor-pointer hover:underline"
               style={{ color: "var(--color-text-primary)" }}
+              title="Clique para copiar"
             >
               {fmt(finalTotal)}
             </span>
@@ -1341,17 +1561,26 @@ function FinalizeModal({
             <span style={{ color: "var(--color-text-muted)" }}>
               Valor informado
             </span>
-            <span
-              style={{
-                color:
-                  amountPaid === finalTotal
-                    ? "var(--color-success)"
-                    : "var(--color-text-secondary)",
-              }}
-            >
+            <span className="font-medium" style={{ color: paidColor }}>
               {fmt(amountPaid)}
             </span>
           </div>
+          {isPartial && (
+            <div className="flex justify-between text-sm">
+              <span style={{ color: "var(--color-warning)" }}>Falta</span>
+              <span
+                onClick={() => {
+                  navigator.clipboard.writeText(remaining.toFixed(2));
+                  success(`Valor de R$ ${remaining.toFixed(2)} copiado`);
+                }}
+                className="font-semibold cursor-pointer hover:underline"
+                style={{ color: "var(--color-warning)" }}
+                title="Clique para copiar"
+              >
+                {fmt(remaining)}
+              </span>
+            </div>
+          )}
           {change > 0 && (
             <div className="flex justify-between text-sm">
               <span style={{ color: "var(--color-text-muted)" }}>Troco</span>
@@ -1362,6 +1591,7 @@ function FinalizeModal({
           )}
         </div>
 
+        {/* Aviso de divergência */}
         {confirmStep && needsConfirm && (
           <div
             className="flex items-start gap-2.5 px-5 py-3"
@@ -1391,6 +1621,7 @@ function FinalizeModal({
           </div>
         )}
 
+        {/* Ações */}
         <div
           className="flex gap-2 px-5 py-4"
           style={{ borderTop: "1px solid var(--color-border)" }}
@@ -2051,7 +2282,40 @@ function OrdersPageInner() {
                     boxShadow: tab === t ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
                   }}
                 >
-                  {t === "active" ? "Ativos" : "Finalizados"}
+                  <span className="flex items-center gap-1.5">
+                    {t === "active" ? "Ativos" : "Finalizados"}
+                    {t === "active" && activeOrders.length > 0 && (
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+                        style={{
+                          backgroundColor:
+                            tab === "active"
+                              ? "var(--color-primary)"
+                              : "rgba(0,136,194,0.18)",
+                          color:
+                            tab === "active"
+                              ? "white"
+                              : "var(--color-primary)",
+                        }}
+                      >
+                        {activeOrders.length}
+                      </span>
+                    )}
+                    {t === "finished" &&
+                      tab === "finished" &&
+                      finishedOrders.length > 0 && (
+                        <span
+                          className="text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+                          style={{
+                            backgroundColor: "var(--color-bg-base)",
+                            color: "var(--color-text-muted)",
+                            border: "1px solid var(--color-border)",
+                          }}
+                        >
+                          {finishedOrders.length}
+                        </span>
+                      )}
+                  </span>
                 </button>
               ))}
             </div>

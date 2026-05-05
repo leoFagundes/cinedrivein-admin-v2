@@ -445,6 +445,14 @@ export default function NewOrderModal({
 
   const [nameError, setNameError] = useState("");
   const [phoneError, setPhoneError] = useState("");
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !submitting && !configuringItem) onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [submitting, configuringItem, onClose]);
   const [spotError, setSpotError] = useState("");
   const [itemsError, setItemsError] = useState("");
   const hasFormError = !!(nameError || spotError || itemsError);

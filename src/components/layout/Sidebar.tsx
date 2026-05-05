@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,6 +12,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 
@@ -102,6 +104,15 @@ export default function Sidebar() {
   const close = () => setMobileOpen(false);
   const onOrdersPage = pathname === "/admin/orders";
 
+  const [storeOpen, setStoreOpen] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
+      if (snap.exists()) setStoreOpen(snap.data().isOpen ?? false);
+    });
+    return unsub;
+  }, []);
+
   const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-4 py-5 flex-shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
@@ -111,6 +122,40 @@ export default function Sidebar() {
           <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>Admin</p>
         </div>
       </div>
+
+      {storeOpen !== null && (
+        <div
+          className="flex items-center gap-2 px-4 py-2"
+          style={{
+            backgroundColor: storeOpen
+              ? "rgba(34,197,94,0.06)"
+              : "rgba(239,68,68,0.06)",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
+          <div
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{
+              backgroundColor: storeOpen
+                ? "var(--color-success)"
+                : "var(--color-error)",
+              boxShadow: storeOpen
+                ? "0 0 6px rgba(34,197,94,0.6)"
+                : "0 0 6px rgba(239,68,68,0.6)",
+            }}
+          />
+          <span
+            className="text-xs font-medium"
+            style={{
+              color: storeOpen
+                ? "var(--color-success)"
+                : "var(--color-error)",
+            }}
+          >
+            {storeOpen ? "Lanchonete aberta" : "Lanchonete fechada"}
+          </span>
+        </div>
+      )}
 
       <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
@@ -173,6 +218,31 @@ export default function Sidebar() {
         <div className="flex items-center gap-2">
           <Image src="/images/logo-drivein.svg" alt="Cine Drive-in" width={28} height={28} />
           <span className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Cine Drive-in</span>
+          {storeOpen !== null && (
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{
+                  backgroundColor: storeOpen
+                    ? "var(--color-success)"
+                    : "var(--color-error)",
+                  boxShadow: storeOpen
+                    ? "0 0 5px rgba(34,197,94,0.6)"
+                    : "0 0 5px rgba(239,68,68,0.6)",
+                }}
+              />
+              <span
+                className="text-xs font-medium hidden sm:inline"
+                style={{
+                  color: storeOpen
+                    ? "var(--color-success)"
+                    : "var(--color-error)",
+                }}
+              >
+                {storeOpen ? "Aberta" : "Fechada"}
+              </span>
+            </div>
+          )}
         </div>
         <button
           onClick={() => setMobileOpen(true)}

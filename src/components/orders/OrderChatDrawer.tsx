@@ -14,7 +14,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { FiX, FiSend, FiMessageSquare, FiEdit2, FiTrash2, FiCheck, FiMoreVertical } from "react-icons/fi";
+import { FiX, FiSend, FiMessageSquare, FiEdit2, FiTrash2, FiCheck, FiMoreVertical, FiAlertTriangle } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Order, ChatMessage, ChatTemplate } from "@/types";
@@ -526,9 +526,40 @@ export default function OrderChatDrawer({
           <div ref={endRef} />
         </div>
 
+        {/* Aviso: pedido finalizado/cancelado */}
+        {(order.status === "finished" || order.status === "canceled") && (
+          <div
+            className="flex items-start gap-2.5 px-4 py-3 flex-shrink-0"
+            style={{
+              backgroundColor: "rgba(245,158,11,0.07)",
+              borderTop: "1px solid rgba(245,158,11,0.22)",
+            }}
+          >
+            <FiAlertTriangle
+              size={14}
+              style={{
+                color: "var(--color-warning)",
+                flexShrink: 0,
+                marginTop: 1,
+              }}
+            />
+            <p
+              className="text-xs leading-relaxed"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Este pedido está{" "}
+              <strong style={{ color: "var(--color-text-primary)" }}>
+                {order.status === "finished" ? "finalizado" : "cancelado"}
+              </strong>
+              . O cliente pode não ver novas mensagens — ele só acessa o chat
+              enquanto a comanda está ativa.
+            </p>
+          </div>
+        )}
+
         {/* Input area */}
         <div
-          className="flex flex-col flex-shrink-0"
+          className="flex flex-col shrink-0"
           style={{ borderTop: "1px solid var(--color-border)" }}
         >
           {/* Suggestions panel */}

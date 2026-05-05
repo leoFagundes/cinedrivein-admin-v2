@@ -223,13 +223,18 @@ export function buildOrderTicket(order: Order): Uint8Array {
   add(CMD.text(`VAGA ${order.spot}`));
   add(CMD.normal, CMD.bold(false));
 
-  // ── Número da comanda + hora ───────────────────────────────────────────────
+  // ── Número da comanda + data + hora ───────────────────────────────────────
   add(CMD.alignCenter);
   const hora = order.createdAt.toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
   });
-  add(CMD.text(`Comanda #${order.orderNumber}  ${hora}`));
+  const data = order.createdAt.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  add(CMD.text(`Comanda #${order.orderNumber}  ${data} ${hora}`));
   add(CMD.text(DIVIDER));
 
   // ── Dados do cliente ───────────────────────────────────────────────────────
