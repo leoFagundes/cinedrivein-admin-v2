@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -74,6 +74,26 @@ function parseError(err: unknown): string {
 const ANIM_HOLD_MS = 2600; // ms until fade starts
 const FADE_DURATION = 900; // ms for fade out
 
+const SAVED_EMAILS_KEY = "cdi_saved_emails";
+const MAX_SAVED_EMAILS = 10;
+
+function getSavedEmails(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_EMAILS_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function persistEmail(email: string) {
+  const list = getSavedEmails().filter((e) => e !== email.toLowerCase());
+  list.unshift(email.toLowerCase());
+  localStorage.setItem(
+    SAVED_EMAILS_KEY,
+    JSON.stringify(list.slice(0, MAX_SAVED_EMAILS)),
+  );
+}
+
 // Module-level flag: resets on full page reload (JS restarts),
 // but stays true during Next.js SPA navigation — exactly what we need.
 let introPlayed = false;
@@ -118,6 +138,11 @@ function LoginForm() {
     password?: string;
   }>({});
 
+  // ── Email autocomplete ──
+  const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Reset state ──
   const [resetEmail, setResetEmail] = useState("");
   const [resetEmailError, setResetEmailError] = useState("");
@@ -152,6 +177,7 @@ function LoginForm() {
     setLoginLoading(true);
     try {
       await signIn(identifier.trim(), password);
+      if (identifier.trim().includes("@")) persistEmail(identifier.trim());
       success("Bem-vindo!", "Você entrou com sucesso.");
     } catch (err) {
       const msg = parseError(err);
@@ -276,20 +302,100 @@ function LoginForm() {
                 className="flex flex-col gap-4"
                 noValidate
               >
-                <Input
-                  label="Usuário ou e-mail"
-                  type="text"
-                  placeholder="Seu usuário ou e-mail"
-                  value={identifier}
-                  onChange={(e) => {
-                    setIdentifier(e.target.value);
-                    if (loginErrors.identifier)
-                      setLoginErrors((p) => ({ ...p, identifier: undefined }));
-                  }}
-                  icon={<FiUser size={16} />}
-                  error={loginErrors.identifier}
-                  autoComplete="username"
-                />
+                <div className="relative">
+                  <Input
+                    label="Usuário ou e-mail"
+                    type="text"
+                    placeholder="Seu usuário ou e-mail"
+                    value={identifier}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setIdentifier(val);
+                      if (loginErrors.identifier)
+                        setLoginErrors((p) => ({
+                          ...p,
+                          identifier: undefined,
+                        }));
+                      if (val.length > 0) {
+                        const matches = getSavedEmails().filter((saved) =>
+                          saved.includes(val.toLowerCase()),
+                        );
+                        setEmailSuggestions(matches);
+                        setShowSuggestions(matches.length > 0);
+                      } else {
+                        setEmailSuggestions([]);
+                        setShowSuggestions(false);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (identifier.length > 0) {
+                        const matches = getSavedEmails().filter((saved) =>
+                          saved.includes(identifier.toLowerCase()),
+                        );
+                        if (matches.length > 0) {
+                          setEmailSuggestions(matches);
+                          setShowSuggestions(true);
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      suggestionBlurTimer.current = setTimeout(
+                        () => setShowSuggestions(false),
+                        150,
+                      );
+                    }}
+                    icon={<FiUser size={16} />}
+                    error={loginErrors.identifier}
+                    autoComplete="off"
+                  />
+                  {showSuggestions && emailSuggestions.length > 0 && (
+                    <div
+                      className="absolute left-0 right-0 top-full mt-1 rounded-[var(--radius-md)] overflow-hidden z-20"
+                      style={{
+                        backgroundColor: "var(--color-bg-surface)",
+                        border: "1px solid var(--color-border)",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                      }}
+                    >
+                      {emailSuggestions.map((email) => (
+                        <button
+                          key={email}
+                          type="button"
+                          onMouseDown={() => {
+                            if (suggestionBlurTimer.current)
+                              clearTimeout(suggestionBlurTimer.current);
+                            setIdentifier(email);
+                            setShowSuggestions(false);
+                            if (loginErrors.identifier)
+                              setLoginErrors((p) => ({
+                                ...p,
+                                identifier: undefined,
+                              }));
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left cursor-pointer transition-colors"
+                          style={{ color: "var(--color-text-secondary)" }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "var(--color-bg-elevated)")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          <FiMail
+                            size={13}
+                            style={{
+                              color: "var(--color-text-muted)",
+                              flexShrink: 0,
+                            }}
+                          />
+                          {email}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex flex-col gap-1.5">
                   <Input

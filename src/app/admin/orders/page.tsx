@@ -2233,8 +2233,10 @@ function OrdersPageInner() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* 🖨️ Printer bar — fixed top strip */}
-      <ThermalPrinterBar />
+      {/* 🖨️ Printer bar — fixed top strip, desktop only */}
+      <div className="hidden md:block">
+        <ThermalPrinterBar />
+      </div>
 
       {/* Header */}
       <div
