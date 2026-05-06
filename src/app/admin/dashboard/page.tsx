@@ -795,6 +795,21 @@ export default function DashboardPage() {
         });
       }
 
+      // Delete messages subcollections first (Firestore não deleta automaticamente)
+      const allMessageRefs = (
+        await Promise.all(
+          snap.docs.map((d) =>
+            getDocs(collection(db, "orders", d.id, "messages")),
+          ),
+        )
+      ).flatMap((s) => s.docs.map((d) => d.ref));
+
+      for (let i = 0; i < allMessageRefs.length; i += 500) {
+        const batch = writeBatch(db);
+        allMessageRefs.slice(i, i + 500).forEach((r) => batch.delete(r));
+        await batch.commit();
+      }
+
       // Delete archived orders in batches of 500
       const refs = snap.docs.map((d) => d.ref);
       for (let i = 0; i < refs.length; i += 500) {

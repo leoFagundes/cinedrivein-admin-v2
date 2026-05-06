@@ -9,6 +9,7 @@ import {
   limit,
   onSnapshot,
   doc,
+  getDocs,
   updateDoc,
   deleteDoc,
   deleteField,
@@ -2024,9 +2025,21 @@ function OrdersPageInner() {
     }
   }
 
+  async function deleteMessages(orderId: string) {
+    const snap = await getDocs(
+      collection(db, "orders", orderId, "messages"),
+    );
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+
   async function handleDelete(order: Order) {
     setDeletingId(order.id);
     try {
+      await deleteMessages(order.id);
       await deleteDoc(doc(db, "orders", order.id));
       log({
         action: "Pedido excluído",
@@ -2079,6 +2092,7 @@ function OrdersPageInner() {
     setBulkDeleting(true);
     const canceled = finishedOrders.filter((o) => o.status === "canceled");
     try {
+      await Promise.all(canceled.map((o) => deleteMessages(o.id)));
       await Promise.all(
         canceled.map((o) => deleteDoc(doc(db, "orders", o.id))),
       );
