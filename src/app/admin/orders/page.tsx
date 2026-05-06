@@ -135,11 +135,12 @@ function usePrinterReminderToast(isConnected: boolean) {
       const snoozeUntil = localStorage.getItem(PRINTER_SNOOZE_KEY);
       if (snoozeUntil && Date.now() < Number(snoozeUntil)) return;
 
-      const dismissedAt = Number(localStorage.getItem(PRINTER_DISMISSED_KEY) ?? 0);
+      const dismissedAt = Number(
+        localStorage.getItem(PRINTER_DISMISSED_KEY) ?? 0,
+      );
       const elapsed = Date.now() - dismissedAt;
-      const delay = dismissedAt === 0
-        ? 400
-        : Math.max(0, PRINTER_RESHOW_DELAY - elapsed);
+      const delay =
+        dismissedAt === 0 ? 400 : Math.max(0, PRINTER_RESHOW_DELAY - elapsed);
 
       const id = setTimeout(() => setVisible(true), delay);
       return () => clearTimeout(id);
@@ -693,19 +694,34 @@ function FinishedCard({
     setTimeout(() => setJustPrinted(false), 2000);
   }
 
-  const statusColor = isCanceled ? "var(--color-error)" : "var(--color-success)";
+  const statusColor = isCanceled
+    ? "var(--color-error)"
+    : "var(--color-success)";
   const statusBg = isCanceled ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)";
 
-  const paymentChips = !isCanceled && order.payment
-    ? ([
-        order.payment.pix > 0 && { label: "Pix", color: "var(--color-success)" },
-        order.payment.credit > 0 && { label: "Crédito", color: "var(--color-primary)" },
-        order.payment.debit > 0 && { label: "Débito", color: "var(--color-primary)" },
-        order.payment.money > 0 && { label: "Dinheiro", color: "var(--color-text-secondary)" },
-      ] as ({ label: string; color: string } | false)[]).filter(
-        (x): x is { label: string; color: string } => !!x,
-      )
-    : [];
+  const paymentChips =
+    !isCanceled && order.payment
+      ? (
+          [
+            order.payment.pix > 0 && {
+              label: "Pix",
+              color: "var(--color-success)",
+            },
+            order.payment.credit > 0 && {
+              label: "Crédito",
+              color: "var(--color-primary)",
+            },
+            order.payment.debit > 0 && {
+              label: "Débito",
+              color: "var(--color-primary)",
+            },
+            order.payment.money > 0 && {
+              label: "Dinheiro",
+              color: "var(--color-text-secondary)",
+            },
+          ] as ({ label: string; color: string } | false)[]
+        ).filter((x): x is { label: string; color: string } => !!x)
+      : [];
 
   return (
     <div
@@ -771,8 +787,7 @@ function FinishedCard({
               className="text-xs"
               style={{ color: "var(--color-text-muted)" }}
             >
-              {order.items.length}{" "}
-              {order.items.length === 1 ? "item" : "itens"}
+              {order.items.length} {order.items.length === 1 ? "item" : "itens"}
             </span>
             <span style={{ color: "var(--color-border)" }}>·</span>
             <span
@@ -1109,8 +1124,7 @@ function FinishedCard({
                     : "var(--color-text-muted)",
                 }}
               >
-                Taxa de serviço:{" "}
-                {order.serviceFeePaid ? "paga" : "não cobrada"}
+                Taxa de serviço: {order.serviceFeePaid ? "paga" : "não cobrada"}
               </p>
             </div>
           )}
@@ -1169,7 +1183,10 @@ function CancelModal({
               border: "2px solid rgba(239,68,68,0.25)",
             }}
           >
-            <FiAlertTriangle size={20} style={{ color: "var(--color-error)" }} />
+            <FiAlertTriangle
+              size={20}
+              style={{ color: "var(--color-error)" }}
+            />
           </div>
           <div className="text-center">
             <p
@@ -1528,9 +1545,7 @@ function FinalizeModal({
             <span
               onClick={() => {
                 navigator.clipboard.writeText(finalTotal.toFixed(2));
-                success(
-                  `Valor de R$ ${finalTotal.toFixed(2)} copiado`,
-                );
+                success(`Valor de R$ ${finalTotal.toFixed(2)} copiado`);
               }}
               className="font-semibold cursor-pointer hover:underline"
               style={{ color: "var(--color-text-primary)" }}
@@ -2026,9 +2041,7 @@ function OrdersPageInner() {
   }
 
   async function deleteMessages(orderId: string) {
-    const snap = await getDocs(
-      collection(db, "orders", orderId, "messages"),
-    );
+    const snap = await getDocs(collection(db, "orders", orderId, "messages"));
     if (!snap.empty) {
       const batch = writeBatch(db);
       snap.docs.forEach((d) => batch.delete(d.ref));
@@ -2290,9 +2303,7 @@ function OrdersPageInner() {
                               ? "var(--color-primary)"
                               : "rgba(0,136,194,0.18)",
                           color:
-                            tab === "active"
-                              ? "white"
-                              : "var(--color-primary)",
+                            tab === "active" ? "white" : "var(--color-primary)",
                         }}
                       >
                         {activeOrders.length}
