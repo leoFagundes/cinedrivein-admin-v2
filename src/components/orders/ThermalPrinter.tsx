@@ -199,15 +199,75 @@ function resolvePortInfo(info: SerialPortInfo): {
 // ── Ticket builder ────────────────────────────────────────────────────────────
 
 const DIVIDER = "--------------------------------";
+const W = 32;
+
+function logOrderTicket(order: Order): void {
+  const hora = order.createdAt.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const data = order.createdAt.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const lines: string[] = [];
+  lines.push(`\n🖨️  COMANDA IMPRESSA`);
+  lines.push(DIVIDER);
+  lines.push(`VAGA ${order.spot}`.padStart(Math.ceil((W + `VAGA ${order.spot}`.length) / 2)));
+  lines.push(`Comanda #${order.orderNumber}  ${data} ${hora}`);
+  lines.push(DIVIDER);
+  lines.push("CLIENTE");
+  lines.push(`Nome: ${order.username}`);
+  if (order.phone) lines.push(`Tel:  ${order.phone}`);
+  lines.push(DIVIDER);
+  lines.push("ITENS");
+
+  for (const item of order.items) {
+    const qty = item.quantity ?? 1;
+    const total = item.value * qty;
+    lines.push(rowLR(`${qty}x ${item.name}`, fmt(total)));
+    if (qty > 1) lines.push(`   unit: ${fmt(item.value)}`);
+    const grupos: Array<[string[] | undefined, string]> = [
+      [item.additionals, ""],
+      [item.additionals_sauce, "molho"],
+      [item.additionals_drink, "bebida"],
+      [item.additionals_sweet, "doce"],
+    ];
+    for (const [lista, label] of grupos) {
+      if (!lista?.length) continue;
+      for (const a of lista) {
+        lines.push(`   + ${a}${label ? ` (${label})` : ""}`);
+      }
+    }
+    if (item.observation) lines.push(`   Obs: ${item.observation}`);
+  }
+
+  lines.push(DIVIDER);
+  lines.push(rowLR("Subtotal:", fmt(order.subtotal)));
+  lines.push(rowLR("Taxa de servico:", fmt(order.serviceFee)));
+  lines.push(rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee)));
+  lines.push(DIVIDER);
+  lines.push("Cine Drive-in");
+  lines.push(DIVIDER);
+
+  console.log(lines.join("\n"));
+}
 
 function fmt(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
 }
 
-/** Right-aligns `right` so that `left + right` fills `width` chars total */
+/** Left text + right text on the same line, space-between style.
+ *  Truncates `left` if needed so there are always at least 2 spaces before `right`. */
 function rowLR(left: string, right: string, width = 32): string {
-  const spaces = Math.max(1, width - left.length - right.length);
-  return left + " ".repeat(spaces) + right;
+  const minSpaces = 2;
+  const maxLeft = width - right.length - minSpaces;
+  const safeLeft =
+    left.length > maxLeft ? left.slice(0, maxLeft - 1) + "." : left;
+  const spaces = Math.max(minSpaces, width - safeLeft.length - right.length);
+  return safeLeft + " ".repeat(spaces) + right;
 }
 
 export function buildOrderTicket(order: Order): Uint8Array {
@@ -240,9 +300,9 @@ export function buildOrderTicket(order: Order): Uint8Array {
   // ── Dados do cliente ───────────────────────────────────────────────────────
   add(CMD.alignLeft);
   add(CMD.bold(true), CMD.text("CLIENTE"), CMD.bold(false));
-  add(CMD.text(`Nome:  ${order.username}`));
+  add(CMD.text(`Nome: ${order.username}`));
   if (order.phone) {
-    add(CMD.text(`Tel:   ${order.phone}`));
+    add(CMD.text(`Tel:  ${order.phone}`));
   }
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
 
@@ -694,19 +754,47 @@ function useThermalPrinterCore() {
   );
 
   const printHelloWorld = useCallback(async () => {
+    const curiosidades = [
+      "O primeiro drive-in do mundo foi inaugurado em 1933 em Camden, Nova Jersey, EUA.",
+      "No auge dos drive-ins nos EUA, nos anos 50 e 60, havia mais de 4.000 espalhados pelo pais.",
+      "O drive-in mais antigo ainda em funcionamento fica em Shankweiler's, Pennsylvania, desde 1934.",
+      "O maior drive-in do mundo fica em Ocala, Florida, com capacidade para mais de 500 carros.",
+      "Durante a pandemia de COVID-19, os drive-ins voltaram a crescer como opcao segura de lazer.",
+      "Alguns drive-ins modernos transmitem o audio do filme pelo radio FM do proprio carro.",
+      "Na Australia, os drive-ins sao muito populares nas areas rurais e funcionam ha decadas.",
+      "O filme mais exibido na historia dos drive-ins americanos e Grease, de 1978.",
+      "No Japao, existem drive-ins tematicos com efeitos de luz e fumaca sincronizados ao filme.",
+      "O primeiro drive-in da Europa foi inaugurado em 1950, na Alemanha.",
+      "Nos anos 1950, os drive-ins americanos eram chamados carinhosamente de passion pits.",
+      "Alguns drive-ins na Escandinavia funcionam no inverno com cobertores eletricos para os clientes.",
+      "O Brasil teve sua era de ouro dos drive-ins nos anos 1970, especialmente nas grandes cidades.",
+      "Nos EUA, os drive-ins chegaram a vender mais pipoca do que qualquer outro tipo de cinema.",
+      "O drive-in de maior altitude do mundo fica a mais de 2.000 metros, no Colorado, EUA.",
+    ];
+    const curiosidade =
+      curiosidades[Math.floor(Math.random() * curiosidades.length)];
+
+    console.log(
+      `\n🖨️  IMPRESSAO DE TESTE\n${DIVIDER}\nOla, Cine Drive-in!\n${DIVIDER}\nCuriosidade do dia:\n"${curiosidade}"\n${DIVIDER}\nImpressora conectada com sucesso\n${DIVIDER}`,
+    );
+
     await print(
       concat(
         CMD.init,
         CMD.alignCenter,
         CMD.doubleHeight,
         CMD.bold(true),
-        CMD.text("Olá, Cine Drive-in!"),
+        CMD.text("Ola, Cine Drive-in!"),
         CMD.normal,
         CMD.bold(false),
         CMD.feed(1),
         CMD.alignLeft,
         CMD.text("Impressao de teste"),
-        CMD.text("Web Serial API + Next.js"),
+        CMD.feed(1),
+        CMD.bold(true),
+        CMD.text("Curiosidade do dia:"),
+        CMD.bold(false),
+        CMD.text(`"${curiosidade}"`),
         CMD.feed(1),
         CMD.alignCenter,
         CMD.text("--------------------------------"),
@@ -1604,6 +1692,7 @@ export function PrintOrderButton({ order }: { order: Order }) {
 
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
+    logOrderTicket(order);
     await printOrder(order);
     markAsPrinted(order.id);
     setJustPrinted(true);

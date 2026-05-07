@@ -13,14 +13,14 @@ export function renderMarkdown(text: string) {
 function renderLine(line: string) {
   if (line.startsWith("# ")) {
     return (
-      <span style={{ fontSize: "1.1em", fontWeight: 700, display: "block" }}>
+      <span style={{ fontSize: "1.35em", fontWeight: 700, display: "block", lineHeight: 1.3 }}>
         {renderInline(line.slice(2))}
       </span>
     );
   }
   if (line.startsWith("## ")) {
     return (
-      <span style={{ fontSize: "1em", fontWeight: 700, display: "block" }}>
+      <span style={{ fontSize: "1.15em", fontWeight: 700, display: "block", lineHeight: 1.3 }}>
         {renderInline(line.slice(3))}
       </span>
     );
