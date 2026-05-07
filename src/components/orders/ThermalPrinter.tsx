@@ -215,7 +215,11 @@ function logOrderTicket(order: Order): void {
   const lines: string[] = [];
   lines.push(`\n🖨️  COMANDA IMPRESSA`);
   lines.push(DIVIDER);
-  lines.push(`VAGA ${order.spot}`.padStart(Math.ceil((W + `VAGA ${order.spot}`.length) / 2)));
+  lines.push(
+    `VAGA ${order.spot}`.padStart(
+      Math.ceil((W + `VAGA ${order.spot}`.length) / 2),
+    ),
+  );
   lines.push(`Comanda #${order.orderNumber}  ${data} ${hora}`);
   lines.push(DIVIDER);
   lines.push("CLIENTE");
@@ -1237,11 +1241,13 @@ function QzTutorialModal({ onClose }: { onClose: () => void }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="w-full max-w-xl rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+        className="w-full max-w-xl rounded-[var(--radius-xl)] overflow-hidden"
         style={{
           backgroundColor: "var(--color-bg-surface)",
           border: "1px solid var(--color-border)",
           maxHeight: "90vh",
+          display: "grid",
+          gridTemplateRows: "auto 1fr auto",
         }}
       >
         {/* Header */}
@@ -1259,13 +1265,13 @@ function QzTutorialModal({ onClose }: { onClose: () => void }) {
                 className="text-sm font-bold"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                Tutorial — Configuração do QZ Tray
+                Configuração do QZ Tray
               </p>
               <p
                 className="text-[10px]"
                 style={{ color: "var(--color-text-muted)" }}
               >
-                Siga os passos abaixo para configurar a impressão em produção
+                Siga os passos no PC que tem a impressora conectada
               </p>
             </div>
           </div>
@@ -1280,11 +1286,33 @@ function QzTutorialModal({ onClose }: { onClose: () => void }) {
 
         {/* Body */}
         <div className="flex flex-col gap-5 px-5 py-5 overflow-y-auto">
-          {/* Step 0 */}
-          <Step number="0" title="Download do QZ Tray">
+          {/* Info */}
+          <div
+            className="rounded-[var(--radius-md)] px-4 py-3 flex items-start gap-2.5"
+            style={{
+              backgroundColor: "rgba(0,136,194,0.07)",
+              border: "1px solid rgba(0,136,194,0.2)",
+            }}
+          >
+            <FiInfo
+              size={13}
+              style={{
+                color: "var(--color-primary)",
+                flexShrink: 0,
+                marginTop: 1,
+              }}
+            />
             <P>
-              Baixe e instale o QZ Tray no computador que tem a impressora
-              conectada.
+              O certificado de autenticação já está pré-configurado no sistema.
+              Você não precisa gerar nada — basta seguir os passos abaixo para
+              instalar o QZ Tray e autorizar a conexão.
+            </P>
+          </div>
+          {/* Step 1 */}
+          <Step number="1" title="Instalar o QZ Tray">
+            <P>
+              Baixe e instale o QZ Tray no PC que tem a impressora conectada.
+              Recomendamos a versão <strong>2.2.x</strong>.
             </P>
             <a
               href="https://qz.io/download/"
@@ -1297,49 +1325,16 @@ function QzTutorialModal({ onClose }: { onClose: () => void }) {
               qz.io/download
             </a>
             <P>
-              Depois crie a pasta no Git Bash (ajuste o caminho para o seu
-              usuário):
-            </P>
-            <CodeBlock>mkdir -p public/qz</CodeBlock>
-          </Step>
-
-          {/* Step 1 */}
-          <Step number="1" title="Gerar o certificado com OpenSSL">
-            <P>No Git Bash, na raiz do projeto, rode:</P>
-            <CodeBlock>
-              openssl req -x509 -newkey rsa:2048 -keyout
-              public/qz/private-key.pem -out public/qz/digital-certificate.pem
-              -days 3650 -nodes
-            </CodeBlock>
-            <P>O comando vai fazer perguntas. Responda assim:</P>
-            <CodeBlock>{`Country Name (2 letter code): BR
-State or Province Name: Goias
-Locality Name (city): Goiania
-Organization Name: CineDriveIn
-Common Name (domain): cinedrivein-admin-v2.vercel.app
-Email Address: (seu email)`}</CodeBlock>
-            <P>
-              Isso gera dois arquivos em{" "}
-              <code style={{ color: "var(--color-primary)" }}>public/qz/</code>:
-            </P>
-            <P>
-              • <strong>digital-certificate.pem</strong> — certificado público
-            </P>
-            <P>
-              • <strong>private-key.pem</strong> — chave privada (nunca
-              compartilhe)
-            </P>
-            <P>
-              Renomeie ambos para <strong>.txt</strong> e adicione ao projeto no
-              VS Code. O conteúdo não muda, só a extensão.
+              Após instalar, abra o QZ Tray — ele ficará minimizado na{" "}
+              <strong>bandeja do sistema</strong> (canto inferior direito da
+              tela).
             </P>
           </Step>
-
           {/* Step 2 */}
-          <Step number="2" title="Copiar o certificado para o QZ Tray">
+          <Step number="2" title="Baixar o certificado">
             <P>
-              Baixe o certificado e cole dentro da pasta de instalação do QZ
-              Tray:
+              Baixe o arquivo de certificado abaixo e salve em algum lugar fácil
+              de encontrar, como a <strong>Área de Trabalho</strong>.
             </P>
             <a
               href="/qz/digital-certificate.txt"
@@ -1354,59 +1349,258 @@ Email Address: (seu email)`}</CodeBlock>
               <FiExternalLink size={11} />
               Baixar digital-certificate.txt
             </a>
-            <P>Cole o arquivo baixado em:</P>
-            <CodeBlock>
-              C:\Program Files\QZ Tray\digital-certificate.txt
-            </CodeBlock>
           </Step>
-
           {/* Step 3 */}
-          <Step number="3" title={`Configurar o qz-tray.properties`}>
-            <P>Abra o arquivo abaixo com o Bloco de Notas:</P>
-            <CodeBlock>C:\Program Files\QZ Tray\qz-tray.properties</CodeBlock>
-            <P>Adicione essa linha no final do arquivo e salve:</P>
-            <CodeBlock>{`authcert.override=C\:\\Program Files\\QZ Tray\\digital-certificate.txt`}</CodeBlock>
+          <Step number="3" title="Copiar o certificado para o QZ Tray">
+            <P>
+              Abra o <strong>Explorador de Arquivos</strong> e navegue até a
+              pasta de instalação do QZ Tray:
+            </P>
+            <CodeBlock>C:\Program Files\QZ Tray\</CodeBlock>
+            <P>
+              Cole o arquivo <strong>digital-certificate.txt</strong> baixado no
+              passo anterior dentro dessa pasta.
+            </P>
+            <div
+              className="flex items-start gap-2 rounded-[var(--radius-md)] px-3 py-2"
+              style={{
+                backgroundColor: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.25)",
+              }}
+            >
+              <FiAlertTriangle
+                size={12}
+                style={{
+                  color: "var(--color-warning)",
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}
+              />
+              <p className="text-xs" style={{ color: "var(--color-warning)" }}>
+                Se aparecer um aviso de permissão do Windows, clique em{" "}
+                <strong>Continuar</strong>. É necessário ter acesso de
+                Administrador.
+              </p>
+            </div>
           </Step>
-
           {/* Step 4 */}
-          <Step number="4" title="Reiniciar o QZ Tray">
+          <Step number="4" title="Configurar o qz-tray.properties">
             <P>
-              Clique com o botão direito no ícone do QZ Tray na bandeja do
-              sistema → <strong>Exit</strong> → Abra o QZ Tray novamente.
+              Abra o <strong>Bloco de Notas como Administrador</strong>: no Menu
+              Iniciar, busque <strong>&quot;Bloco de Notas&quot;</strong>,
+              clique com o <strong>botão direito</strong> →{" "}
+              <strong>Executar como Administrador</strong>.
             </P>
+            <P>No Bloco de Notas, abra o arquivo (Arquivo → Abrir):</P>
+            <CodeBlock>C:\Program Files\QZ Tray\qz-tray.properties</CodeBlock>
+            <P>
+              Vá ao final do arquivo, adicione a linha abaixo e salve com{" "}
+              <strong>Ctrl+S</strong>:
+            </P>
+            <CodeBlock>{`authcert.override=C\\:\\\\Program Files\\\\QZ Tray\\\\digital-certificate.txt`}</CodeBlock>
+            <div
+              className="flex items-start gap-2 rounded-[var(--radius-md)] px-3 py-2"
+              style={{
+                backgroundColor: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.25)",
+              }}
+            >
+              <FiAlertTriangle
+                size={12}
+                style={{
+                  color: "var(--color-warning)",
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}
+              />
+              <p className="text-xs" style={{ color: "var(--color-warning)" }}>
+                Abrir sem privilégios de Administrador impedirá que o arquivo
+                seja salvo.
+              </p>
+            </div>
           </Step>
-
           {/* Step 5 */}
-          <Step number="5" title="Primeira conexão">
+          <Step number="5" title="Reiniciar o QZ Tray">
             <P>
-              Conecte via QZ Tray no painel. Um popup vai aparecer — marque{" "}
-              <strong>
-                {'"'}Remember this decision{'"'}
-              </strong>{" "}
-              e clique em <strong>Allow</strong>. Nunca mais vai pedir.
+              Clique com o <strong>botão direito</strong> no ícone do QZ Tray na
+              bandeja do sistema (canto inferior direito) →{" "}
+              <strong>Exit</strong>.
+            </P>
+            <P>
+              Abra o QZ Tray novamente pelo Menu Iniciar. Aguarde o ícone
+              aparecer na bandeja antes de continuar.
             </P>
           </Step>
-
+          {/* Step 6 */}
+          <Step number="6" title="Conectar no painel">
+            <P>
+              Com o QZ Tray rodando na bandeja, volte ao painel e clique em{" "}
+              <strong>Conectar via QZ Tray</strong>.
+            </P>
+            <P>
+              Um popup do QZ Tray vai aparecer perguntando se deseja permitir a
+              conexão. Marque{" "}
+              <strong>&quot;Remember this decision&quot;</strong> e clique em{" "}
+              <strong>Allow</strong>. Isso só acontece uma vez.
+            </P>
+          </Step>
           {/* Troca de PC */}
           <div
-            className="rounded-[var(--radius-md)] px-4 py-3 flex flex-col gap-1"
+            className="rounded-[var(--radius-md)] px-4 py-3 flex flex-col gap-1.5"
             style={{
-              backgroundColor: "rgba(0,136,194,0.07)",
-              border: "1px solid rgba(0,136,194,0.2)",
+              backgroundColor: "rgba(34,197,94,0.06)",
+              border: "1px solid rgba(34,197,94,0.2)",
             }}
           >
             <p
               className="text-xs font-semibold"
-              style={{ color: "var(--color-primary)" }}
+              style={{ color: "var(--color-success)" }}
             >
               Trocando de PC no futuro
             </p>
             <P>
-              O certificado dura 10 anos e não é vinculado ao hardware. Basta
-              instalar o QZ Tray no novo PC, copiar o{" "}
-              <strong>digital-certificate.txt</strong> e configurar o{" "}
-              <strong>qz-tray.properties</strong> novamente (passos 2, 3 e 4).
+              O certificado dura <strong>10 anos</strong> e não é vinculado ao
+              hardware. Em um novo PC, basta instalar o QZ Tray e repetir os{" "}
+              <strong>passos 2, 3, 4 e 5</strong> — sem precisar gerar um novo
+              certificado.
             </P>
+          </div>
+
+          {/* Dev section */}
+          <div
+            className="rounded-[var(--radius-md)]"
+            style={{ border: "1px solid var(--color-border)" }}
+          >
+            <div
+              className="px-4 py-2.5 flex items-center gap-2"
+              style={{
+                backgroundColor: "rgba(245,158,11,0.08)",
+                borderBottom: "1px solid rgba(245,158,11,0.2)",
+              }}
+            >
+              <span className="text-sm">🛠</span>
+              <span
+                className="text-xs font-semibold"
+                style={{ color: "var(--color-warning)" }}
+              >
+                Para desenvolvedores — regenerar certificado
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-4 px-4 py-4">
+              <P>
+                Necessário apenas se o certificado precisar ser regenerado
+                (expirou, domínio mudou, etc.). Execute no{" "}
+                <strong>Git Bash</strong>, na raiz do projeto.
+              </P>
+
+              {/* Criar pasta */}
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  1. Criar a pasta (se não existir)
+                </p>
+                <CodeBlock>mkdir -p public/qz</CodeBlock>
+              </div>
+
+              {/* Gerar certificado */}
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  2. Gerar certificado e chave privada com OpenSSL
+                </p>
+                <CodeBlock>{`openssl req -x509 -newkey rsa:2048 \\
+  -keyout public/qz/private-key.pem \\
+  -out public/qz/digital-certificate.pem \\
+  -days 3650 -nodes`}</CodeBlock>
+                <P>Responda as perguntas assim:</P>
+                <CodeBlock>{`Country Name (2 letter code): BR
+State or Province Name: Goias
+Locality Name (city): Goiania
+Organization Name: CineDriveIn
+Common Name (domain): cinedrivein-admin-v2.vercel.app
+Email Address: (seu email)`}</CodeBlock>
+              </div>
+
+              {/* Renomear */}
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  3. Renomear os arquivos para .txt
+                </p>
+                <P>
+                  Os arquivos gerados ficam em{" "}
+                  <code style={{ color: "var(--color-primary)" }}>
+                    public/qz/
+                  </code>
+                  . Renomeie ambos de <strong>.pem</strong> para{" "}
+                  <strong>.txt</strong> — o conteúdo não muda, só a extensão.
+                </P>
+                <CodeBlock>{`public/qz/digital-certificate.pem → digital-certificate.txt
+public/qz/private-key.pem       → private-key.txt`}</CodeBlock>
+              </div>
+
+              {/* Adicionar ao projeto */}
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  4. Adicionar ao projeto e fazer deploy
+                </p>
+                <P>
+                  Adicione os dois arquivos <strong>.txt</strong> no VS Code,
+                  faça commit e deploy. Após o deploy, o botão de download no{" "}
+                  <strong>Passo 2</strong> deste tutorial já entregará o novo
+                  certificado automaticamente.
+                </P>
+                <div
+                  className="flex items-start gap-2 rounded-[var(--radius-md)] px-3 py-2"
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.07)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                  }}
+                >
+                  <FiAlertTriangle
+                    size={12}
+                    style={{
+                      color: "var(--color-error)",
+                      flexShrink: 0,
+                      marginTop: 1,
+                    }}
+                  />
+                  <p
+                    className="text-xs"
+                    style={{ color: "var(--color-error)" }}
+                  >
+                    Nunca compartilhe o <strong>private-key.txt</strong>. Ele
+                    fica no repositório mas não deve ser exposto publicamente.
+                    Verifique se o repositório é privado.
+                  </p>
+                </div>
+              </div>
+
+              {/* Após regenerar */}
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  5. Reconfigurar as máquinas operacionais
+                </p>
+                <P>
+                  Após o deploy, em cada PC com o QZ Tray instalado, repita os{" "}
+                  <strong>passos 2, 3, 4 e 5</strong> do tutorial acima com o
+                  novo certificado.
+                </P>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1632,19 +1826,21 @@ export default function ThermalPrinterBar() {
 
         {/* Info + Chrome badge */}
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => setShowTutorial(true)}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
-            style={{
-              backgroundColor: "rgba(0,136,194,0.1)",
-              color: "var(--color-primary)",
-              border: "1px solid rgba(0,136,194,0.25)",
-            }}
-            title="Tutorial de configuração do QZ Tray"
-          >
-            <FiInfo size={10} />
-            Tutorial QZ
-          </button>
+          {connectionMode === "qztray" && (
+            <button
+              onClick={() => setShowTutorial(true)}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
+              style={{
+                backgroundColor: "rgba(0,136,194,0.1)",
+                color: "var(--color-primary)",
+                border: "1px solid rgba(0,136,194,0.25)",
+              }}
+              title="Tutorial de configuração do QZ Tray"
+            >
+              <FiInfo size={10} />
+              Tutorial QZ
+            </button>
+          )}
           {connectionMode === "serial" && <ChromeBadge />}
         </div>
 

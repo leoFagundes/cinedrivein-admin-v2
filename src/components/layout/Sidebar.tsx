@@ -15,6 +15,7 @@ import {
   FiMenu,
   FiX,
   FiLock,
+  FiHelpCircle,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
@@ -257,6 +258,23 @@ export default function Sidebar() {
           );
         })}
       </nav>
+      <Link
+        href="/admin/help"
+        onClick={close}
+        className="flex items-center gap-2 w-full px-3 py-1.5 rounded-[var(--radius-md)] text-xs mb-1 transition-all duration-150 cursor-pointer"
+        style={{ color: "var(--color-text-muted)" }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+          e.currentTarget.style.color = "var(--color-text-secondary)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "transparent";
+          e.currentTarget.style.color = "var(--color-text-muted)";
+        }}
+      >
+        <FiHelpCircle size={14} />
+        Ajuda
+      </Link>
 
       <div
         className="p-3 flex-shrink-0"
@@ -308,6 +326,7 @@ export default function Sidebar() {
             </p>
           </div>
         </Link>
+
         <button
           onClick={async () => {
             try {
