@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import {
@@ -18,6 +19,8 @@ import {
   FiX,
   FiMessageSquare,
 } from "react-icons/fi";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Order } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,7 +37,16 @@ interface SoundSettings {
   chatVolume: number;
 }
 
-const STORAGE_KEY = "cdi_sound_alert";
+const SOUND_DOC = "soundSettings"; // storeConfig/soundSettings
+
+const DEFAULTS: SoundSettings = {
+  enabled: true,
+  volume: 0.7,
+  sound: "som1",
+  chatSoundEnabled: true,
+  chatSound: "som2",
+  chatVolume: 0.6,
+};
 
 const SOUND_LABELS: Record<SoundOption, string> = {
   som1: "Som 1",
@@ -47,91 +59,95 @@ const SOUND_LABELS: Record<SoundOption, string> = {
 
 const SOUNDS: SoundOption[] = ["som1", "som2", "som3", "som4", "som5", "som6"];
 
-function loadSettings(): SoundSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<SoundSettings>;
-      return {
-        enabled: parsed.enabled ?? true,
-        volume: typeof parsed.volume === "number" ? parsed.volume : 0.7,
-        sound: parsed.sound ?? "som1",
-        chatSoundEnabled: parsed.chatSoundEnabled ?? true,
-        chatSound: parsed.chatSound ?? "som2",
-        chatVolume:
-          typeof parsed.chatVolume === "number" ? parsed.chatVolume : 0.6,
-      };
-    }
-  } catch {}
-  return {
-    enabled: true,
-    volume: 0.7,
-    sound: "som1",
-    chatSoundEnabled: true,
-    chatSound: "som2",
-    chatVolume: 0.6,
-  };
-}
+// ── Module-level live settings ────────────────────────────────────────────────
+// Updated synchronously whenever save() is called.
+// play() and playChat() always read from here — no closures, no refs, no timing issues.
 
-function saveSettings(s: SoundSettings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {}
+let _live: SoundSettings = { ...DEFAULTS };
+let _liveLoaded = false; // true only after Firebase settings are fetched
+let _lastPlay = 0;
+let _lastPlayChat = 0;
+const DEBOUNCE_MS = 800;
+
+function normalize(data: Partial<SoundSettings>): SoundSettings {
+  return {
+    enabled: data.enabled ?? DEFAULTS.enabled,
+    volume: typeof data.volume === "number" ? data.volume : DEFAULTS.volume,
+    sound: (data.sound as SoundOption) ?? DEFAULTS.sound,
+    chatSoundEnabled: data.chatSoundEnabled ?? DEFAULTS.chatSoundEnabled,
+    chatSound: (data.chatSound as SoundOption) ?? DEFAULTS.chatSound,
+    chatVolume:
+      typeof data.chatVolume === "number"
+        ? data.chatVolume
+        : DEFAULTS.chatVolume,
+  };
 }
 
 // ── Core hook ─────────────────────────────────────────────────────────────────
 
 function useSoundAlertCore() {
-  const [settings, setSettings] = useState<SoundSettings>(loadSettings);
+  const [settings, setSettings] = useState<SoundSettings>(DEFAULTS);
+  const [loading, setLoading] = useState(true);
 
-  // Refs that always hold the latest values — updated on every render
-  const enabledRef = useRef(settings.enabled);
-  const volumeRef = useRef(settings.volume);
-  const soundRef = useRef(settings.sound);
-  const chatEnabledRef = useRef(settings.chatSoundEnabled);
-  const chatVolumeRef = useRef(settings.chatVolume);
-  const chatSoundRef = useRef(settings.chatSound);
-
-  enabledRef.current = settings.enabled;
-  volumeRef.current = settings.volume;
-  soundRef.current = settings.sound;
-  chatEnabledRef.current = settings.chatSoundEnabled;
-  chatVolumeRef.current = settings.chatVolume;
-  chatSoundRef.current = settings.chatSound;
-
-  // Persist whenever settings change
+  // Load from Firebase on mount
   useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+    getDoc(doc(db, "storeConfig", SOUND_DOC))
+      .then((snap) => {
+        const loaded = snap.exists() ? normalize(snap.data()) : { ...DEFAULTS };
+        _live = loaded;
+        _liveLoaded = true;
+        setSettings(loaded);
+      })
+      .catch(() => {
+        _liveLoaded = true;
+      }) // even on error, allow sounds with defaults
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Play order sound — creates a fresh element each call so no stale state
+  // Save patch to Firebase — updates _live synchronously so play/playChat
+  // see the new values immediately, before the async Firebase write completes.
+  const save = useCallback(async (patch: Partial<SoundSettings>) => {
+    _live = normalize({ ..._live, ...patch });
+    _liveLoaded = true;
+    setSettings({ ..._live });
+    try {
+      await setDoc(doc(db, "storeConfig", SOUND_DOC), _live);
+    } catch {
+      // silent — UI already updated, Firebase write best-effort
+    }
+  }, []);
+
+  // Play order alert — reads _live, debounced, only after Firebase has loaded
   const play = useCallback(() => {
-    if (!enabledRef.current) return;
-    const audio = new Audio(`/music/${soundRef.current}.mp3`);
-    audio.volume = volumeRef.current;
+    if (!_liveLoaded || !_live.enabled) return;
+    const now = Date.now();
+    if (now - _lastPlay < DEBOUNCE_MS) return;
+    _lastPlay = now;
+    const audio = new Audio(`/music/${_live.sound}.mp3`);
+    audio.volume = _live.volume;
     audio.play().catch(() => {});
   }, []);
 
-  // Play chat sound — creates a fresh element each call so no stale state
+  // Play chat alert — reads _live, debounced, only after Firebase has loaded
   const playChat = useCallback(() => {
-    if (!chatEnabledRef.current) return;
-    const audio = new Audio(`/music/${chatSoundRef.current}.mp3`);
-    audio.volume = chatVolumeRef.current;
+    if (!_liveLoaded || !_live.chatSoundEnabled) return;
+    const now = Date.now();
+    if (now - _lastPlayChat < DEBOUNCE_MS) return;
+    _lastPlayChat = now;
+    const audio = new Audio(`/music/${_live.chatSound}.mp3`);
+    audio.volume = _live.chatVolume;
     audio.play().catch(() => {});
   }, []);
 
-  const update = useCallback((patch: Partial<SoundSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  return { settings, update, play, playChat };
+  return { settings, loading, save, play, playChat };
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
 interface SoundAlertContextValue {
   settings: SoundSettings;
-  update: (patch: Partial<SoundSettings>) => void;
+  loading: boolean;
+  save: (patch: Partial<SoundSettings>) => Promise<void>;
   play: () => void;
   playChat: () => void;
 }
@@ -154,14 +170,14 @@ export function useSoundAlert(): SoundAlertContextValue {
   return ctx;
 }
 
-// ── Auto-sound hook (call once, pass activeOrders) ────────────────────────────
+// ── Auto-sound hook ────────────────────────────────────────────────────────────
 
 export function useAutoSound(orders: Order[]) {
-  const { play, settings } = useSoundAlert();
+  const { play } = useSoundAlert();
   const prevIdsRef = useRef<Set<string>>(new Set());
   const baselineRef = useRef<Set<string> | null>(null);
+  const initializedRef = useRef(false);
 
-  // Set baseline on mount
   useEffect(() => {
     if (baselineRef.current === null) {
       baselineRef.current = new Set(orders.map((o) => o.id));
@@ -170,22 +186,25 @@ export function useAutoSound(orders: Order[]) {
   }, []);
 
   useEffect(() => {
-    if (!settings.enabled) {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
       prevIdsRef.current = new Set(orders.map((o) => o.id));
       return;
     }
 
+    let shouldPlay = false;
     for (const order of orders) {
-      const isNew = !prevIdsRef.current.has(order.id);
-      const notInBaseline = !baselineRef.current?.has(order.id);
-      if (isNew && notInBaseline) {
-        play();
-        break; // one beep per batch
+      if (
+        !prevIdsRef.current.has(order.id) &&
+        !baselineRef.current?.has(order.id)
+      ) {
+        shouldPlay = true;
+        break;
       }
     }
-
+    if (shouldPlay) play(); // play() checks enabled and debounces internally
     prevIdsRef.current = new Set(orders.map((o) => o.id));
-  }, [orders, settings.enabled, play]);
+  }, [orders, play]);
 }
 
 // ── Floating Button Component ─────────────────────────────────────────────────
@@ -193,7 +212,7 @@ export function useAutoSound(orders: Order[]) {
 type PanelTab = "orders" | "chat";
 
 export function SoundAlertButton() {
-  const { settings, update } = useSoundAlert();
+  const { settings, save } = useSoundAlert();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PanelTab>("orders");
   const panelRef = useRef<HTMLDivElement>(null);
@@ -235,8 +254,8 @@ export function SoundAlertButton() {
     audio.play().catch(() => {});
   }
 
-  function saveOrders() {
-    update({
+  async function saveOrders() {
+    await save({
       enabled: pending.enabled,
       volume: pending.volume,
       sound: pending.sound,
@@ -245,8 +264,8 @@ export function SoundAlertButton() {
     setTimeout(() => setOrdersSaved(false), 2000);
   }
 
-  function saveChat() {
-    update({
+  async function saveChat() {
+    await save({
       chatSoundEnabled: pending.chatSoundEnabled,
       chatVolume: pending.chatVolume,
       chatSound: pending.chatSound,
@@ -357,47 +376,126 @@ export function SoundAlertButton() {
             <div className="flex flex-col gap-4 px-4 py-4">
               {/* Enable / disable toggle */}
               <div className="flex items-center justify-between">
-                <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
                   {pending.enabled ? "Som ativado" : "Som desativado"}
                 </span>
                 <button
-                  onClick={() => setPending((p) => ({ ...p, enabled: !p.enabled }))}
+                  onClick={() =>
+                    setPending((p) => ({ ...p, enabled: !p.enabled }))
+                  }
                   className="relative flex items-center cursor-pointer transition-all"
                   style={{ width: 44, height: 24 }}
                 >
-                  <span className="absolute inset-0 rounded-full transition-colors" style={{ backgroundColor: pending.enabled ? "var(--color-primary)" : "var(--color-border)" }} />
-                  <span className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform" style={{ transform: pending.enabled ? "translateX(24px)" : "translateX(4px)" }} />
+                  <span
+                    className="absolute inset-0 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: pending.enabled
+                        ? "var(--color-primary)"
+                        : "var(--color-border)",
+                    }}
+                  />
+                  <span
+                    className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: pending.enabled
+                        ? "translateX(24px)"
+                        : "translateX(4px)",
+                    }}
+                  />
                 </button>
               </div>
 
               {/* Volume slider */}
-              <div className="flex flex-col gap-2" style={{ opacity: pending.enabled ? 1 : 0.4 }}>
+              <div
+                className="flex flex-col gap-2"
+                style={{ opacity: pending.enabled ? 1 : 0.4 }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <FiSliders size={12} style={{ color: "var(--color-text-muted)" }} />
-                    <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Volume</span>
+                    <FiSliders
+                      size={12}
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Volume
+                    </span>
                   </div>
-                  <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--color-primary)" }}>{volumePct}%</span>
+                  <span
+                    className="text-xs font-semibold tabular-nums"
+                    style={{ color: "var(--color-primary)" }}
+                  >
+                    {volumePct}%
+                  </span>
                 </div>
-                <div className="relative flex items-center" style={{ height: 20 }}>
-                  <div className="absolute inset-y-0 my-auto rounded-full" style={{ left: 0, right: 0, height: 4, backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }} />
-                  <div className="absolute inset-y-0 my-auto rounded-full transition-all" style={{ left: 0, width: `${volumePct}%`, height: 4, backgroundColor: "var(--color-primary)" }} />
+                <div
+                  className="relative flex items-center"
+                  style={{ height: 20 }}
+                >
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full"
+                    style={{
+                      left: 0,
+                      right: 0,
+                      height: 4,
+                      backgroundColor: "var(--color-bg-base)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full transition-all"
+                    style={{
+                      left: 0,
+                      width: `${volumePct}%`,
+                      height: 4,
+                      backgroundColor: "var(--color-primary)",
+                    }}
+                  />
                   <input
-                    type="range" min={0} max={1} step={0.01}
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
                     value={pending.volume}
                     disabled={!pending.enabled}
-                    onChange={(e) => setPending((p) => ({ ...p, volume: parseFloat(e.target.value) }))}
+                    onChange={(e) =>
+                      setPending((p) => ({
+                        ...p,
+                        volume: parseFloat(e.target.value),
+                      }))
+                    }
                     className="relative w-full cursor-pointer"
-                    style={{ height: 20, appearance: "none", background: "transparent", outline: "none" }}
+                    style={{
+                      height: 20,
+                      appearance: "none",
+                      background: "transparent",
+                      outline: "none",
+                    }}
                   />
                 </div>
               </div>
 
               {/* Sound picker */}
-              <div className="flex flex-col gap-1.5" style={{ opacity: pending.enabled ? 1 : 0.4 }}>
+              <div
+                className="flex flex-col gap-1.5"
+                style={{ opacity: pending.enabled ? 1 : 0.4 }}
+              >
                 <div className="flex items-center gap-1.5">
-                  <FiMusic size={12} style={{ color: "var(--color-text-muted)" }} />
-                  <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Som ao receber pedido</span>
+                  <FiMusic
+                    size={12}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Som ao receber pedido
+                  </span>
                 </div>
                 <div className="flex flex-col gap-1">
                   {SOUNDS.map((s) => {
@@ -405,18 +503,59 @@ export function SoundAlertButton() {
                     return (
                       <button
                         key={s}
-                        onClick={() => pending.enabled ? previewSound(s) : undefined}
+                        onClick={() =>
+                          pending.enabled ? previewSound(s) : undefined
+                        }
                         disabled={!pending.enabled}
                         className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
-                        style={{ backgroundColor: active ? "rgba(0,136,194,0.12)" : "var(--color-bg-elevated)", border: active ? "1px solid rgba(0,136,194,0.35)" : "1px solid var(--color-border)", color: active ? "var(--color-primary)" : "var(--color-text-secondary)" }}
+                        style={{
+                          backgroundColor: active
+                            ? "rgba(0,136,194,0.12)"
+                            : "var(--color-bg-elevated)",
+                          border: active
+                            ? "1px solid rgba(0,136,194,0.35)"
+                            : "1px solid var(--color-border)",
+                          color: active
+                            ? "var(--color-primary)"
+                            : "var(--color-text-secondary)",
+                        }}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: active ? "var(--color-primary)" : "var(--color-bg-base)", border: active ? "none" : "1px solid var(--color-border)" }}>
-                            {active ? <FiCheck size={10} color="white" /> : <FiMusic size={10} style={{ color: "var(--color-text-muted)" }} />}
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{
+                              backgroundColor: active
+                                ? "var(--color-primary)"
+                                : "var(--color-bg-base)",
+                              border: active
+                                ? "none"
+                                : "1px solid var(--color-border)",
+                            }}
+                          >
+                            {active ? (
+                              <FiCheck size={10} color="white" />
+                            ) : (
+                              <FiMusic
+                                size={10}
+                                style={{ color: "var(--color-text-muted)" }}
+                              />
+                            )}
                           </div>
-                          <span className="text-xs font-medium">{SOUND_LABELS[s]}</span>
+                          <span className="text-xs font-medium">
+                            {SOUND_LABELS[s]}
+                          </span>
                         </div>
-                        {active && <span className="text-[10px] font-medium" style={{ color: "var(--color-primary)", opacity: 0.7 }}>▶ preview</span>}
+                        {active && (
+                          <span
+                            className="text-[10px] font-medium"
+                            style={{
+                              color: "var(--color-primary)",
+                              opacity: 0.7,
+                            }}
+                          >
+                            ▶ preview
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -428,9 +567,13 @@ export function SoundAlertButton() {
                 onClick={saveOrders}
                 className="w-full py-2 rounded-[var(--radius-md)] text-xs font-semibold cursor-pointer transition-all"
                 style={{
-                  backgroundColor: ordersSaved ? "rgba(34,197,94,0.15)" : "var(--color-primary)",
+                  backgroundColor: ordersSaved
+                    ? "rgba(34,197,94,0.15)"
+                    : "var(--color-primary)",
                   color: ordersSaved ? "var(--color-success)" : "white",
-                  border: ordersSaved ? "1px solid rgba(34,197,94,0.35)" : "none",
+                  border: ordersSaved
+                    ? "1px solid rgba(34,197,94,0.35)"
+                    : "none",
                 }}
               >
                 {ordersSaved ? "✓ Salvo!" : "Salvar"}
@@ -443,47 +586,129 @@ export function SoundAlertButton() {
             <div className="flex flex-col gap-4 px-4 py-4">
               {/* Enable chat sound toggle */}
               <div className="flex items-center justify-between">
-                <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
                   {pending.chatSoundEnabled ? "Som ativado" : "Som desativado"}
                 </span>
                 <button
-                  onClick={() => setPending((p) => ({ ...p, chatSoundEnabled: !p.chatSoundEnabled }))}
+                  onClick={() =>
+                    setPending((p) => ({
+                      ...p,
+                      chatSoundEnabled: !p.chatSoundEnabled,
+                    }))
+                  }
                   className="relative flex items-center cursor-pointer transition-all"
                   style={{ width: 44, height: 24 }}
                 >
-                  <span className="absolute inset-0 rounded-full transition-colors" style={{ backgroundColor: pending.chatSoundEnabled ? "var(--color-primary)" : "var(--color-border)" }} />
-                  <span className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform" style={{ transform: pending.chatSoundEnabled ? "translateX(24px)" : "translateX(4px)" }} />
+                  <span
+                    className="absolute inset-0 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: pending.chatSoundEnabled
+                        ? "var(--color-primary)"
+                        : "var(--color-border)",
+                    }}
+                  />
+                  <span
+                    className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: pending.chatSoundEnabled
+                        ? "translateX(24px)"
+                        : "translateX(4px)",
+                    }}
+                  />
                 </button>
               </div>
 
               {/* Chat volume slider */}
-              <div className="flex flex-col gap-2" style={{ opacity: pending.chatSoundEnabled ? 1 : 0.4 }}>
+              <div
+                className="flex flex-col gap-2"
+                style={{ opacity: pending.chatSoundEnabled ? 1 : 0.4 }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <FiSliders size={12} style={{ color: "var(--color-text-muted)" }} />
-                    <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Volume</span>
+                    <FiSliders
+                      size={12}
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Volume
+                    </span>
                   </div>
-                  <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--color-primary)" }}>{chatVolumePct}%</span>
+                  <span
+                    className="text-xs font-semibold tabular-nums"
+                    style={{ color: "var(--color-primary)" }}
+                  >
+                    {chatVolumePct}%
+                  </span>
                 </div>
-                <div className="relative flex items-center" style={{ height: 20 }}>
-                  <div className="absolute inset-y-0 my-auto rounded-full" style={{ left: 0, right: 0, height: 4, backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }} />
-                  <div className="absolute inset-y-0 my-auto rounded-full transition-all" style={{ left: 0, width: `${chatVolumePct}%`, height: 4, backgroundColor: "var(--color-primary)" }} />
+                <div
+                  className="relative flex items-center"
+                  style={{ height: 20 }}
+                >
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full"
+                    style={{
+                      left: 0,
+                      right: 0,
+                      height: 4,
+                      backgroundColor: "var(--color-bg-base)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 my-auto rounded-full transition-all"
+                    style={{
+                      left: 0,
+                      width: `${chatVolumePct}%`,
+                      height: 4,
+                      backgroundColor: "var(--color-primary)",
+                    }}
+                  />
                   <input
-                    type="range" min={0} max={1} step={0.01}
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
                     value={pending.chatVolume}
                     disabled={!pending.chatSoundEnabled}
-                    onChange={(e) => setPending((p) => ({ ...p, chatVolume: parseFloat(e.target.value) }))}
+                    onChange={(e) =>
+                      setPending((p) => ({
+                        ...p,
+                        chatVolume: parseFloat(e.target.value),
+                      }))
+                    }
                     className="relative w-full cursor-pointer"
-                    style={{ height: 20, appearance: "none", background: "transparent", outline: "none" }}
+                    style={{
+                      height: 20,
+                      appearance: "none",
+                      background: "transparent",
+                      outline: "none",
+                    }}
                   />
                 </div>
               </div>
 
               {/* Chat sound picker */}
-              <div className="flex flex-col gap-1.5" style={{ opacity: pending.chatSoundEnabled ? 1 : 0.4 }}>
+              <div
+                className="flex flex-col gap-1.5"
+                style={{ opacity: pending.chatSoundEnabled ? 1 : 0.4 }}
+              >
                 <div className="flex items-center gap-1.5">
-                  <FiMessageSquare size={12} style={{ color: "var(--color-text-muted)" }} />
-                  <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Som ao receber mensagem</span>
+                  <FiMessageSquare
+                    size={12}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Som ao receber mensagem
+                  </span>
                 </div>
                 <div className="flex flex-col gap-1">
                   {SOUNDS.map((s) => {
@@ -491,18 +716,61 @@ export function SoundAlertButton() {
                     return (
                       <button
                         key={s}
-                        onClick={() => pending.chatSoundEnabled ? previewChatSound(s) : undefined}
+                        onClick={() =>
+                          pending.chatSoundEnabled
+                            ? previewChatSound(s)
+                            : undefined
+                        }
                         disabled={!pending.chatSoundEnabled}
                         className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
-                        style={{ backgroundColor: active ? "rgba(0,136,194,0.12)" : "var(--color-bg-elevated)", border: active ? "1px solid rgba(0,136,194,0.35)" : "1px solid var(--color-border)", color: active ? "var(--color-primary)" : "var(--color-text-secondary)" }}
+                        style={{
+                          backgroundColor: active
+                            ? "rgba(0,136,194,0.12)"
+                            : "var(--color-bg-elevated)",
+                          border: active
+                            ? "1px solid rgba(0,136,194,0.35)"
+                            : "1px solid var(--color-border)",
+                          color: active
+                            ? "var(--color-primary)"
+                            : "var(--color-text-secondary)",
+                        }}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: active ? "var(--color-primary)" : "var(--color-bg-base)", border: active ? "none" : "1px solid var(--color-border)" }}>
-                            {active ? <FiCheck size={10} color="white" /> : <FiMessageSquare size={10} style={{ color: "var(--color-text-muted)" }} />}
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{
+                              backgroundColor: active
+                                ? "var(--color-primary)"
+                                : "var(--color-bg-base)",
+                              border: active
+                                ? "none"
+                                : "1px solid var(--color-border)",
+                            }}
+                          >
+                            {active ? (
+                              <FiCheck size={10} color="white" />
+                            ) : (
+                              <FiMessageSquare
+                                size={10}
+                                style={{ color: "var(--color-text-muted)" }}
+                              />
+                            )}
                           </div>
-                          <span className="text-xs font-medium">{SOUND_LABELS[s]}</span>
+                          <span className="text-xs font-medium">
+                            {SOUND_LABELS[s]}
+                          </span>
                         </div>
-                        {active && <span className="text-[10px] font-medium" style={{ color: "var(--color-primary)", opacity: 0.7 }}>▶ preview</span>}
+                        {active && (
+                          <span
+                            className="text-[10px] font-medium"
+                            style={{
+                              color: "var(--color-primary)",
+                              opacity: 0.7,
+                            }}
+                          >
+                            ▶ preview
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -514,7 +782,9 @@ export function SoundAlertButton() {
                 onClick={saveChat}
                 className="w-full py-2 rounded-[var(--radius-md)] text-xs font-semibold cursor-pointer transition-all"
                 style={{
-                  backgroundColor: chatSaved ? "rgba(34,197,94,0.15)" : "var(--color-primary)",
+                  backgroundColor: chatSaved
+                    ? "rgba(34,197,94,0.15)"
+                    : "var(--color-primary)",
                   color: chatSaved ? "var(--color-success)" : "white",
                   border: chatSaved ? "1px solid rgba(34,197,94,0.35)" : "none",
                 }}

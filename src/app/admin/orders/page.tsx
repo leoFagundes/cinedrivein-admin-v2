@@ -1803,6 +1803,8 @@ function OrdersPageInner() {
   const [customerMsgTimes, setCustomerMsgTimes] = useState<
     Record<string, number>
   >({});
+  // Ref kept in sync so onSnapshot callbacks never use a stale closure value
+  const customerMsgTimesRef = useRef<Record<string, number>>({});
   const [chatSeenTimes, setChatSeenTimes] = useState<Record<string, number>>(
     () => {
       try {
@@ -1821,6 +1823,9 @@ function OrdersPageInner() {
 
   const initializedOrdersRef = useRef<Set<string>>(new Set());
   const chatOrderIdRef = useRef<string | null>(null);
+  // Tracks message doc IDs that already triggered a sound — prevents Firestore
+  // from firing the callback twice (cache + server) and playing the sound twice
+  const playedMsgIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     chatOrderIdRef.current = chatOrder?.id ?? null;
@@ -1843,6 +1848,11 @@ function OrdersPageInner() {
     dismiss: dismissPrinterReminder,
   } = usePrinterReminderToast(isConnected);
 
+  // Keep ref in sync so callbacks always read the latest timestamps
+  useEffect(() => {
+    customerMsgTimesRef.current = customerMsgTimes;
+  }, [customerMsgTimes]);
+
   useEffect(() => {
     if (activeOrders.length === 0) return;
     const unsubs = activeOrders.map((order) => {
@@ -1856,10 +1866,12 @@ function OrdersPageInner() {
 
         if (snap.empty) {
           initializedOrdersRef.current.add(order.id);
-          setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: 0 }));
+          customerMsgTimesRef.current = { ...customerMsgTimesRef.current, [order.id]: 0 };
+          setCustomerMsgTimes({ ...customerMsgTimesRef.current });
           return;
         }
 
+        const msgDocId = snap.docs[0].id;
         const d = snap.docs[0].data();
         const ts = (d.createdAt as Timestamp)?.toMillis() ?? 0;
         const isFromOthers = d.senderName !== appUser?.username;
@@ -1867,23 +1879,23 @@ function OrdersPageInner() {
 
         const isChatOpen = chatOrderIdRef.current === order.id;
 
-        // alreadyInitialized garante que não toca no carregamento inicial
-        // mas agora captura corretamente a primeira mensagem nova
         if (
           isFromOthers &&
           !isChatOpen &&
           alreadyInitialized &&
-          msgTs > (customerMsgTimes[order.id] ?? 0)
+          !playedMsgIdsRef.current.has(msgDocId)
         ) {
+          playedMsgIdsRef.current.add(msgDocId);
           playChat();
         }
 
-        initializedOrdersRef.current.add(order.id); // ← marca DEPOIS da checagem
-        setCustomerMsgTimes((prev) => ({ ...prev, [order.id]: msgTs }));
+        initializedOrdersRef.current.add(order.id);
+        customerMsgTimesRef.current = { ...customerMsgTimesRef.current, [order.id]: msgTs };
+        setCustomerMsgTimes({ ...customerMsgTimesRef.current });
       });
     });
     return () => unsubs.forEach((u) => u());
-  }, [activeOrders, appUser?.username]);
+  }, [activeOrders, appUser?.username, playChat]);
 
   function hasUnread(orderId: string): boolean {
     if (chatOrder?.id === orderId) return false;
