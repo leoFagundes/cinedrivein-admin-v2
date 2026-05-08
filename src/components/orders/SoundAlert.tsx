@@ -83,50 +83,42 @@ function saveSettings(s: SoundSettings) {
 
 function useSoundAlertCore() {
   const [settings, setSettings] = useState<SoundSettings>(loadSettings);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const chatAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Refs that always hold the latest values — updated on every render
+  const enabledRef = useRef(settings.enabled);
+  const volumeRef = useRef(settings.volume);
+  const soundRef = useRef(settings.sound);
+  const chatEnabledRef = useRef(settings.chatSoundEnabled);
+  const chatVolumeRef = useRef(settings.chatVolume);
+  const chatSoundRef = useRef(settings.chatSound);
+
+  enabledRef.current = settings.enabled;
+  volumeRef.current = settings.volume;
+  soundRef.current = settings.sound;
+  chatEnabledRef.current = settings.chatSoundEnabled;
+  chatVolumeRef.current = settings.chatVolume;
+  chatSoundRef.current = settings.chatSound;
 
   // Persist whenever settings change
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
 
-  // Rebuild order audio when sound changes
-  useEffect(() => {
-    const audio = new Audio(`/music/${settings.sound}.mp3`);
-    audio.volume = settings.volume;
-    audioRef.current = audio;
-  }, [settings.sound]);
-
-  // Rebuild chat audio when chat sound changes
-  useEffect(() => {
-    const audio = new Audio(`/music/${settings.chatSound}.mp3`);
-    audio.volume = settings.chatVolume;
-    chatAudioRef.current = audio;
-  }, [settings.chatSound]);
-
-  // Sync volumes
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = settings.volume;
-  }, [settings.volume]);
-
-  useEffect(() => {
-    if (chatAudioRef.current) chatAudioRef.current.volume = settings.chatVolume;
-  }, [settings.chatVolume]);
-
-  // Play order sound
+  // Play order sound — creates a fresh element each call so no stale state
   const play = useCallback(() => {
-    if (!settings.enabled || !audioRef.current) return;
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch(() => {});
-  }, [settings.enabled]);
+    if (!enabledRef.current) return;
+    const audio = new Audio(`/music/${soundRef.current}.mp3`);
+    audio.volume = volumeRef.current;
+    audio.play().catch(() => {});
+  }, []);
 
-  // Play chat sound
+  // Play chat sound — creates a fresh element each call so no stale state
   const playChat = useCallback(() => {
-    if (!settings.chatSoundEnabled || !chatAudioRef.current) return;
-    chatAudioRef.current.currentTime = 0;
-    chatAudioRef.current.play().catch(() => {});
-  }, [settings.chatSoundEnabled]);
+    if (!chatEnabledRef.current) return;
+    const audio = new Audio(`/music/${chatSoundRef.current}.mp3`);
+    audio.volume = chatVolumeRef.current;
+    audio.play().catch(() => {});
+  }, []);
 
   const update = useCallback((patch: Partial<SoundSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -201,10 +193,21 @@ export function useAutoSound(orders: Order[]) {
 type PanelTab = "orders" | "chat";
 
 export function SoundAlertButton() {
-  const { settings, update, play, playChat } = useSoundAlert();
+  const { settings, update } = useSoundAlert();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PanelTab>("orders");
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Pending state — changes only apply when Save is clicked
+  const [pending, setPending] = useState<SoundSettings>(settings);
+  const [ordersSaved, setOrdersSaved] = useState(false);
+  const [chatSaved, setChatSaved] = useState(false);
+
+  // Reset pending to saved settings whenever the panel opens
+  useEffect(() => {
+    if (open) setPending(settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Close on outside click
   useEffect(() => {
@@ -219,17 +222,41 @@ export function SoundAlertButton() {
   }, [open]);
 
   function previewSound(s: SoundOption) {
-    update({ sound: s });
-    setTimeout(() => play(), 60);
+    setPending((p) => ({ ...p, sound: s }));
+    const audio = new Audio(`/music/${s}.mp3`);
+    audio.volume = pending.volume;
+    audio.play().catch(() => {});
   }
 
   function previewChatSound(s: SoundOption) {
-    update({ chatSound: s });
-    setTimeout(() => playChat(), 60);
+    setPending((p) => ({ ...p, chatSound: s }));
+    const audio = new Audio(`/music/${s}.mp3`);
+    audio.volume = pending.chatVolume;
+    audio.play().catch(() => {});
   }
 
-  const volumePct = Math.round(settings.volume * 100);
-  const chatVolumePct = Math.round(settings.chatVolume * 100);
+  function saveOrders() {
+    update({
+      enabled: pending.enabled,
+      volume: pending.volume,
+      sound: pending.sound,
+    });
+    setOrdersSaved(true);
+    setTimeout(() => setOrdersSaved(false), 2000);
+  }
+
+  function saveChat() {
+    update({
+      chatSoundEnabled: pending.chatSoundEnabled,
+      chatVolume: pending.chatVolume,
+      chatSound: pending.chatSound,
+    });
+    setChatSaved(true);
+    setTimeout(() => setChatSaved(false), 2000);
+  }
+
+  const volumePct = Math.round(pending.volume * 100);
+  const chatVolumePct = Math.round(pending.chatVolume * 100);
 
   return (
     <div
@@ -330,189 +357,84 @@ export function SoundAlertButton() {
             <div className="flex flex-col gap-4 px-4 py-4">
               {/* Enable / disable toggle */}
               <div className="flex items-center justify-between">
-                <span
-                  className="text-sm"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  {settings.enabled ? "Som ativado" : "Som desativado"}
+                <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                  {pending.enabled ? "Som ativado" : "Som desativado"}
                 </span>
                 <button
-                  onClick={() => update({ enabled: !settings.enabled })}
+                  onClick={() => setPending((p) => ({ ...p, enabled: !p.enabled }))}
                   className="relative flex items-center cursor-pointer transition-all"
                   style={{ width: 44, height: 24 }}
-                  title={settings.enabled ? "Desativar som" : "Ativar som"}
                 >
-                  <span
-                    className="absolute inset-0 rounded-full transition-colors"
-                    style={{
-                      backgroundColor: settings.enabled
-                        ? "var(--color-primary)"
-                        : "var(--color-border)",
-                    }}
-                  />
-                  <span
-                    className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
-                    style={{
-                      transform: settings.enabled
-                        ? "translateX(24px)"
-                        : "translateX(4px)",
-                    }}
-                  />
+                  <span className="absolute inset-0 rounded-full transition-colors" style={{ backgroundColor: pending.enabled ? "var(--color-primary)" : "var(--color-border)" }} />
+                  <span className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform" style={{ transform: pending.enabled ? "translateX(24px)" : "translateX(4px)" }} />
                 </button>
               </div>
 
               {/* Volume slider */}
-              <div
-                className="flex flex-col gap-2"
-                style={{ opacity: settings.enabled ? 1 : 0.4 }}
-              >
+              <div className="flex flex-col gap-2" style={{ opacity: pending.enabled ? 1 : 0.4 }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <FiSliders
-                      size={12}
-                      style={{ color: "var(--color-text-muted)" }}
-                    />
-                    <span
-                      className="text-xs"
-                      style={{ color: "var(--color-text-muted)" }}
-                    >
-                      Volume
-                    </span>
+                    <FiSliders size={12} style={{ color: "var(--color-text-muted)" }} />
+                    <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Volume</span>
                   </div>
-                  <span
-                    className="text-xs font-semibold tabular-nums"
-                    style={{ color: "var(--color-primary)" }}
-                  >
-                    {volumePct}%
-                  </span>
+                  <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--color-primary)" }}>{volumePct}%</span>
                 </div>
-
-                <div
-                  className="relative flex items-center"
-                  style={{ height: 20 }}
-                >
-                  <div
-                    className="absolute inset-y-0 my-auto rounded-full"
-                    style={{
-                      left: 0,
-                      right: 0,
-                      height: 4,
-                      backgroundColor: "var(--color-bg-base)",
-                      border: "1px solid var(--color-border)",
-                    }}
-                  />
-                  <div
-                    className="absolute inset-y-0 my-auto rounded-full transition-all"
-                    style={{
-                      left: 0,
-                      width: `${volumePct}%`,
-                      height: 4,
-                      backgroundColor: "var(--color-primary)",
-                    }}
-                  />
+                <div className="relative flex items-center" style={{ height: 20 }}>
+                  <div className="absolute inset-y-0 my-auto rounded-full" style={{ left: 0, right: 0, height: 4, backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }} />
+                  <div className="absolute inset-y-0 my-auto rounded-full transition-all" style={{ left: 0, width: `${volumePct}%`, height: 4, backgroundColor: "var(--color-primary)" }} />
                   <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={settings.volume}
-                    disabled={!settings.enabled}
-                    onChange={(e) =>
-                      update({ volume: parseFloat(e.target.value) })
-                    }
+                    type="range" min={0} max={1} step={0.01}
+                    value={pending.volume}
+                    disabled={!pending.enabled}
+                    onChange={(e) => setPending((p) => ({ ...p, volume: parseFloat(e.target.value) }))}
                     className="relative w-full cursor-pointer"
-                    style={{
-                      height: 20,
-                      appearance: "none",
-                      background: "transparent",
-                      outline: "none",
-                    }}
+                    style={{ height: 20, appearance: "none", background: "transparent", outline: "none" }}
                   />
                 </div>
               </div>
 
               {/* Sound picker */}
-              <div
-                className="flex flex-col gap-1.5"
-                style={{ opacity: settings.enabled ? 1 : 0.4 }}
-              >
+              <div className="flex flex-col gap-1.5" style={{ opacity: pending.enabled ? 1 : 0.4 }}>
                 <div className="flex items-center gap-1.5">
-                  <FiMusic
-                    size={12}
-                    style={{ color: "var(--color-text-muted)" }}
-                  />
-                  <span
-                    className="text-xs"
-                    style={{ color: "var(--color-text-muted)" }}
-                  >
-                    Som ao receber pedido
-                  </span>
+                  <FiMusic size={12} style={{ color: "var(--color-text-muted)" }} />
+                  <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Som ao receber pedido</span>
                 </div>
-
                 <div className="flex flex-col gap-1">
                   {SOUNDS.map((s) => {
-                    const active = settings.sound === s;
+                    const active = pending.sound === s;
                     return (
                       <button
                         key={s}
-                        onClick={() =>
-                          settings.enabled ? previewSound(s) : undefined
-                        }
-                        disabled={!settings.enabled}
+                        onClick={() => pending.enabled ? previewSound(s) : undefined}
+                        disabled={!pending.enabled}
                         className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "rgba(0,136,194,0.12)"
-                            : "var(--color-bg-elevated)",
-                          border: active
-                            ? "1px solid rgba(0,136,194,0.35)"
-                            : "1px solid var(--color-border)",
-                          color: active
-                            ? "var(--color-primary)"
-                            : "var(--color-text-secondary)",
-                        }}
+                        style={{ backgroundColor: active ? "rgba(0,136,194,0.12)" : "var(--color-bg-elevated)", border: active ? "1px solid rgba(0,136,194,0.35)" : "1px solid var(--color-border)", color: active ? "var(--color-primary)" : "var(--color-text-secondary)" }}
                       >
                         <div className="flex items-center gap-2">
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                            style={{
-                              backgroundColor: active
-                                ? "var(--color-primary)"
-                                : "var(--color-bg-base)",
-                              border: active
-                                ? "none"
-                                : "1px solid var(--color-border)",
-                            }}
-                          >
-                            {active ? (
-                              <FiCheck size={10} color="white" />
-                            ) : (
-                              <FiMusic
-                                size={10}
-                                style={{ color: "var(--color-text-muted)" }}
-                              />
-                            )}
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: active ? "var(--color-primary)" : "var(--color-bg-base)", border: active ? "none" : "1px solid var(--color-border)" }}>
+                            {active ? <FiCheck size={10} color="white" /> : <FiMusic size={10} style={{ color: "var(--color-text-muted)" }} />}
                           </div>
-                          <span className="text-xs font-medium">
-                            {SOUND_LABELS[s]}
-                          </span>
+                          <span className="text-xs font-medium">{SOUND_LABELS[s]}</span>
                         </div>
-                        {active && (
-                          <span
-                            className="text-[10px] font-medium"
-                            style={{
-                              color: "var(--color-primary)",
-                              opacity: 0.7,
-                            }}
-                          >
-                            ▶ preview
-                          </span>
-                        )}
+                        {active && <span className="text-[10px] font-medium" style={{ color: "var(--color-primary)", opacity: 0.7 }}>▶ preview</span>}
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Save button */}
+              <button
+                onClick={saveOrders}
+                className="w-full py-2 rounded-[var(--radius-md)] text-xs font-semibold cursor-pointer transition-all"
+                style={{
+                  backgroundColor: ordersSaved ? "rgba(34,197,94,0.15)" : "var(--color-primary)",
+                  color: ordersSaved ? "var(--color-success)" : "white",
+                  border: ordersSaved ? "1px solid rgba(34,197,94,0.35)" : "none",
+                }}
+              >
+                {ordersSaved ? "✓ Salvo!" : "Salvar"}
+              </button>
             </div>
           )}
 
@@ -521,192 +443,84 @@ export function SoundAlertButton() {
             <div className="flex flex-col gap-4 px-4 py-4">
               {/* Enable chat sound toggle */}
               <div className="flex items-center justify-between">
-                <span
-                  className="text-sm"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  {settings.chatSoundEnabled ? "Som ativado" : "Som desativado"}
+                <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                  {pending.chatSoundEnabled ? "Som ativado" : "Som desativado"}
                 </span>
                 <button
-                  onClick={() =>
-                    update({ chatSoundEnabled: !settings.chatSoundEnabled })
-                  }
+                  onClick={() => setPending((p) => ({ ...p, chatSoundEnabled: !p.chatSoundEnabled }))}
                   className="relative flex items-center cursor-pointer transition-all"
                   style={{ width: 44, height: 24 }}
                 >
-                  <span
-                    className="absolute inset-0 rounded-full transition-colors"
-                    style={{
-                      backgroundColor: settings.chatSoundEnabled
-                        ? "var(--color-primary)"
-                        : "var(--color-border)",
-                    }}
-                  />
-                  <span
-                    className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform"
-                    style={{
-                      transform: settings.chatSoundEnabled
-                        ? "translateX(24px)"
-                        : "translateX(4px)",
-                    }}
-                  />
+                  <span className="absolute inset-0 rounded-full transition-colors" style={{ backgroundColor: pending.chatSoundEnabled ? "var(--color-primary)" : "var(--color-border)" }} />
+                  <span className="absolute w-4 h-4 bg-white rounded-full shadow transition-transform" style={{ transform: pending.chatSoundEnabled ? "translateX(24px)" : "translateX(4px)" }} />
                 </button>
               </div>
 
               {/* Chat volume slider */}
-              <div
-                className="flex flex-col gap-2"
-                style={{ opacity: settings.chatSoundEnabled ? 1 : 0.4 }}
-              >
+              <div className="flex flex-col gap-2" style={{ opacity: pending.chatSoundEnabled ? 1 : 0.4 }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <FiSliders
-                      size={12}
-                      style={{ color: "var(--color-text-muted)" }}
-                    />
-                    <span
-                      className="text-xs"
-                      style={{ color: "var(--color-text-muted)" }}
-                    >
-                      Volume
-                    </span>
+                    <FiSliders size={12} style={{ color: "var(--color-text-muted)" }} />
+                    <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Volume</span>
                   </div>
-                  <span
-                    className="text-xs font-semibold tabular-nums"
-                    style={{ color: "var(--color-primary)" }}
-                  >
-                    {chatVolumePct}%
-                  </span>
+                  <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--color-primary)" }}>{chatVolumePct}%</span>
                 </div>
-
-                <div
-                  className="relative flex items-center"
-                  style={{ height: 20 }}
-                >
-                  <div
-                    className="absolute inset-y-0 my-auto rounded-full"
-                    style={{
-                      left: 0,
-                      right: 0,
-                      height: 4,
-                      backgroundColor: "var(--color-bg-base)",
-                      border: "1px solid var(--color-border)",
-                    }}
-                  />
-                  <div
-                    className="absolute inset-y-0 my-auto rounded-full transition-all"
-                    style={{
-                      left: 0,
-                      width: `${chatVolumePct}%`,
-                      height: 4,
-                      backgroundColor: "var(--color-primary)",
-                    }}
-                  />
+                <div className="relative flex items-center" style={{ height: 20 }}>
+                  <div className="absolute inset-y-0 my-auto rounded-full" style={{ left: 0, right: 0, height: 4, backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }} />
+                  <div className="absolute inset-y-0 my-auto rounded-full transition-all" style={{ left: 0, width: `${chatVolumePct}%`, height: 4, backgroundColor: "var(--color-primary)" }} />
                   <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={settings.chatVolume}
-                    disabled={!settings.chatSoundEnabled}
-                    onChange={(e) =>
-                      update({ chatVolume: parseFloat(e.target.value) })
-                    }
+                    type="range" min={0} max={1} step={0.01}
+                    value={pending.chatVolume}
+                    disabled={!pending.chatSoundEnabled}
+                    onChange={(e) => setPending((p) => ({ ...p, chatVolume: parseFloat(e.target.value) }))}
                     className="relative w-full cursor-pointer"
-                    style={{
-                      height: 20,
-                      appearance: "none",
-                      background: "transparent",
-                      outline: "none",
-                    }}
+                    style={{ height: 20, appearance: "none", background: "transparent", outline: "none" }}
                   />
                 </div>
               </div>
 
               {/* Chat sound picker */}
-              <div
-                className="flex flex-col gap-1.5"
-                style={{ opacity: settings.chatSoundEnabled ? 1 : 0.4 }}
-              >
+              <div className="flex flex-col gap-1.5" style={{ opacity: pending.chatSoundEnabled ? 1 : 0.4 }}>
                 <div className="flex items-center gap-1.5">
-                  <FiMessageSquare
-                    size={12}
-                    style={{ color: "var(--color-text-muted)" }}
-                  />
-                  <span
-                    className="text-xs"
-                    style={{ color: "var(--color-text-muted)" }}
-                  >
-                    Som ao receber mensagem
-                  </span>
+                  <FiMessageSquare size={12} style={{ color: "var(--color-text-muted)" }} />
+                  <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Som ao receber mensagem</span>
                 </div>
-
                 <div className="flex flex-col gap-1">
                   {SOUNDS.map((s) => {
-                    const active = settings.chatSound === s;
+                    const active = pending.chatSound === s;
                     return (
                       <button
                         key={s}
-                        onClick={() =>
-                          settings.chatSoundEnabled
-                            ? previewChatSound(s)
-                            : undefined
-                        }
-                        disabled={!settings.chatSoundEnabled}
+                        onClick={() => pending.chatSoundEnabled ? previewChatSound(s) : undefined}
+                        disabled={!pending.chatSoundEnabled}
                         className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "rgba(0,136,194,0.12)"
-                            : "var(--color-bg-elevated)",
-                          border: active
-                            ? "1px solid rgba(0,136,194,0.35)"
-                            : "1px solid var(--color-border)",
-                          color: active
-                            ? "var(--color-primary)"
-                            : "var(--color-text-secondary)",
-                        }}
+                        style={{ backgroundColor: active ? "rgba(0,136,194,0.12)" : "var(--color-bg-elevated)", border: active ? "1px solid rgba(0,136,194,0.35)" : "1px solid var(--color-border)", color: active ? "var(--color-primary)" : "var(--color-text-secondary)" }}
                       >
                         <div className="flex items-center gap-2">
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                            style={{
-                              backgroundColor: active
-                                ? "var(--color-primary)"
-                                : "var(--color-bg-base)",
-                              border: active
-                                ? "none"
-                                : "1px solid var(--color-border)",
-                            }}
-                          >
-                            {active ? (
-                              <FiCheck size={10} color="white" />
-                            ) : (
-                              <FiMessageSquare
-                                size={10}
-                                style={{ color: "var(--color-text-muted)" }}
-                              />
-                            )}
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: active ? "var(--color-primary)" : "var(--color-bg-base)", border: active ? "none" : "1px solid var(--color-border)" }}>
+                            {active ? <FiCheck size={10} color="white" /> : <FiMessageSquare size={10} style={{ color: "var(--color-text-muted)" }} />}
                           </div>
-                          <span className="text-xs font-medium">
-                            {SOUND_LABELS[s]}
-                          </span>
+                          <span className="text-xs font-medium">{SOUND_LABELS[s]}</span>
                         </div>
-                        {active && (
-                          <span
-                            className="text-[10px] font-medium"
-                            style={{
-                              color: "var(--color-primary)",
-                              opacity: 0.7,
-                            }}
-                          >
-                            ▶ preview
-                          </span>
-                        )}
+                        {active && <span className="text-[10px] font-medium" style={{ color: "var(--color-primary)", opacity: 0.7 }}>▶ preview</span>}
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Save button */}
+              <button
+                onClick={saveChat}
+                className="w-full py-2 rounded-[var(--radius-md)] text-xs font-semibold cursor-pointer transition-all"
+                style={{
+                  backgroundColor: chatSaved ? "rgba(34,197,94,0.15)" : "var(--color-primary)",
+                  color: chatSaved ? "var(--color-success)" : "white",
+                  border: chatSaved ? "1px solid rgba(34,197,94,0.35)" : "none",
+                }}
+              >
+                {chatSaved ? "✓ Salvo!" : "Salvar"}
+              </button>
             </div>
           )}
         </div>
