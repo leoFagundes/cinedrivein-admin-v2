@@ -86,8 +86,11 @@ function getSavedEmails(): string[] {
 }
 
 function persistEmail(email: string) {
-  const list = getSavedEmails().filter((e) => e !== email.toLowerCase());
-  list.unshift(email.toLowerCase());
+  const val = email.trim();
+  const list = getSavedEmails().filter(
+    (e) => e.toLowerCase() !== val.toLowerCase(),
+  );
+  list.unshift(val);
   localStorage.setItem(
     SAVED_EMAILS_KEY,
     JSON.stringify(list.slice(0, MAX_SAVED_EMAILS)),
@@ -141,7 +144,9 @@ function LoginForm() {
   // ── Email autocomplete ──
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const suggestionBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // ── Reset state ──
   const [resetEmail, setResetEmail] = useState("");
@@ -177,7 +182,8 @@ function LoginForm() {
     setLoginLoading(true);
     try {
       await signIn(identifier.trim(), password);
-      if (identifier.trim().includes("@")) persistEmail(identifier.trim());
+      // if (identifier.trim().includes("@"))
+      persistEmail(identifier.trim());
       success("Bem-vindo!", "Você entrou com sucesso.");
     } catch (err) {
       const msg = parseError(err);
@@ -318,7 +324,7 @@ function LoginForm() {
                         }));
                       if (val.length > 0) {
                         const matches = getSavedEmails().filter((saved) =>
-                          saved.includes(val.toLowerCase()),
+                          saved.toLowerCase().includes(val.toLowerCase()),
                         );
                         setEmailSuggestions(matches);
                         setShowSuggestions(matches.length > 0);

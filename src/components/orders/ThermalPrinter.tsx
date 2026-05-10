@@ -396,9 +396,12 @@ export function buildReportTicket(report: ReportData): Uint8Array {
   const parts: Uint8Array[] = [];
   const add = (...chunks: Uint8Array[]) => parts.push(...chunks);
 
-  // Format date "2026-05-01" → "01/05/2026"
-  const [y, m, d] = report.date.split("-");
-  const dateLabel = `${d}/${m}/${y}`;
+  const dateLabel = report.date.includes("/")
+    ? report.date
+    : (() => {
+        const [y, m, d] = report.date.split("-");
+        return `${d}/${m}/${y}`;
+      })();
 
   add(CMD.init);
 

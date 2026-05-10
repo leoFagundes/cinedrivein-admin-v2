@@ -1095,6 +1095,102 @@ export default function DashboardPage() {
     }
   }
 
+  async function handlePrintPdfRange() {
+    if (!pdfRange.from || !pdfRange.to) return;
+
+    const rangeDays = stats.filter(
+      (s) => s.date >= pdfRange.from && s.date <= pdfRange.to,
+    );
+
+    const today = todayStr();
+    const todayInRange = pdfRange.from <= today && today <= pdfRange.to;
+    const todayArchived = rangeDays.some((s) => s.date === today);
+    const hasPending = pendingStats.finished > 0 || pendingStats.canceled > 0;
+    const pending =
+      todayInRange && !todayArchived && hasPending ? pendingStats : null;
+
+    const ZERO_REV = {
+      money: 0,
+      pix: 0,
+      credit: 0,
+      debit: 0,
+      subtotal: 0,
+      serviceFee: 0,
+      total: 0,
+    };
+
+    const aggregated = rangeDays.reduce(
+      (acc, s) => ({
+        finishedOrders: acc.finishedOrders + s.finishedOrders,
+        canceledOrders: acc.canceledOrders + s.canceledOrders,
+        revenue: {
+          money: acc.revenue.money + s.revenue.money,
+          pix: acc.revenue.pix + s.revenue.pix,
+          credit: acc.revenue.credit + s.revenue.credit,
+          debit: acc.revenue.debit + s.revenue.debit,
+          subtotal: acc.revenue.subtotal + s.revenue.subtotal,
+          serviceFee: acc.revenue.serviceFee + s.revenue.serviceFee,
+          total: acc.revenue.total + s.revenue.total,
+        },
+      }),
+      { finishedOrders: 0, canceledOrders: 0, revenue: { ...ZERO_REV } },
+    );
+
+    const itemMap: Record<
+      string,
+      {
+        codItem: string;
+        name: string;
+        quantity: number;
+        additionals: Record<string, number>;
+      }
+    > = {};
+
+    rangeDays
+      .flatMap((s) => s.topItems)
+      .forEach((item) => {
+        const key = item.codItem || item.name;
+        if (!itemMap[key]) {
+          itemMap[key] = {
+            codItem: item.codItem,
+            name: item.name,
+            quantity: 0,
+            additionals: {},
+          };
+        }
+        itemMap[key].quantity += item.quantity;
+        Object.entries(item.additionals ?? {}).forEach(([k, v]) => {
+          itemMap[key].additionals[k] = (itemMap[key].additionals[k] ?? 0) + v;
+        });
+      });
+
+    if (pending) {
+      aggregated.finishedOrders += pending.finished;
+      aggregated.canceledOrders += pending.canceled;
+      aggregated.revenue.total += pending.revenue;
+    }
+
+    function fmtFull(dateStr: string): string {
+      const [y, m, d] = dateStr.split("-");
+      return `${d}/${m}/${y}`;
+    }
+
+    // Passa sempre já formatado para o buildReportTicket não tentar fazer split
+    const dateLabel =
+      pdfRange.from === pdfRange.to
+        ? fmtFull(pdfRange.from)
+        : `${fmtFull(pdfRange.from)} a ${fmtFull(pdfRange.to)}`;
+
+    const reportData: ReportData = {
+      date: dateLabel,
+      ...aggregated,
+      topItems: Object.values(itemMap).sort((a, b) => b.quantity - a.quantity),
+    };
+
+    // buildReportTicket precisa tratar data já formatada (contém "/")
+    print(buildReportTicket(reportData));
+  }
+
   // ── Chart data (per-chart filtered) ────────────────────────────────────────
 
   const revenueStats = filterStats(revenueRange);
@@ -2044,7 +2140,30 @@ export default function DashboardPage() {
             </div>
 
             {/* Download button */}
-            <div className="flex justify-end">
+            {/* Download button */}
+            <div className="flex justify-end gap-2">
+              {" "}
+              {/* gap-2 para separar os botões */}
+              <button
+                onClick={handlePrintPdfRange}
+                disabled={!isConnected || !pdfRange.from || !pdfRange.to}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: isConnected
+                    ? "var(--color-text-secondary)"
+                    : "var(--color-text-muted)",
+                  border: "1px solid var(--color-border)",
+                }}
+                title={
+                  !isConnected
+                    ? "Conecte a impressora para imprimir"
+                    : "Imprimir relatório do período na térmica"
+                }
+              >
+                <FiPrinter size={15} />
+                {isConnected ? "Imprimir período" : "Impressora desconectada"}
+              </button>
               <button
                 onClick={handleDownloadPdf}
                 disabled={generatingPdf || !pdfRange.from || !pdfRange.to}
