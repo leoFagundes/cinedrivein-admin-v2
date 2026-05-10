@@ -26,6 +26,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { ref, onValue } from "firebase/database";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
+import { usePrinter } from "../orders/ThermalPrinter";
 
 interface NavItem {
   label: string;
@@ -156,6 +157,7 @@ export default function Sidebar() {
 
   const [storeOpen, setStoreOpen] = useState<boolean | null>(null);
   const [activeUsers, setActiveUsers] = useState<number>(0);
+  const { isConnected, connectionMode, status } = usePrinter();
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
@@ -239,6 +241,64 @@ export default function Sidebar() {
           )}
         </div>
       )}
+
+      {/* Faixa da impressora */}
+      <div
+        className="flex items-center justify-between px-4 py-2"
+        style={{
+          backgroundColor: isConnected
+            ? "rgba(0,136,194,0.06)"
+            : "rgba(100,100,120,0.04)",
+          borderBottom: "1px solid var(--color-border)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div
+            className="w-2 h-2 rounded-full shrink-0"
+            style={{
+              backgroundColor: isConnected
+                ? status === "printing"
+                  ? "var(--color-primary)"
+                  : "var(--color-success)"
+                : "var(--color-text-muted)",
+              boxShadow: isConnected
+                ? status === "printing"
+                  ? "0 0 6px rgba(0,136,194,0.6)"
+                  : "0 0 6px rgba(34,197,94,0.5)"
+                : "none",
+            }}
+          />
+          <span
+            className="text-xs font-medium"
+            style={{
+              color: isConnected
+                ? status === "printing"
+                  ? "var(--color-primary)"
+                  : "var(--color-success)"
+                : "var(--color-text-muted)",
+            }}
+          >
+            {status === "printing"
+              ? "Imprimindo..."
+              : isConnected
+                ? "Impressora conectada"
+                : "Impressora desconectada"}
+          </span>
+        </div>
+
+        {isConnected && (
+          <span
+            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+            style={{
+              backgroundColor: "rgba(0,136,194,0.1)",
+              color: "var(--color-primary)",
+              border: "1px solid rgba(0,136,194,0.2)",
+            }}
+          >
+            {connectionMode === "qztray" ? "QZ Tray" : "Serial"}
+          </span>
+        )}
+      </div>
 
       <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {

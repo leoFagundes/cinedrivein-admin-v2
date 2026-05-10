@@ -1117,6 +1117,7 @@ export default function DashboardPage() {
       subtotal: 0,
       serviceFee: 0,
       total: 0,
+      discount: 0,
     };
 
     const aggregated = rangeDays.reduce(
@@ -1131,6 +1132,7 @@ export default function DashboardPage() {
           subtotal: acc.revenue.subtotal + s.revenue.subtotal,
           serviceFee: acc.revenue.serviceFee + s.revenue.serviceFee,
           total: acc.revenue.total + s.revenue.total,
+          discount: acc.revenue.discount + (s.revenue.discount ?? 0),
         },
       }),
       { finishedOrders: 0, canceledOrders: 0, revenue: { ...ZERO_REV } },
