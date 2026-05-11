@@ -1776,7 +1776,7 @@ function ItemModal({
           </button>
           <InfoTooltip
             align="right"
-            text="Itens em destaque aparecem no topo da sua própria seção cardápio, com maior visibilidade."
+            text="Itens em destaque aparecem no topo da sua própria seção no cardápio, com maior visibilidade."
           />
         </div>
 
