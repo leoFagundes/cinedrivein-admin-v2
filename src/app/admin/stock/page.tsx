@@ -2484,7 +2484,13 @@ export default function StockPage() {
     "none",
   );
   const [filterVisibility, setFilterVisibility] = useState<
-    "all" | "visible" | "hidden"
+    | "all"
+    | "visible"
+    | "hidden"
+    | "printTwice"
+    | "featured"
+    | "trackStock"
+    | "noTrackStock"
   >("all");
 
   // ── Modals ──
@@ -2599,9 +2605,24 @@ export default function StockPage() {
         i.description.toLowerCase().includes(search.toLowerCase());
       const matchCat =
         filterCategory === "all" || i.category === filterCategory;
-      const matchVis =
-        filterVisibility === "all" ||
-        (filterVisibility === "visible" ? i.isVisible : !i.isVisible);
+      const matchVis = (() => {
+        switch (filterVisibility) {
+          case "visible":
+            return i.isVisible;
+          case "hidden":
+            return !i.isVisible;
+          case "printTwice":
+            return i.printTwice === true;
+          case "featured":
+            return i.isFeatured === true;
+          case "trackStock":
+            return i.trackStock === true;
+          case "noTrackStock":
+            return i.trackStock !== true;
+          default:
+            return true;
+        }
+      })();
       return matchSearch && matchCat && matchVis;
     })
     .sort((a, b) => {
@@ -3301,14 +3322,26 @@ export default function StockPage() {
                     }
                     className="h-9 px-3 text-sm rounded-[var(--radius-md)] outline-none cursor-pointer"
                     style={{
-                      backgroundColor: "var(--color-bg-elevated)",
-                      border: "1px solid var(--color-border)",
-                      color: "var(--color-text-secondary)",
+                      backgroundColor:
+                        filterVisibility !== "all"
+                          ? "var(--color-primary-light)"
+                          : "var(--color-bg-elevated)",
+                      border: `1px solid ${filterVisibility !== "all" ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                      color:
+                        filterVisibility !== "all"
+                          ? "var(--color-primary)"
+                          : "var(--color-text-secondary)",
                     }}
                   >
-                    <option value="all">Visibilidade: Todos</option>
-                    <option value="visible">Apenas visíveis</option>
-                    <option value="hidden">Apenas ocultos</option>
+                    <option value="all">Filtro: Todos</option>
+                    <option value="visible">Visíveis</option>
+                    <option value="hidden">Ocultos</option>
+                    <option value="featured">Em destaque</option>
+                    <option value="printTwice">Impressão 2x</option>
+                    <option value="trackStock">Com controle de estoque</option>
+                    <option value="noTrackStock">
+                      Sem controle de estoque
+                    </option>
                   </select>
                 </div>
               </div>

@@ -630,6 +630,7 @@ export default function NewOrderModal({
     setCustomerName("Lanchonete do Cine Drive-in");
     setCustomerPhone(applyPhoneMask("99999999999"));
     setNameError("");
+    setPhoneError("");
   }
 
   function validate() {
