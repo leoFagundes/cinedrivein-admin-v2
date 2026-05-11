@@ -134,3 +134,62 @@ export async function increaseStock(items: OrderItem[]): Promise<void> {
 
   if (hasBatch) await batch.commit();
 }
+
+// ── diffOrderStock ────────────────────────────────────────────────────────────
+
+/**
+ * Compara os itens de um pedido antes e depois da edição e ajusta o estoque
+ * apenas na diferença. Regras:
+ *  - qty aumentou  → decreaseStock pela diferença (consumir mais)
+ *  - qty diminuiu  → increaseStock pela diferença (devolver)
+ *  - item novo     → decreaseStock pela qty total
+ *  - item removido → increaseStock pela qty total
+ */
+export async function diffOrderStock(
+  previousItems: OrderItem[],
+  nextItems: OrderItem[],
+): Promise<void> {
+  const [prevMap, nextMap] = await Promise.all([
+    buildAdjustmentMap(previousItems),
+    buildAdjustmentMap(nextItems),
+  ]);
+
+  // Todos os itemIds envolvidos nos dois lados
+  const allIds = new Set([...prevMap.keys(), ...nextMap.keys()]);
+
+  const toDecrease: Map<string, number> = new Map();
+  const toIncrease: Map<string, number> = new Map();
+
+  for (const id of allIds) {
+    const prev = prevMap.get(id) ?? 0;
+    const next = nextMap.get(id) ?? 0;
+    const diff = next - prev;
+
+    if (diff > 0)
+      toDecrease.set(id, diff); // consumir mais
+    else if (diff < 0) toIncrease.set(id, -diff); // devolver
+    // diff === 0 → nada a fazer
+  }
+
+  // Monta OrderItem[] fictícios só com itemId + quantity para reaproveitar
+  // as funções existentes que já lidam com trackStock e transações
+  function syntheticItems(map: Map<string, number>): OrderItem[] {
+    return Array.from(map.entries()).map(([itemId, quantity]) => ({
+      itemId,
+      codItem: "",
+      name: "",
+      value: 0,
+      quantity,
+      trackStock: true, // já filtramos por trackStock dentro de decrease/increase
+    }));
+  }
+
+  await Promise.all([
+    toDecrease.size > 0
+      ? decreaseStock(syntheticItems(toDecrease))
+      : Promise.resolve(),
+    toIncrease.size > 0
+      ? increaseStock(syntheticItems(toIncrease))
+      : Promise.resolve(),
+  ]);
+}

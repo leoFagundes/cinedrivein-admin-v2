@@ -1838,7 +1838,7 @@ function ItemModal({
           </button>
           <InfoTooltip
             align="right"
-            text="Quando chega uma comanda que tenha ao menos UM item com essa opção ativa, a comanda é impressa em duas vias automaticamente — útil para comandas que precisam ir para setores diferentes."
+            text="Quando chega uma comanda que tenha ao menos UM item com essa opção ativa, a comanda é impressa em duas vias automaticamente. Caso tenha apenas itens com essa opção ativa, então ele imprime apenas uma via normalmente."
           />
         </div>
       </div>

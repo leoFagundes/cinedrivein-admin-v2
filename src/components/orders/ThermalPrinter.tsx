@@ -812,7 +812,11 @@ function useThermalPrinterCore() {
         const shouldPrintTwice = order.items.some(
           (item) => item.printTwice === true,
         );
-        if (shouldPrintTwice) {
+        const itsOnlyPrintTwiceItems =
+          order.items.length ===
+          order.items.filter((item) => item.printTwice === true).length;
+
+        if (shouldPrintTwice && !itsOnlyPrintTwiceItems) {
           await new Promise((resolve) => setTimeout(resolve, 800));
           await print(buildOrderTicket(order));
         }

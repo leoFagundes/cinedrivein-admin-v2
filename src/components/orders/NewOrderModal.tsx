@@ -29,7 +29,8 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
-import { StockItem, Subitem, Order } from "@/types";
+import { StockItem, Subitem, Order, OrderItem } from "@/types";
+import { diffOrderStock } from "@/lib/stock";
 
 const SERVICE_FEE_RATE = 0.1;
 
@@ -91,6 +92,30 @@ function ItemCard({ item, onClick }: { item: StockItem; onClick: () => void }) {
           style={{ backgroundColor: "var(--color-bg-base)" }}
         >
           <FiPackage size={24} style={{ color: "var(--color-text-muted)" }} />
+        </div>
+      )}
+      {item.trackStock && (
+        <div className="absolute p-1 m-1">
+          <div
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+            style={{
+              backgroundColor:
+                item.quantity <= 0
+                  ? "rgba(239,68,68,0.12)"
+                  : item.quantity <= 5
+                    ? "rgba(245,158,11,0.12)"
+                    : "rgba(34,197,94,0.1)",
+              color:
+                item.quantity <= 0
+                  ? "var(--color-error)"
+                  : item.quantity <= 5
+                    ? "var(--color-warning)"
+                    : "var(--color-success)",
+            }}
+          >
+            <FiPackage size={10} className="flex-shrink-0" />
+            {item.quantity}
+          </div>
         </div>
       )}
       <div className="p-2.5 flex flex-col gap-0.5">
@@ -692,6 +717,10 @@ export default function NewOrderModal({
           serviceFee,
           total,
         });
+        await diffOrderStock(
+          editOrder.items,
+          itemsPayload as unknown as OrderItem[],
+        );
         log({
           action: "Pedido editado",
           category: "orders",
