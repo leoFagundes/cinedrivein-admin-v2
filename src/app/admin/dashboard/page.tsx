@@ -380,6 +380,14 @@ export default function DashboardPage() {
     range: { from: string; to: string };
   } | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [clearPeriodModal, setClearPeriodModal] = useState(false);
+  const [clearPeriodRange, setClearPeriodRange] = useState({
+    from: "",
+    to: "",
+  });
+  const [clearPeriodConfirm, setClearPeriodConfirm] = useState(false);
+  const [clearingPeriod, setClearingPeriod] = useState(false);
+  const [confirmDeleteDay, setConfirmDeleteDay] = useState(false);
 
   const [pdfRange, setPdfRange] = useState({ from: "", to: "" });
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -561,6 +569,54 @@ export default function DashboardPage() {
   }, [reportDate]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
+  async function handleClearPeriod() {
+    setClearingPeriod(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "dailyStats"), orderBy("date")),
+      );
+      const toDelete = snap.docs.filter((d) => {
+        const date = d.data().date as string;
+        if (clearPeriodRange.from && date < clearPeriodRange.from) return false;
+        if (clearPeriodRange.to && date > clearPeriodRange.to) return false;
+        return true;
+      });
+      if (toDelete.length === 0) {
+        info("Nada a zerar", "Nenhum dado no período selecionado.");
+        setClearPeriodModal(false);
+        setClearPeriodConfirm(false);
+        setClearingPeriod(false);
+        return;
+      }
+      for (let i = 0; i < toDelete.length; i += 500) {
+        const batch = writeBatch(db);
+        toDelete.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      setStats((prev) =>
+        prev.filter((s) => {
+          if (clearPeriodRange.from && s.date < clearPeriodRange.from)
+            return true;
+          if (clearPeriodRange.to && s.date > clearPeriodRange.to) return true;
+          return false;
+        }),
+      );
+      log({
+        action: "Estatísticas zeradas por período",
+        category: "orders",
+        description: `${toDelete.length} dia(s) removidos (${clearPeriodRange.from || "início"} → ${clearPeriodRange.to || "fim"})`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+      });
+      success("Dados zerados", `${toDelete.length} dia(s) removidos.`);
+      setClearPeriodModal(false);
+      setClearPeriodConfirm(false);
+    } catch {
+      toastError("Erro", "Não foi possível zerar os dados.");
+    } finally {
+      setClearingPeriod(false);
+    }
+  }
 
   async function handleToggleStore() {
     setTogglingStore(true);
@@ -1674,24 +1730,75 @@ export default function DashboardPage() {
               className="flex items-center gap-2 flex-wrap"
               onClick={(e) => e.stopPropagation()}
             >
-              {reportSource === "archived" && canDeleteChartData && (
+              {canDeleteChartData && stats.length > 0 && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteDay(reportDate);
+                  onClick={() => {
+                    setClearPeriodRange({ from: "", to: "" });
+                    setClearPeriodConfirm(false);
+                    setClearPeriodModal(true);
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs cursor-pointer transition-opacity hover:opacity-70"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs cursor-pointer transition-opacity hover:opacity-70"
                   style={{
                     backgroundColor: "rgba(239,68,68,0.08)",
                     border: "1px solid rgba(239,68,68,0.2)",
                     color: "var(--color-error)",
                   }}
-                  title="Limpar estatísticas deste dia"
                 >
                   <FiTrash2 size={11} />
-                  Limpar dia
+                  Limpar período
                 </button>
               )}
+              {reportSource === "archived" &&
+                canDeleteChartData &&
+                (confirmDeleteDay ? (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Confirmar exclusão?
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteDay(false);
+                        handleDeleteDay(reportDate);
+                      }}
+                      className="text-xs font-medium cursor-pointer transition-opacity hover:opacity-70"
+                      style={{ color: "var(--color-error)" }}
+                    >
+                      Sim
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteDay(false);
+                      }}
+                      className="text-xs cursor-pointer transition-opacity hover:opacity-70"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Não
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDeleteDay(true);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs cursor-pointer transition-opacity hover:opacity-70"
+                    style={{
+                      backgroundColor: "rgba(239,68,68,0.08)",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                      color: "var(--color-error)",
+                    }}
+                    title="Limpar estatísticas deste dia"
+                  >
+                    <FiTrash2 size={11} />
+                    Limpar dia
+                  </button>
+                ))}
+
               <div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] text-sm"
                 style={{
@@ -2486,6 +2593,285 @@ export default function DashboardPage() {
             </div>
           </>
         )
+      )}
+
+      {/* Limpar dados por período - Modal */}
+      {clearPeriodModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+        >
+          <div
+            className="w-full max-w-sm rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "1px solid var(--color-border)" }}
+            >
+              <p
+                className="font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                Limpar estatísticas por período
+              </p>
+              <button
+                onClick={() => {
+                  setClearPeriodModal(false);
+                  setClearPeriodConfirm(false);
+                }}
+                className="p-1.5 cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 flex flex-col gap-4">
+              {/* Registro mais antigo */}
+              {stats.length > 0 && (
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <FiCalendar
+                    size={13}
+                    style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+                  />
+                  <div className="flex flex-col">
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Registro mais antigo
+                    </span>
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      {[...stats]
+                        .sort((a, b) => a.date.localeCompare(b.date))[0]
+                        .date.split("-")
+                        .reverse()
+                        .join("/")}
+                    </span>
+                  </div>
+                  <div className="flex flex-col ml-auto">
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Total de dias
+                    </span>
+                    <span
+                      className="text-sm font-medium text-right"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      {stats.length} dia{stats.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Seleção de período */}
+              <div className="flex flex-col gap-2">
+                <p
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Período a limpar
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      De
+                    </label>
+                    <input
+                      type="date"
+                      value={clearPeriodRange.from}
+                      onChange={(e) => {
+                        setClearPeriodRange((r) => ({
+                          ...r,
+                          from: e.target.value,
+                        }));
+                        setClearPeriodConfirm(false);
+                      }}
+                      className="h-8 px-2.5 text-sm outline-none cursor-pointer rounded-[var(--radius-md)]"
+                      style={{
+                        backgroundColor: clearPeriodRange.from
+                          ? "var(--color-primary-light)"
+                          : "var(--color-bg-elevated)",
+                        border: `1px solid ${clearPeriodRange.from ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                        color: clearPeriodRange.from
+                          ? "var(--color-primary)"
+                          : "var(--color-text-muted)",
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Até
+                    </label>
+                    <input
+                      type="date"
+                      value={clearPeriodRange.to}
+                      min={clearPeriodRange.from}
+                      onChange={(e) => {
+                        setClearPeriodRange((r) => ({
+                          ...r,
+                          to: e.target.value,
+                        }));
+                        setClearPeriodConfirm(false);
+                      }}
+                      className="h-8 px-2.5 text-sm outline-none cursor-pointer rounded-[var(--radius-md)]"
+                      style={{
+                        backgroundColor: clearPeriodRange.to
+                          ? "var(--color-primary-light)"
+                          : "var(--color-bg-elevated)",
+                        border: `1px solid ${clearPeriodRange.to ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                        color: clearPeriodRange.to
+                          ? "var(--color-primary)"
+                          : "var(--color-text-muted)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Quantos dias seriam deletados */}
+                {(clearPeriodRange.from || clearPeriodRange.to) &&
+                  (() => {
+                    const count = stats.filter((s) => {
+                      if (
+                        clearPeriodRange.from &&
+                        s.date < clearPeriodRange.from
+                      )
+                        return false;
+                      if (clearPeriodRange.to && s.date > clearPeriodRange.to)
+                        return false;
+                      return true;
+                    }).length;
+                    return count > 0 ? (
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        <span
+                          style={{
+                            color: "var(--color-warning)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {count} dia{count !== 1 ? "s" : ""}
+                        </span>{" "}
+                        serão removidos neste período.
+                      </p>
+                    ) : (
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Nenhum registro encontrado neste período.
+                      </p>
+                    );
+                  })()}
+              </div>
+
+              {/* Confirmação inline */}
+              {clearPeriodConfirm && (
+                <div
+                  className="flex items-start gap-2.5 px-3 py-3 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                  }}
+                >
+                  <FiAlertTriangle
+                    size={14}
+                    style={{
+                      color: "var(--color-error)",
+                      flexShrink: 0,
+                      marginTop: 1,
+                    }}
+                  />
+                  <p
+                    className="text-xs leading-relaxed"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    Esta ação é{" "}
+                    <strong style={{ color: "var(--color-error)" }}>
+                      irreversível
+                    </strong>
+                    . Os dados do período selecionado serão permanentemente
+                    excluídos e não poderão ser recuperados. Confirme clicando
+                    no botão abaixo.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              className="flex gap-2 px-5 py-4"
+              style={{ borderTop: "1px solid var(--color-border)" }}
+            >
+              <button
+                onClick={() => {
+                  setClearPeriodModal(false);
+                  setClearPeriodConfirm(false);
+                }}
+                disabled={clearingPeriod}
+                className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-70"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-secondary)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!clearPeriodConfirm) {
+                    setClearPeriodConfirm(true);
+                    return;
+                  }
+                  handleClearPeriod();
+                }}
+                disabled={
+                  clearingPeriod ||
+                  (!clearPeriodRange.from && !clearPeriodRange.to)
+                }
+                className="flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: clearPeriodConfirm
+                    ? "var(--color-error)"
+                    : "var(--color-warning)",
+                  color: "white",
+                }}
+              >
+                {clearingPeriod
+                  ? "Removendo..."
+                  : clearPeriodConfirm
+                    ? "Confirmar exclusão"
+                    : "Limpar período"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Close Day Modal */}

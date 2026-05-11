@@ -520,6 +520,16 @@ function useThermalPrinterCore() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("cdi_printer_autoconnect") === "true";
   });
+  const [printerBarOpen, setPrinterBarOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("cdi_printer_bar_open");
+    return saved === null ? true : saved === "true";
+  });
+
+  const handleSetPrinterBarOpen = useCallback((v: boolean) => {
+    localStorage.setItem("cdi_printer_bar_open", String(v));
+    setPrinterBarOpen(v);
+  }, []);
 
   const handleSetAutoConnect = useCallback((v: boolean) => {
     localStorage.setItem("cdi_printer_autoconnect", String(v));
@@ -889,6 +899,8 @@ function useThermalPrinterCore() {
     printHelloWorld,
     autoConnect,
     setAutoConnect: handleSetAutoConnect,
+    printerBarOpen,
+    setPrinterBarOpen: handleSetPrinterBarOpen,
   };
 }
 
@@ -917,6 +929,8 @@ interface PrinterContextValue {
   printHelloWorld: () => Promise<void>;
   autoConnect: boolean;
   setAutoConnect: (v: boolean) => void;
+  printerBarOpen: boolean;
+  setPrinterBarOpen: (v: boolean) => void;
 }
 
 const PrinterContext = createContext<PrinterContextValue | null>(null);
@@ -1721,6 +1735,8 @@ export default function ThermalPrinterBar() {
     connect,
     disconnect,
     printHelloWorld,
+    printerBarOpen,
+    setPrinterBarOpen,
   } = usePrinter();
 
   const [showTutorial, setShowTutorial] = useState(false);
@@ -1731,197 +1747,51 @@ export default function ThermalPrinterBar() {
 
   return (
     <div className="flex flex-col">
+      {/* Strip compacta — sempre visível */}
       <div
-        className="flex items-stretch flex-wrap"
+        className="flex items-center gap-2 px-4 py-1.5"
         style={{
-          borderBottom: hasWarning ? "none" : "1px solid var(--color-border)",
+          borderBottom: "1px solid var(--color-border)",
           backgroundColor: "var(--color-bg-elevated)",
         }}
       >
-        {/* ── Grupo 1: Conexão ── */}
-        <div
-          className="flex flex-col gap-2 px-4 py-3"
-          style={{ borderRight: "1px solid var(--color-border)" }}
+        <FiPrinter size={12} style={{ color: cfg.color, flexShrink: 0 }} />
+        <span
+          className="text-xs font-medium flex-1"
+          style={{ color: cfg.color }}
         >
-          <span
-            className="text-[10px] font-semibold uppercase tracking-widest"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            Conexão
-          </span>
+          Impressora · {cfg.label}
+          {portLabel && isConnected ? ` · ${portLabel}` : ""}
+        </span>
+        <button
+          onClick={() => setPrinterBarOpen(!printerBarOpen)}
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-opacity hover:opacity-70"
+          style={{
+            color: "var(--color-text-muted)",
+            border: "1px solid var(--color-border)",
+          }}
+        >
+          <FiChevronDown
+            size={10}
+            style={{
+              transform: printerBarOpen ? "rotate(0deg)" : "rotate(-90deg)",
+              transition: "transform 0.15s ease",
+            }}
+          />
+          {printerBarOpen ? "Fechar" : "Configurar"}
+        </button>
+      </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Status pill */}
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)]"
-              style={{
-                backgroundColor: cfg.bg,
-                border: `1px solid ${cfg.border}`,
-              }}
-            >
-              <span className="relative flex h-2 w-2 flex-shrink-0">
-                {(status === "connected" ||
-                  status === "printing" ||
-                  status === "connecting") && (
-                  <span
-                    className="absolute inline-flex h-full w-full rounded-full animate-ping"
-                    style={{ backgroundColor: cfg.dot, opacity: 0.5 }}
-                  />
-                )}
-                <span
-                  className="relative inline-flex rounded-full h-2 w-2"
-                  style={{ backgroundColor: cfg.dot }}
-                />
-              </span>
-              <FiPrinter
-                size={12}
-                style={{ color: cfg.color, flexShrink: 0 }}
-              />
-              <span
-                className="text-xs font-medium"
-                style={{ color: cfg.color }}
-              >
-                {cfg.label}
-              </span>
-              {portLabel && isConnected && (
-                <span
-                  className="text-xs"
-                  style={{ color: cfg.color, opacity: 0.65 }}
-                >
-                  · {portLabel}
-                </span>
-              )}
-              {status === "printing" && (
-                <FiLoader
-                  size={11}
-                  style={{
-                    color: cfg.color,
-                    animation: "spin 1s linear infinite",
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Segmented mode selector — só quando desconectado */}
-            {!isConnected && !isBusy && (
-              <div
-                className="flex rounded-[var(--radius-md)] overflow-hidden"
-                style={{ border: "1px solid var(--color-border)" }}
-              >
-                {(["serial", "qztray"] as ConnectionMode[]).map((mode) => {
-                  const active = connectionMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      onClick={() => setConnectionMode(mode)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium cursor-pointer transition-all"
-                      style={{
-                        backgroundColor: active
-                          ? "var(--color-bg-surface)"
-                          : "transparent",
-                        color: active
-                          ? "var(--color-text-primary)"
-                          : "var(--color-text-muted)",
-                        borderRight:
-                          mode === "serial"
-                            ? "1px solid var(--color-border)"
-                            : "none",
-                      }}
-                    >
-                      {mode === "serial" ? (
-                        <>
-                          <FiWifi size={10} /> USB Serial
-                        </>
-                      ) : (
-                        <>
-                          <FiPrinter size={10} /> QZ Tray
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Aviso serial não suportado */}
-            {!isSerialSupported &&
-              connectionMode === "serial" &&
-              !isConnected && (
-                <div
-                  className="flex items-center gap-1.5 px-2 py-1 rounded-[var(--radius-md)] text-xs"
-                  style={{
-                    backgroundColor: "rgba(239,68,68,0.08)",
-                    color: "var(--color-error)",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                  }}
-                >
-                  <FiWifiOff size={11} />
-                  Requer Chrome / Edge
-                </div>
-              )}
-
-            {/* Botão conectar / desconectar */}
-            <button
-              onClick={isConnected ? disconnect : connect}
-              disabled={isBusy}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: isConnected
-                  ? "rgba(239,68,68,0.1)"
-                  : "var(--color-primary)",
-                color: isConnected ? "var(--color-error)" : "white",
-                border: isConnected ? "1px solid rgba(239,68,68,0.25)" : "none",
-              }}
-            >
-              {isConnected ? (
-                <>
-                  <FiWifiOff size={11} /> Desconectar
-                </>
-              ) : (
-                <>
-                  <FiWifi size={11} />
-                  {status === "connecting"
-                    ? "Conectando..."
-                    : connectionMode === "qztray"
-                      ? "Conectar via QZ Tray"
-                      : "Conectar impressora"}
-                </>
-              )}
-            </button>
-
-            {/* Tutorial QZ */}
-            {connectionMode === "qztray" && (
-              <button
-                onClick={() => setShowTutorial(true)}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
-                style={{
-                  backgroundColor: "rgba(0,136,194,0.1)",
-                  color: "var(--color-primary)",
-                  border: "1px solid rgba(0,136,194,0.25)",
-                }}
-              >
-                <FiInfo size={10} />
-                Tutorial
-              </button>
-            )}
-
-            {connectionMode === "serial" && !isConnected && (
-              <span
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
-                style={{
-                  backgroundColor: "rgba(66,133,244,0.12)",
-                  color: "#4285F4",
-                  border: "1px solid rgba(66,133,244,0.25)",
-                }}
-              >
-                Chrome / Edge
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* ── Grupo 2: Impressora (só quando conectado) ── */}
-        {isConnected && (
+      {/* Painel completo — colapsável */}
+      {printerBarOpen && (
+        <div
+          className="flex items-stretch flex-wrap"
+          style={{
+            borderBottom: hasWarning ? "none" : "1px solid var(--color-border)",
+            backgroundColor: "var(--color-bg-elevated)",
+          }}
+        >
+          {/* ── Grupo 1: Conexão ── */}
           <div
             className="flex flex-col gap-2 px-4 py-3"
             style={{ borderRight: "1px solid var(--color-border)" }}
@@ -1930,84 +1800,238 @@ export default function ThermalPrinterBar() {
               className="text-[10px] font-semibold uppercase tracking-widest"
               style={{ color: "var(--color-text-muted)" }}
             >
-              Impressora
+              Conexão
             </span>
-            <div className="flex items-center gap-2">
-              <QzPrinterSelector />
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Status pill */}
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: cfg.bg,
+                  border: `1px solid ${cfg.border}`,
+                }}
+              >
+                <span className="relative flex h-2 w-2 flex-shrink-0">
+                  {(status === "connected" ||
+                    status === "printing" ||
+                    status === "connecting") && (
+                    <span
+                      className="absolute inline-flex h-full w-full rounded-full animate-ping"
+                      style={{ backgroundColor: cfg.dot, opacity: 0.5 }}
+                    />
+                  )}
+                  <span
+                    className="relative inline-flex rounded-full h-2 w-2"
+                    style={{ backgroundColor: cfg.dot }}
+                  />
+                </span>
+                <FiPrinter
+                  size={12}
+                  style={{ color: cfg.color, flexShrink: 0 }}
+                />
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: cfg.color }}
+                >
+                  {cfg.label}
+                </span>
+                {portLabel && isConnected && (
+                  <span
+                    className="text-xs"
+                    style={{ color: cfg.color, opacity: 0.65 }}
+                  >
+                    · {portLabel}
+                  </span>
+                )}
+                {status === "printing" && (
+                  <FiLoader
+                    size={11}
+                    style={{
+                      color: cfg.color,
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Segmented mode selector — só quando desconectado */}
+              {!isConnected && !isBusy && (
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {(["serial", "qztray"] as ConnectionMode[]).map((mode) => {
+                    const active = connectionMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => setConnectionMode(mode)}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-bg-surface)"
+                            : "transparent",
+                          color: active
+                            ? "var(--color-text-primary)"
+                            : "var(--color-text-muted)",
+                          borderRight:
+                            mode === "serial"
+                              ? "1px solid var(--color-border)"
+                              : "none",
+                        }}
+                      >
+                        {mode === "serial" ? (
+                          <>
+                            <FiWifi size={10} /> USB Serial
+                          </>
+                        ) : (
+                          <>
+                            <FiPrinter size={10} /> QZ Tray
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Aviso serial não suportado */}
+              {!isSerialSupported &&
+                connectionMode === "serial" &&
+                !isConnected && (
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-[var(--radius-md)] text-xs"
+                    style={{
+                      backgroundColor: "rgba(239,68,68,0.08)",
+                      color: "var(--color-error)",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                    }}
+                  >
+                    <FiWifiOff size={11} />
+                    Requer Chrome / Edge
+                  </div>
+                )}
+
+              {/* Botão conectar / desconectar */}
               <button
-                onClick={printHelloWorld}
-                disabled={status === "printing"}
+                onClick={isConnected ? disconnect : connect}
+                disabled={isBusy}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
-                  backgroundColor: "var(--color-bg-surface)",
-                  color: "var(--color-text-muted)",
-                  border: "1px solid var(--color-border)",
+                  backgroundColor: isConnected
+                    ? "rgba(239,68,68,0.1)"
+                    : "var(--color-primary)",
+                  color: isConnected ? "var(--color-error)" : "white",
+                  border: isConnected
+                    ? "1px solid rgba(239,68,68,0.25)"
+                    : "none",
                 }}
               >
-                <FiZap size={11} />
-                Imprimir teste
+                {isConnected ? (
+                  <>
+                    <FiWifiOff size={11} /> Desconectar
+                  </>
+                ) : (
+                  <>
+                    <FiWifi size={11} />
+                    {status === "connecting"
+                      ? "Conectando..."
+                      : connectionMode === "qztray"
+                        ? "Conectar via QZ Tray"
+                        : "Conectar impressora"}
+                  </>
+                )}
               </button>
+
+              {/* Tutorial QZ */}
+              {connectionMode === "qztray" && (
+                <button
+                  onClick={() => setShowTutorial(true)}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
+                  style={{
+                    backgroundColor: "rgba(0,136,194,0.1)",
+                    color: "var(--color-primary)",
+                    border: "1px solid rgba(0,136,194,0.25)",
+                  }}
+                >
+                  <FiInfo size={10} />
+                  Tutorial
+                </button>
+              )}
+
+              {connectionMode === "serial" && !isConnected && (
+                <span
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                  style={{
+                    backgroundColor: "rgba(66,133,244,0.12)",
+                    color: "#4285F4",
+                    border: "1px solid rgba(66,133,244,0.25)",
+                  }}
+                >
+                  Chrome / Edge
+                </span>
+              )}
             </div>
           </div>
-        )}
 
-        {/* ── Grupo 3: Comportamento ── */}
-        <div className="flex flex-col gap-2 px-4 py-3">
-          <span
-            className="text-[10px] font-semibold uppercase tracking-widest"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            Comportamento
-          </span>
-          <div className="flex flex-col gap-2">
-            {/* Auto-imprimir */}
-            <label
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={() => setAutoPrint(!autoPrint)}
+          {/* ── Grupo 2: Impressora (só quando conectado) ── */}
+          {isConnected && (
+            <div
+              className="flex flex-col gap-2 px-4 py-3"
+              style={{ borderRight: "1px solid var(--color-border)" }}
             >
               <span
-                className="relative inline-flex items-center w-7 h-4 rounded-full flex-shrink-0 transition-colors"
-                style={{
-                  backgroundColor: autoPrint
-                    ? "var(--color-success)"
-                    : "var(--color-border)",
-                }}
+                className="text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--color-text-muted)" }}
               >
-                <span
-                  className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                Impressora
+              </span>
+              <div className="flex items-center gap-2">
+                <QzPrinterSelector />
+                <button
+                  onClick={printHelloWorld}
+                  disabled={status === "printing"}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
-                    transform: autoPrint
-                      ? "translateX(14px)"
-                      : "translateX(2px)",
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-muted)",
+                    border: "1px solid var(--color-border)",
                   }}
-                />
-              </span>
-              <span
-                className="text-xs"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                Auto-imprimir novas comandas
-              </span>
-            </label>
+                >
+                  <FiZap size={11} />
+                  Imprimir teste
+                </button>
+              </div>
+            </div>
+          )}
 
-            {/* Auto-conectar — só para QZ Tray */}
-            {connectionMode === "qztray" && (
+          {/* ── Grupo 3: Comportamento ── */}
+          <div className="flex flex-col gap-2 px-4 py-3">
+            <span
+              className="text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Comportamento
+            </span>
+            <div className="flex flex-col gap-2">
+              {/* Auto-imprimir */}
               <label
                 className="flex items-center gap-2 cursor-pointer"
-                onClick={() => setAutoConnect(!autoConnect)}
+                onClick={() => setAutoPrint(!autoPrint)}
               >
                 <span
                   className="relative inline-flex items-center w-7 h-4 rounded-full flex-shrink-0 transition-colors"
                   style={{
-                    backgroundColor: autoConnect
-                      ? "var(--color-primary)"
+                    backgroundColor: autoPrint
+                      ? "var(--color-success)"
                       : "var(--color-border)",
                   }}
                 >
                   <span
                     className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
                     style={{
-                      transform: autoConnect
+                      transform: autoPrint
                         ? "translateX(14px)"
                         : "translateX(2px)",
                     }}
@@ -2017,13 +2041,45 @@ export default function ThermalPrinterBar() {
                   className="text-xs"
                   style={{ color: "var(--color-text-secondary)" }}
                 >
-                  Conectar automaticamente ao abrir
+                  Auto-imprimir novas comandas
                 </span>
               </label>
-            )}
+
+              {/* Auto-conectar — só para QZ Tray */}
+              {connectionMode === "qztray" && (
+                <label
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() => setAutoConnect(!autoConnect)}
+                >
+                  <span
+                    className="relative inline-flex items-center w-7 h-4 rounded-full flex-shrink-0 transition-colors"
+                    style={{
+                      backgroundColor: autoConnect
+                        ? "var(--color-primary)"
+                        : "var(--color-border)",
+                    }}
+                  >
+                    <span
+                      className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                      style={{
+                        transform: autoConnect
+                          ? "translateX(14px)"
+                          : "translateX(2px)",
+                      }}
+                    />
+                  </span>
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    Conectar automaticamente ao abrir
+                  </span>
+                </label>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Warning strip */}
       {hasWarning && (

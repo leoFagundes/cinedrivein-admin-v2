@@ -45,6 +45,7 @@ import {
   FiDownload,
   FiZap,
   FiPrinter,
+  FiInfo,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1444,6 +1445,83 @@ function Section({ title }: { title: string }) {
   );
 }
 
+function InfoTooltip({
+  text,
+  align = "center",
+}: {
+  text: string;
+  align?: "left" | "center" | "right";
+}) {
+  const [visible, setVisible] = useState(false);
+
+  const tooltipStyle: React.CSSProperties =
+    align === "right"
+      ? { right: 0, transform: "none" }
+      : align === "left"
+        ? { left: 0, transform: "none" }
+        : { left: "50%", transform: "translateX(-50%)" };
+
+  const arrowStyle: React.CSSProperties =
+    align === "right"
+      ? { right: 6, left: "auto", transform: "none" }
+      : align === "left"
+        ? { left: 6, transform: "none" }
+        : { left: "50%", transform: "translateX(-50%)" };
+
+  return (
+    <div className="relative flex items-center flex-shrink-0">
+      <button
+        type="button"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        className="flex items-center justify-center cursor-help"
+        style={{ color: "var(--color-text-muted)" }}
+      >
+        <FiInfo size={13} />
+      </button>
+      {visible && (
+        <div
+          className="absolute z-50 bottom-full mb-2 w-56 rounded-[var(--radius-md)] px-3 py-2 text-xs leading-relaxed pointer-events-none"
+          style={{
+            ...tooltipStyle,
+            backgroundColor: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-secondary)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          }}
+        >
+          {text}
+          <div
+            className="absolute top-full"
+            style={{
+              ...arrowStyle,
+              width: 0,
+              height: 0,
+              borderLeft: "5px solid transparent",
+              borderRight: "5px solid transparent",
+              borderTop: "5px solid var(--color-border)",
+            }}
+          />
+          <div
+            className="absolute top-full"
+            style={{
+              ...arrowStyle,
+              width: 0,
+              height: 0,
+              borderLeft: "4px solid transparent",
+              borderRight: "4px solid transparent",
+              borderTop: "4px solid var(--color-bg-elevated)",
+              marginTop: "-1px",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ItemModal({
   existing,
   allSubitems,
@@ -1635,77 +1713,134 @@ function ItemModal({
       </div>
 
       <Section title="Configurações" />
-      <div className="flex w-full flex-col sm:flex-row gap-3">
-        <button
-          type="button"
-          onClick={() => set("isVisible", !form.isVisible)}
-          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all"
+      <div className="grid grid-cols-2 gap-2">
+        {/* Visível */}
+        <div
+          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
           style={{
             backgroundColor: form.isVisible
               ? "rgba(34,197,94,0.1)"
               : "var(--color-bg-elevated)",
             border: `1px solid ${form.isVisible ? "var(--color-success)" : "var(--color-border)"}`,
-            color: form.isVisible
-              ? "var(--color-success)"
-              : "var(--color-text-secondary)",
           }}
         >
-          {form.isVisible ? <FiEye size={14} /> : <FiEyeOff size={14} />}
-          {form.isVisible ? "Visível" : "Oculto"}
-        </button>
-        <button
-          type="button"
-          onClick={() => set("isFeatured", !form.isFeatured)}
-          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all"
+          <button
+            type="button"
+            onClick={() => set("isVisible", !form.isVisible)}
+            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+            style={{
+              color: form.isVisible
+                ? "var(--color-success)"
+                : "var(--color-text-secondary)",
+            }}
+          >
+            {form.isVisible ? (
+              <FiEye size={14} className="flex-shrink-0" />
+            ) : (
+              <FiEyeOff size={14} className="flex-shrink-0" />
+            )}
+            <span className="truncate">
+              {form.isVisible ? "Visível" : "Oculto"}
+            </span>
+          </button>
+          <InfoTooltip
+            align="left"
+            text="Controla se este item aparece ou não no cardápio. Itens ocultos não podem ser pedidos pelos clientes."
+          />
+        </div>
+
+        {/* Destaque */}
+        <div
+          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
           style={{
             backgroundColor: form.isFeatured
               ? "rgba(245,158,11,0.12)"
               : "var(--color-bg-elevated)",
             border: `1px solid ${form.isFeatured ? "var(--color-warning)" : "var(--color-border)"}`,
-            color: form.isFeatured
-              ? "var(--color-warning)"
-              : "var(--color-text-secondary)",
           }}
         >
-          <FiStar size={14} />
-          {form.isFeatured ? "Destaque" : "Sem destaque"}
-        </button>
-        <button
-          type="button"
-          onClick={() => set("trackStock", !form.trackStock)}
-          title="Se ativado, cada pedido deste item reduz 1 do estoque. Ao cancelar, o estoque é restaurado. Ao atingir 0, o item fica invisível."
-          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all"
+          <button
+            type="button"
+            onClick={() => set("isFeatured", !form.isFeatured)}
+            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+            style={{
+              color: form.isFeatured
+                ? "var(--color-warning)"
+                : "var(--color-text-secondary)",
+            }}
+          >
+            <FiStar size={14} className="flex-shrink-0" />
+            <span className="truncate">
+              {form.isFeatured ? "Destaque" : "Sem destaque"}
+            </span>
+          </button>
+          <InfoTooltip
+            align="right"
+            text="Itens em destaque aparecem no topo da sua própria seção cardápio, com maior visibilidade."
+          />
+        </div>
+
+        {/* Controle de estoque */}
+        <div
+          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
           style={{
             backgroundColor: form.trackStock
               ? "rgba(0,136,194,0.12)"
               : "var(--color-bg-elevated)",
             border: `1px solid ${form.trackStock ? "var(--color-primary)" : "var(--color-border)"}`,
-            color: form.trackStock
-              ? "var(--color-primary)"
-              : "var(--color-text-secondary)",
           }}
         >
-          <FiPackage size={14} />
-          {form.trackStock ? "Controle de estoque" : "Sem controle"}
-        </button>
-        <button
-          type="button"
-          onClick={() => set("printTwice", !form.printTwice)}
-          title="Se ativado, este item imprime duas vias quando sair em uma comanda."
-          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all"
+          <button
+            type="button"
+            onClick={() => set("trackStock", !form.trackStock)}
+            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+            style={{
+              color: form.trackStock
+                ? "var(--color-primary)"
+                : "var(--color-text-secondary)",
+            }}
+          >
+            <FiPackage size={14} className="flex-shrink-0" />
+            <span className="truncate">
+              {form.trackStock ? "Com Ctrl. estoque" : "Sem controle"}
+            </span>
+          </button>
+          <InfoTooltip
+            align="left"
+            text="Essa opção ativa o controle de estoque do item. Cada pedido desconta 1 da quantidade. Ao cancelar, o estoque é restaurado. Ao chegar a 0, o item é ocultado automaticamente."
+          />
+        </div>
+
+        {/* Impressão 2x */}
+        <div
+          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
           style={{
             backgroundColor: form.printTwice
               ? "rgba(168,85,247,0.12)"
               : "var(--color-bg-elevated)",
             border: `1px solid ${form.printTwice ? "rgba(168,85,247,0.5)" : "var(--color-border)"}`,
-            color: form.printTwice
-              ? "rgb(168,85,247)"
-              : "var(--color-text-secondary)",
           }}
         >
-          <FiPrinter size={14} />
-          {form.printTwice ? "Imprime 2x" : "Impressão normal"}
-        </button>
+          <button
+            type="button"
+            onClick={() => set("printTwice", !form.printTwice)}
+            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+            style={{
+              color: form.printTwice
+                ? "rgb(168,85,247)"
+                : "var(--color-text-secondary)",
+            }}
+          >
+            <FiPrinter size={14} className="flex-shrink-0" />
+            <span className="truncate">
+              {form.printTwice ? "Imprime 2x" : "Impressão normal"}
+            </span>
+          </button>
+          <InfoTooltip
+            align="right"
+            text="Quando chega uma comanda que tenha ao menos UM item com essa opção ativa, a comanda é impressa em duas vias automaticamente — útil para comandas que precisam ir para setores diferentes."
+          />
+        </div>
       </div>
 
       <Section title="Foto" />
@@ -2585,6 +2720,19 @@ export default function StockPage() {
             field: "Destaque",
             from: old.isFeatured ? "Sim" : "Não",
             to: data.isFeatured ? "Sim" : "Não",
+          });
+        if (data.trackStock !== old.trackStock)
+          changes.push({
+            field: "Controle de estoque",
+            from: old.trackStock ? "Sim" : "Não",
+            to: data.trackStock ? "Sim" : "Não",
+          });
+
+        if (data.printTwice !== old.printTwice)
+          changes.push({
+            field: "Impressão 2x",
+            from: old.printTwice ? "Sim" : "Não",
+            to: data.printTwice ? "Sim" : "Não",
           });
         if (file)
           changes.push({

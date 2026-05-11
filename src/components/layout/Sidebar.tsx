@@ -16,6 +16,8 @@ import {
   FiX,
   FiLock,
   FiHelpCircle,
+  FiSettings,
+  FiPrinter,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
@@ -26,7 +28,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { ref, onValue } from "firebase/database";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
-import { usePrinter } from "../orders/ThermalPrinter";
+import ThermalPrinterBar, { usePrinter } from "../orders/ThermalPrinter";
 
 interface NavItem {
   label: string;
@@ -153,11 +155,13 @@ export default function Sidebar() {
   const { success, error } = useToast();
   const pathname = usePathname();
   const close = () => setMobileOpen(false);
-  const onOrdersPage = pathname === "/admin/orders";
+  const onOrdersPage = pathname === "/admin/orders/";
 
   const [storeOpen, setStoreOpen] = useState<boolean | null>(null);
   const [activeUsers, setActiveUsers] = useState<number>(0);
-  const { isConnected, connectionMode, status } = usePrinter();
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const { isConnected, connectionMode, status, setPrinterBarOpen } =
+    usePrinter();
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
@@ -244,13 +248,31 @@ export default function Sidebar() {
 
       {/* Faixa da impressora */}
       <div
-        className="flex items-center justify-between px-4 py-2"
+        className={`flex items-center justify-between px-4 py-2 ${pathname === "/admin/orders/" && "pointer-events-none cursor-default"}`}
+        onClick={() => {
+          if (pathname !== "/admin/orders/") {
+            setPrinterModalOpen(true);
+            setPrinterBarOpen(true);
+          }
+        }}
         style={{
           backgroundColor: isConnected
             ? "rgba(0,136,194,0.06)"
             : "rgba(100,100,120,0.04)",
           borderBottom: "1px solid var(--color-border)",
+          cursor: "pointer",
         }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = isConnected
+            ? "rgba(0,136,194,0.1)"
+            : "rgba(100,100,120,0.08)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = isConnected
+            ? "rgba(0,136,194,0.06)"
+            : "rgba(100,100,120,0.04)";
+        }}
+        title="Configurar impressora"
       >
         <div className="flex items-center gap-2">
           <div
@@ -285,18 +307,13 @@ export default function Sidebar() {
                 : "Impressora desconectada"}
           </span>
         </div>
-
-        {isConnected && (
-          <span
-            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-            style={{
-              backgroundColor: "rgba(0,136,194,0.1)",
-              color: "var(--color-primary)",
-              border: "1px solid rgba(0,136,194,0.2)",
-            }}
-          >
-            {connectionMode === "qztray" ? "QZ Tray" : "Serial"}
-          </span>
+        {pathname !== "/admin/orders/" && (
+          <div className="flex items-center gap-1.5">
+            <FiSettings
+              size={11}
+              style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+            />
+          </div>
         )}
       </div>
 
@@ -511,6 +528,58 @@ export default function Sidebar() {
             </button>
             {sidebarContent}
           </aside>
+        </div>
+      )}
+
+      {/* Modal da impressora — só desktop */}
+      {printerModalOpen && (
+        <div
+          className="hidden md:flex fixed inset-0 z-60 items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+          onClick={(e) =>
+            e.target === e.currentTarget && setPrinterModalOpen(false)
+          }
+        >
+          <div
+            className="w-full max-w-2xl rounded-[var(--radius-xl)] overflow-y-auto"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            }}
+          >
+            {/* Header do modal */}
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{
+                borderBottom: "1px solid var(--color-border)",
+                backgroundColor: "var(--color-bg-elevated)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <FiPrinter
+                  size={15}
+                  style={{ color: "var(--color-primary)" }}
+                />
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Configurações da impressora
+                </p>
+              </div>
+              <button
+                onClick={() => setPrinterModalOpen(false)}
+                className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+
+            {/* Conteúdo — a própria ThermalPrinterBar */}
+            <ThermalPrinterBar />
+          </div>
         </div>
       )}
     </>
