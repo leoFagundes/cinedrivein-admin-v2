@@ -15,7 +15,6 @@ import {
   deleteField,
   writeBatch,
   serverTimestamp,
-  Timestamp,
 } from "firebase/firestore";
 import {
   FiSearch,
@@ -1765,7 +1764,15 @@ function ConfirmModal({
 // ── Inner page (needs to be inside PrinterProvider) ───────────────────────────
 
 function OrdersPageInner() {
-  const { activeOrders, markAsSeen, readyToPrintIds, printedIds } = useOrders();
+  const {
+    activeOrders,
+    markAsSeen,
+    readyToPrintIds,
+    printedIds,
+    customerMsgTimes,
+    chatSeenTimes,
+    markChatSeen,
+  } = useOrders();
   const { appUser } = useAuth();
   const { success, error: toastError } = useToast();
 
@@ -1802,28 +1809,12 @@ function OrdersPageInner() {
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
-  const [customerMsgTimes, setCustomerMsgTimes] = useState<
-    Record<string, number>
-  >({});
-  // Ref kept in sync so onSnapshot callbacks never use a stale closure value
-  const customerMsgTimesRef = useRef<Record<string, number>>({});
-  const [chatSeenTimes, setChatSeenTimes] = useState<Record<string, number>>(
-    () => {
-      try {
-        const stored = localStorage.getItem("cdi_chat_seen");
-        return stored ? (JSON.parse(stored) as Record<string, number>) : {};
-      } catch {
-        return {};
-      }
-    },
-  );
 
   const [finishedStatusFilter, setFinishedStatusFilter] = useState<
     "all" | "finished" | "canceled"
   >("all");
   const [finishedDateFilter, setFinishedDateFilter] = useState("");
 
-  const initializedOrdersRef = useRef<Set<string>>(new Set());
   const chatOrderIdRef = useRef<string | null>(null);
   // Tracks message doc IDs that already triggered a sound — prevents Firestore
   // from firing the callback twice (cache + server) and playing the sound twice
@@ -1850,60 +1841,30 @@ function OrdersPageInner() {
     dismiss: dismissPrinterReminder,
   } = usePrinterReminderToast(isConnected);
 
-  // Keep ref in sync so callbacks always read the latest timestamps
+  // Sound alert: plays when a new customer message arrives (context provides timestamps)
+  const prevMsgTimesRef = useRef<Record<string, number>>({});
+  const soundBaselineRef = useRef<Record<string, number> | null>(null);
   useEffect(() => {
-    customerMsgTimesRef.current = customerMsgTimes;
-  }, [customerMsgTimes]);
-
-  useEffect(() => {
-    if (activeOrders.length === 0) return;
-    const unsubs = activeOrders.map((order) => {
-      const q = query(
-        collection(db, "orders", order.id, "messages"),
-        orderBy("createdAt", "desc"),
-        limit(1),
-      );
-      return onSnapshot(q, (snap) => {
-        const alreadyInitialized = initializedOrdersRef.current.has(order.id);
-
-        if (snap.empty) {
-          initializedOrdersRef.current.add(order.id);
-          customerMsgTimesRef.current = {
-            ...customerMsgTimesRef.current,
-            [order.id]: 0,
-          };
-          setCustomerMsgTimes({ ...customerMsgTimesRef.current });
-          return;
-        }
-
-        const msgDocId = snap.docs[0].id;
-        const d = snap.docs[0].data();
-        const ts = (d.createdAt as Timestamp)?.toMillis() ?? 0;
-        const isFromOthers = d.senderName !== appUser?.username;
-        const msgTs = isFromOthers ? ts : 0;
-
-        const isChatOpen = chatOrderIdRef.current === order.id;
-
-        if (
-          isFromOthers &&
-          !isChatOpen &&
-          alreadyInitialized &&
-          !playedMsgIdsRef.current.has(msgDocId)
-        ) {
-          playedMsgIdsRef.current.add(msgDocId);
+    if (Object.keys(customerMsgTimes).length === 0) return;
+    // Set baseline on first load so existing messages don't trigger sound
+    if (soundBaselineRef.current === null) {
+      soundBaselineRef.current = { ...customerMsgTimes };
+      prevMsgTimesRef.current = { ...customerMsgTimes };
+      return;
+    }
+    for (const [orderId, ts] of Object.entries(customerMsgTimes)) {
+      const prev = prevMsgTimesRef.current[orderId] ?? 0;
+      const baseline = soundBaselineRef.current[orderId] ?? 0;
+      if (ts > 0 && ts > prev && ts > baseline && chatOrderIdRef.current !== orderId) {
+        const key = `${orderId}:${ts}`;
+        if (!playedMsgIdsRef.current.has(key)) {
+          playedMsgIdsRef.current.add(key);
           playChat();
         }
-
-        initializedOrdersRef.current.add(order.id);
-        customerMsgTimesRef.current = {
-          ...customerMsgTimesRef.current,
-          [order.id]: msgTs,
-        };
-        setCustomerMsgTimes({ ...customerMsgTimesRef.current });
-      });
-    });
-    return () => unsubs.forEach((u) => u());
-  }, [activeOrders, appUser?.username, playChat]);
+      }
+    }
+    prevMsgTimesRef.current = { ...customerMsgTimes };
+  }, [customerMsgTimes, playChat]);
 
   function hasUnread(orderId: string): boolean {
     if (chatOrder?.id === orderId) return false;
@@ -1912,16 +1873,12 @@ function OrdersPageInner() {
     return msgTime > 0 && msgTime > seenTime;
   }
 
+  const totalUnread = activeOrders.filter((o) => hasUnread(o.id)).length;
+
   useEffect(() => {
     markAsSeen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrders]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("cdi_chat_seen", JSON.stringify(chatSeenTimes));
-    } catch {}
-  }, [chatSeenTimes]);
 
   useEffect(() => {
     if (tab !== "finished") return;
@@ -2072,6 +2029,12 @@ function OrdersPageInner() {
   async function handleDelete(order: Order) {
     setDeletingId(order.id);
     try {
+      // Pedidos "finished" tiveram o estoque decrementado na criação e nunca
+      // devolvido. Pedidos "canceled" já tiveram o estoque restaurado no
+      // cancelamento — não tocar novamente.
+      if (order.status === "finished") {
+        await increaseStock(order.items);
+      }
       await deleteMessages(order.id);
       await deleteDoc(doc(db, "orders", order.id));
       log({
@@ -2286,6 +2249,14 @@ function OrdersPageInner() {
               {activeOrders.length === 0
                 ? "Nenhum pedido ativo"
                 : `${activeOrders.length} pedido${activeOrders.length !== 1 ? "s" : ""} ativo${activeOrders.length !== 1 ? "s" : ""}`}
+              {totalUnread > 0 && (
+                <span style={{ color: "var(--color-error)" }}>
+                  {" "}
+                  &middot; {totalUnread} chat
+                  {totalUnread !== 1 ? "s" : ""} não lido
+                  {totalUnread !== 1 ? "s" : ""}
+                </span>
+              )}
             </p>
           </div>
 
@@ -2581,10 +2552,7 @@ function OrdersPageInner() {
                       canChatOrders
                         ? () => {
                             setChatOrder(order);
-                            setChatSeenTimes((prev) => ({
-                              ...prev,
-                              [order.id]: Date.now(),
-                            }));
+                            markChatSeen(order.id);
                           }
                         : undefined
                     }
@@ -2780,10 +2748,7 @@ function OrdersPageInner() {
                       canChatOrders
                         ? () => {
                             setChatOrder(order);
-                            setChatSeenTimes((prev) => ({
-                              ...prev,
-                              [order.id]: Date.now(),
-                            }));
+                            markChatSeen(order.id);
                           }
                         : undefined
                     }
@@ -2851,11 +2816,7 @@ function OrdersPageInner() {
         <OrderChatDrawer
           order={chatOrder}
           onClose={() => {
-            // Marca como visto no momento em que fecha
-            setChatSeenTimes((prev) => ({
-              ...prev,
-              [chatOrder.id]: Date.now(),
-            }));
+            markChatSeen(chatOrder.id);
             setChatOrder(null);
           }}
         />

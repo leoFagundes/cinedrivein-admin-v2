@@ -14,6 +14,7 @@ import {
   query,
   orderBy,
   writeBatch,
+  where,
 } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
@@ -879,6 +880,14 @@ function ProfileModal({
 
 // ─── User card (mobile) ───────────────────────────────────────────────────────
 
+function fmtShortDate(d: Date): string {
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 function UserCard({
   user,
   canApprove,
@@ -889,6 +898,7 @@ function UserCard({
   onAssign,
   onEdit,
   onDelete,
+  lastLogin,
 }: {
   user: AppUser;
   canApprove: boolean;
@@ -899,6 +909,7 @@ function UserCard({
   onAssign: (user: AppUser) => void;
   onEdit: (user: AppUser) => void;
   onDelete: (user: AppUser) => void;
+  lastLogin?: Date;
 }) {
   return (
     <div
@@ -1049,6 +1060,24 @@ function UserCard({
             </>
           )}
         </div>
+      </div>
+      {/* Dates */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pt-0.5">
+        <span
+          className="flex items-center gap-1 text-xs"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          <FiClock size={10} />
+          Membro desde {fmtShortDate(user.createdAt)}
+        </span>
+        {lastLogin && (
+          <span
+            className="text-xs"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            · Último acesso {fmtShortDate(lastLogin)}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -1215,6 +1244,12 @@ export default function UsersPage() {
     open: boolean;
     editing?: PermissionProfile;
   }>({ open: false });
+  const [deleteProfileTarget, setDeleteProfileTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteProfileLoading, setDeleteProfileLoading] = useState(false);
+  const [lastLogins, setLastLogins] = useState<Record<string, Date>>({});
 
   const actor = appUser
     ? { uid: appUser.uid, username: appUser.username }
@@ -1262,6 +1297,27 @@ export default function UsersPage() {
       )
       .catch(() => error("Erro ao carregar perfis", "Tente recarregar."))
       .finally(() => setLoadingProfiles(false));
+  }, []);
+
+  useEffect(() => {
+    // Busca apenas a categoria "auth" — filtra action client-side para
+    // evitar índice composto no Firestore.
+    getDocs(
+      query(collection(db, "logs"), where("category", "==", "auth")),
+    ).then((snap) => {
+      const map: Record<string, Date> = {};
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.action !== "login") continue;
+        const username = data.performedBy?.username as string | undefined;
+        if (!username) continue;
+        const ts: number = data.createdAt?.toMillis?.() ?? 0;
+        if (!map[username] || ts > map[username].getTime()) {
+          map[username] = data.createdAt?.toDate?.() ?? new Date(ts);
+        }
+      }
+      setLastLogins(map);
+    }).catch(() => {});
   }, []);
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -1783,6 +1839,7 @@ export default function UsersPage() {
                         onAssign={setAssignTarget}
                         onEdit={setEditTarget}
                         onDelete={setDeleteTarget}
+                        lastLogin={lastLogins[user.username]}
                       />
                     ))}
                   </div>
@@ -1805,6 +1862,7 @@ export default function UsersPage() {
                             "E-mail",
                             "Perfil",
                             "Status",
+                            "Cadastro",
                             "Ações",
                           ].map((h) => (
                             <th
@@ -1880,6 +1938,23 @@ export default function UsersPage() {
                             </td>
                             <td className="px-4 py-3">
                               <StatusBadge status={user.status} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <p
+                                className="text-xs"
+                                style={{ color: "var(--color-text-secondary)" }}
+                              >
+                                {fmtShortDate(user.createdAt)}
+                              </p>
+                              {lastLogins[user.username] && (
+                                <p
+                                  className="text-xs mt-0.5 flex items-center gap-1"
+                                  style={{ color: "var(--color-text-muted)" }}
+                                >
+                                  <FiClock size={10} />
+                                  {fmtShortDate(lastLogins[user.username])}
+                                </p>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1.5">
@@ -2096,7 +2171,11 @@ export default function UsersPage() {
                       onEdit={(p) =>
                         setProfileModal({ open: true, editing: p })
                       }
-                      onDelete={handleDeleteProfile}
+                      onDelete={(id) => {
+                        const prof = profiles.find((x) => x.id === id);
+                        if (prof)
+                          setDeleteProfileTarget({ id, name: prof.name });
+                      }}
                     />
                   ))}
                 </div>
@@ -2160,6 +2239,29 @@ export default function UsersPage() {
           onClose={() => setProfileModal({ open: false })}
         />
       )}
+      {deleteProfileTarget && (() => {
+        const affected = users.filter(
+          (u) => u.profileId === deleteProfileTarget.id && !u.isOwner,
+        ).length;
+        return (
+          <DeleteConfirmModal
+            title={`Excluir perfil "${deleteProfileTarget.name}"`}
+            description={
+              affected > 0
+                ? `Este perfil está atribuído a ${affected} usuário${affected !== 1 ? "s" : ""}. Ao excluí-lo, eles ficarão sem perfil e poderão perder acesso a funcionalidades.`
+                : `Nenhum usuário está usando este perfil. A exclusão não afetará ninguém.`
+            }
+            onConfirm={async () => {
+              setDeleteProfileLoading(true);
+              await handleDeleteProfile(deleteProfileTarget.id);
+              setDeleteProfileLoading(false);
+              setDeleteProfileTarget(null);
+            }}
+            onClose={() => setDeleteProfileTarget(null)}
+            loading={deleteProfileLoading}
+          />
+        );
+      })()}
     </div>
   );
 }

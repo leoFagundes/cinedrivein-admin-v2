@@ -18,6 +18,7 @@ import {
   FiHelpCircle,
   FiSettings,
   FiPrinter,
+  FiMessageSquare,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
@@ -80,11 +81,13 @@ function NavLink({
   item,
   allowed,
   badge,
+  chatBadge,
   onClick,
 }: {
   item: NavItem;
   allowed: boolean;
   badge?: number;
+  chatBadge?: number;
   onClick?: () => void;
 }) {
   const pathname = usePathname();
@@ -143,7 +146,18 @@ function NavLink({
           </span>
         )}
       </span>
-      <span className="truncate">{item.label}</span>
+      <span className="truncate flex-1">{item.label}</span>
+      {chatBadge != null && chatBadge > 0 && (
+        <span
+          className="flex items-center gap-0.5 flex-shrink-0"
+          style={{ color: "var(--color-primary)" }}
+        >
+          <FiMessageSquare size={10} />
+          <span className="text-[9px] font-bold leading-none">
+            {chatBadge > 99 ? "99+" : chatBadge}
+          </span>
+        </span>
+      )}
     </Link>
   );
 }
@@ -151,7 +165,7 @@ function NavLink({
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { appUser, logOut } = useAuth();
-  const { unseenCount } = useOrders();
+  const { unseenCount, unreadChatsCount } = useOrders();
   const { success, error } = useToast();
   const pathname = usePathname();
   const close = () => setMobileOpen(false);
@@ -329,6 +343,11 @@ export default function Sidebar() {
               badge={
                 item.href === "/admin/orders" && !onOrdersPage && allowed
                   ? unseenCount
+                  : undefined
+              }
+              chatBadge={
+                item.href === "/admin/orders" && !onOrdersPage && allowed
+                  ? unreadChatsCount
                   : undefined
               }
             />

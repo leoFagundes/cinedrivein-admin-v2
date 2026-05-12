@@ -14,6 +14,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   doc,
   getDoc,
@@ -34,9 +35,29 @@ interface OrdersContextValue {
   readyToPrintIds: Set<string>;
   printedIds: Set<string>;
   markAsPrinted: (orderId: string) => void;
+  customerMsgTimes: Record<string, number>;
+  chatSeenTimes: Record<string, number>;
+  markChatSeen: (orderId: string) => void;
+  unreadChatsCount: number;
 }
 
 const PRINTED_KEY = "cdi_printed_orders";
+const CHAT_SEEN_KEY = "cdi_chat_seen";
+
+function loadChatSeen(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(CHAT_SEEN_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChatSeen(v: Record<string, number>) {
+  try {
+    localStorage.setItem(CHAT_SEEN_KEY, JSON.stringify(v));
+  } catch {}
+}
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);
 
@@ -207,7 +228,7 @@ function savePrinted(ids: Set<string>) {
 }
 
 export function OrdersProvider({ children }: { children: ReactNode }) {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, appUser } = useAuth();
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const seenIdsRef = useRef<Set<string>>(new Set());
@@ -344,6 +365,72 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     return unsub;
   }, [firebaseUser]);
 
+  // ── Chat message tracking ─────────────────────────────────────────────────
+
+  const [customerMsgTimes, setCustomerMsgTimes] = useState<
+    Record<string, number>
+  >({});
+  const customerMsgTimesRef = useRef<Record<string, number>>({});
+
+  const [chatSeenTimes, setChatSeenTimesState] = useState<
+    Record<string, number>
+  >(() => (typeof window !== "undefined" ? loadChatSeen() : {}));
+  const chatSeenTimesRef = useRef<Record<string, number>>(chatSeenTimes);
+
+  // Keep ref in sync for snapshot callbacks
+  useEffect(() => {
+    customerMsgTimesRef.current = customerMsgTimes;
+  }, [customerMsgTimes]);
+
+  // Listen to last message per active order
+  useEffect(() => {
+    if (!firebaseUser || activeOrders.length === 0) return;
+
+    const unsubs = activeOrders.map((order) => {
+      const q = query(
+        collection(db, "orders", order.id, "messages"),
+        orderBy("createdAt", "desc"),
+        limit(1),
+      );
+      return onSnapshot(q, (snap) => {
+        if (snap.empty) {
+          customerMsgTimesRef.current = {
+            ...customerMsgTimesRef.current,
+            [order.id]: 0,
+          };
+          setCustomerMsgTimes({ ...customerMsgTimesRef.current });
+          return;
+        }
+        const d = snap.docs[0].data();
+        const ts = (d.createdAt as Timestamp)?.toMillis() ?? 0;
+        const isFromOthers = d.senderName !== appUser?.username;
+        customerMsgTimesRef.current = {
+          ...customerMsgTimesRef.current,
+          [order.id]: isFromOthers ? ts : 0,
+        };
+        setCustomerMsgTimes({ ...customerMsgTimesRef.current });
+      });
+    });
+
+    return () => unsubs.forEach((u) => u());
+  }, [firebaseUser, activeOrders, appUser?.username]);
+
+  function markChatSeen(orderId: string) {
+    const now = Date.now();
+    const next = { ...chatSeenTimesRef.current, [orderId]: now };
+    chatSeenTimesRef.current = next;
+    setChatSeenTimesState(next);
+    saveChatSeen(next);
+  }
+
+  const unreadChatsCount = activeOrders.filter((o) => {
+    const msgTime = customerMsgTimesRef.current[o.id] ?? 0;
+    const seenTime = chatSeenTimesRef.current[o.id] ?? 0;
+    return msgTime > 0 && msgTime > seenTime;
+  }).length;
+
+  // ── Order actions ──────────────────────────────────────────────────────────
+
   function markAsSeen() {
     seenIdsRef.current = new Set(activeOrders.map((o) => o.id));
     setUnseenCount(0);
@@ -365,6 +452,10 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         readyToPrintIds,
         printedIds,
         markAsPrinted,
+        customerMsgTimes,
+        chatSeenTimes,
+        markChatSeen,
+        unreadChatsCount,
       }}
     >
       {children}

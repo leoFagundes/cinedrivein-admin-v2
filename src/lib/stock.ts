@@ -128,7 +128,19 @@ export async function increaseStock(items: OrderItem[]): Promise<void> {
   for (const [itemId, qty] of totals) {
     const snap = await getDoc(doc(db, "items", itemId));
     if (!snap.exists() || !snap.data().trackStock) continue;
-    batch.update(doc(db, "items", itemId), { quantity: increment(qty) });
+
+    const data = snap.data();
+    const currentQty: number = data.quantity ?? 0;
+    const updates: Record<string, unknown> = { quantity: increment(qty) };
+
+    // Restore visibility only when the item was auto-hidden by hitting 0 stock
+    // (currentQty <= 0) and the restoration brings it back above 0.
+    // Does NOT reactivate items the admin manually hid while stock > 0.
+    if (data.isVisible === false && currentQty <= 0 && currentQty + qty > 0) {
+      updates.isVisible = true;
+    }
+
+    batch.update(doc(db, "items", itemId), updates);
     hasBatch = true;
   }
 
