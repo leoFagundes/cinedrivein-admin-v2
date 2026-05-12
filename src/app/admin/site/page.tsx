@@ -186,7 +186,7 @@ function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          className="flex items-center justify-between px-6 py-4 flex-shrink-0"
+          className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 flex-shrink-0"
           style={{ borderBottom: "1px solid var(--color-border)" }}
         >
           <h2
@@ -203,12 +203,12 @@ function Modal({
             <FiX size={16} />
           </button>
         </div>
-        <div className="overflow-y-auto flex-1 p-6 flex flex-col gap-4">
+        <div className="overflow-y-auto flex-1 p-4 sm:p-6 flex flex-col gap-4">
           {children}
         </div>
         {footer && (
           <div
-            className="px-6 py-4 flex-shrink-0"
+            className="px-4 sm:px-6 py-4 flex-shrink-0"
             style={{
               borderTop: "1px solid var(--color-border)",
               backgroundColor: "var(--color-bg-surface)",
@@ -763,22 +763,51 @@ function SessionCard({
             }}
           />
 
-          {/* Session label + classification */}
-          <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
+          {/* Session label + classification + mobile actions */}
+          <div className="absolute top-2 left-2 right-2 flex items-start justify-between">
             <span
               className="px-2 py-0.5 rounded text-xs font-semibold text-white"
               style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
             >
               {session.label}
             </span>
-            {classInfo && (
-              <span
-                className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-black flex-shrink-0"
-                style={{ backgroundColor: classInfo.bg, color: classInfo.text }}
-              >
-                {classInfo.label}
-              </span>
-            )}
+            <div className="flex flex-col items-end gap-1.5">
+              {classInfo && (
+                <span
+                  className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-black flex-shrink-0"
+                  style={{ backgroundColor: classInfo.bg, color: classInfo.text }}
+                >
+                  {classInfo.label}
+                </span>
+              )}
+              {/* Action buttons — always visible on mobile */}
+              <div className="flex gap-1 sm:hidden">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCopy(); }}
+                  title="Copiar"
+                  className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+                  style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "white" }}
+                >
+                  <FiCopy size={12} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                  title="Editar"
+                  className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+                  style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                >
+                  <FiEdit2 size={12} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  title="Remover"
+                  className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+                  style={{ backgroundColor: "rgba(239,68,68,0.8)", color: "white" }}
+                >
+                  <FiTrash2 size={12} />
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Film info at bottom */}
@@ -794,9 +823,9 @@ function SessionCard({
             </p>
           </div>
 
-          {/* Actions — visible on hover */}
+          {/* Actions — desktop hover overlay only */}
           <div
-            className="absolute inset-0 flex items-center justify-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+            className="absolute inset-0 hidden sm:flex items-center justify-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
             style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
           >
             <button
@@ -1218,19 +1247,19 @@ function ExtraSettings({
       >
         {/* Header clicável */}
         <div
-          className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none"
+          className="flex items-center justify-between px-4 sm:px-5 py-3.5 cursor-pointer select-none gap-2"
           style={{ backgroundColor: "var(--color-bg-surface)" }}
           onClick={() => setPricesExpanded((v) => !v)}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
             <p
-              className="text-xs font-semibold uppercase tracking-wide"
+              className="text-xs font-semibold uppercase tracking-wide flex-shrink-0"
               style={{ color: "var(--color-text-muted)" }}
             >
               Tabela de preços
             </p>
             <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+              className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0"
               style={{
                 backgroundColor: "rgba(34,197,94,0.12)",
                 color: "var(--color-success)",
@@ -1241,7 +1270,7 @@ function ExtraSettings({
             </span>
             {prices.length > 0 && (
               <span
-                className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0"
                 style={{
                   backgroundColor: "var(--color-bg-elevated)",
                   border: "1px solid var(--color-border)",
@@ -1252,7 +1281,7 @@ function ExtraSettings({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {pricesExpanded && (
               <button
                 onClick={(e) => {
@@ -1269,7 +1298,8 @@ function ExtraSettings({
                   color: "var(--color-text-secondary)",
                 }}
               >
-                <FiPlus size={12} /> Nova regra
+                <FiPlus size={12} />
+                <span className="hidden sm:inline">Nova regra</span>
               </button>
             )}
             <span
@@ -1281,7 +1311,9 @@ function ExtraSettings({
               ) : (
                 <FiChevronDown size={14} />
               )}
-              {pricesExpanded ? "Recolher" : "Editar"}
+              <span className="hidden sm:inline">
+                {pricesExpanded ? "Recolher" : "Editar"}
+              </span>
             </span>
           </div>
         </div>
@@ -1524,7 +1556,7 @@ function ExtraSettings({
 
         {popupExpanded && (
           <div
-            className="flex flex-col gap-3 pl-3"
+            className="flex flex-col gap-3 pl-3 pr-4 pb-4 sm:pr-5 sm:pb-5"
             style={{ borderLeft: "2px solid var(--color-border)" }}
           >
             {/* Preview + upload */}

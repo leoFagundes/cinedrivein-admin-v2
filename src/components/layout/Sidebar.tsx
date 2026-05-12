@@ -248,7 +248,7 @@ export default function Sidebar() {
 
       {/* Faixa da impressora */}
       <div
-        className={`flex items-center justify-between px-4 py-2 ${pathname === "/admin/orders/" && "pointer-events-none cursor-default"}`}
+        className={`hidden sm:flex items-center justify-between px-4 py-2 ${pathname === "/admin/orders/" && "pointer-events-none cursor-default"}`}
         onClick={() => {
           if (pathname !== "/admin/orders/") {
             setPrinterModalOpen(true);
@@ -505,7 +505,7 @@ export default function Sidebar() {
       </header>
 
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
+        <div className="md:hidden fixed inset-0 z-80 flex">
           <div
             className="absolute inset-0"
             style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
@@ -577,8 +577,8 @@ export default function Sidebar() {
               </button>
             </div>
 
-            {/* Conteúdo — a própria ThermalPrinterBar */}
-            <ThermalPrinterBar />
+            {/* Conteúdo — modo modal: sem strip de colapso, sempre expandido */}
+            <ThermalPrinterBar modal />
           </div>
         </div>
       )}

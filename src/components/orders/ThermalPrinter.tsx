@@ -1723,7 +1723,7 @@ function ChromeBadge() {
 
 // ── ThermalPrinterBar ─────────────────────────────────────────────────────────
 
-export default function ThermalPrinterBar() {
+export default function ThermalPrinterBar({ modal = false }: { modal?: boolean } = {}) {
   const {
     status,
     isConnected,
@@ -1748,48 +1748,51 @@ export default function ThermalPrinterBar() {
   const cfg = STATUS_CFG[status];
   const isBusy = status === "connecting" || status === "printing";
   const hasWarning = !!portWarning && !warningDismissed;
+  const panelOpen = modal || printerBarOpen;
 
   return (
     <div className="flex flex-col">
-      {/* Strip compacta — sempre visível */}
-      <div
-        className="flex items-center gap-2 px-4 py-1.5"
-        style={{
-          borderBottom: "1px solid var(--color-border)",
-          backgroundColor: "var(--color-bg-elevated)",
-        }}
-      >
-        <FiPrinter size={12} style={{ color: cfg.color, flexShrink: 0 }} />
-        <span
-          className="text-xs font-medium flex-1"
-          style={{ color: cfg.color }}
-        >
-          Impressora · {cfg.label}
-          {portLabel && isConnected ? ` · ${portLabel}` : ""}
-        </span>
-        <button
-          onClick={() => setPrinterBarOpen(!printerBarOpen)}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-opacity hover:opacity-70"
+      {/* Strip compacta — só na barra da página de pedidos */}
+      {!modal && (
+        <div
+          className="flex items-center gap-2 px-4 py-1.5"
           style={{
-            color: "var(--color-text-muted)",
-            border: "1px solid var(--color-border)",
+            borderBottom: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-bg-elevated)",
           }}
         >
-          <FiChevronDown
-            size={10}
+          <FiPrinter size={12} style={{ color: cfg.color, flexShrink: 0 }} />
+          <span
+            className="text-xs font-medium flex-1"
+            style={{ color: cfg.color }}
+          >
+            Impressora · {cfg.label}
+            {portLabel && isConnected ? ` · ${portLabel}` : ""}
+          </span>
+          <button
+            onClick={() => setPrinterBarOpen(!printerBarOpen)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-opacity hover:opacity-70"
             style={{
-              transform: printerBarOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              transition: "transform 0.15s ease",
+              color: "var(--color-text-muted)",
+              border: "1px solid var(--color-border)",
             }}
-          />
-          {printerBarOpen ? "Fechar" : "Configurar"}
-        </button>
-      </div>
+          >
+            <FiChevronDown
+              size={10}
+              style={{
+                transform: printerBarOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                transition: "transform 0.15s ease",
+              }}
+            />
+            {printerBarOpen ? "Fechar" : "Configurar"}
+          </button>
+        </div>
+      )}
 
-      {/* Painel completo — colapsável */}
-      {printerBarOpen && (
+      {/* Painel completo */}
+      {panelOpen && (
         <div
-          className="flex items-stretch flex-wrap"
+          className={modal ? "flex flex-col" : "flex items-stretch flex-wrap"}
           style={{
             borderBottom: hasWarning ? "none" : "1px solid var(--color-border)",
             backgroundColor: "var(--color-bg-elevated)",
@@ -1798,7 +1801,11 @@ export default function ThermalPrinterBar() {
           {/* ── Grupo 1: Conexão ── */}
           <div
             className="flex flex-col gap-2 px-4 py-3"
-            style={{ borderRight: "1px solid var(--color-border)" }}
+            style={
+              modal
+                ? { borderBottom: "1px solid var(--color-border)" }
+                : { borderRight: "1px solid var(--color-border)" }
+            }
           >
             <span
               className="text-[10px] font-semibold uppercase tracking-widest"
@@ -1983,7 +1990,11 @@ export default function ThermalPrinterBar() {
           {isConnected && (
             <div
               className="flex flex-col gap-2 px-4 py-3"
-              style={{ borderRight: "1px solid var(--color-border)" }}
+              style={
+                modal
+                  ? { borderBottom: "1px solid var(--color-border)" }
+                  : { borderRight: "1px solid var(--color-border)" }
+              }
             >
               <span
                 className="text-[10px] font-semibold uppercase tracking-widest"

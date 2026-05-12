@@ -18,6 +18,7 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { AppUser, Permission } from "@/types";
+import { log } from "@/lib/logger";
 
 const SESSION_KEY = "cdi_session_start";
 const SESSION_EXPIRED_KEY = "cdi_session_expired";
@@ -185,6 +186,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const appUserData = await loadAppUser(credential.user.uid);
       setFirebaseUser(credential.user);
       setAppUser(appUserData);
+      log({
+        action: "login",
+        category: "auth",
+        description: `@${appUserData.username} fez login`,
+        performedBy: { uid: appUserData.uid, username: appUserData.username },
+      });
     } finally {
       signingInRef.current = false;
     }

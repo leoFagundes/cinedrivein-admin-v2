@@ -31,6 +31,7 @@ interface Article {
   title: string;
   summary: string;
   content: React.ReactNode;
+  bodyText?: string;
 }
 
 // ── Article content ────────────────────────────────────────────────────────────
@@ -952,6 +953,334 @@ const ARTICLES: Article[] = [
       </div>
     ),
   },
+
+  // ── PEDIDOS (novos) ──
+  {
+    id: "alerta-sonoro",
+    category: "pedidos",
+    title: "Alerta sonoro de novos pedidos",
+    summary: "Como ativar o som de notificação quando um pedido chega.",
+    bodyText:
+      "som audio alerta sonoro notificação novo pedido ativar desativar mudo silencioso volume",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na página de <B>Pedidos</B>, há um botão de som no canto inferior
+          direito da tela. Clique nele para ativar ou desativar o alerta
+          sonoro.
+        </P>
+        <P>
+          Com o som ativo, sempre que um novo pedido chegar ao painel, um{" "}
+          <B>sinal sonoro</B> é tocado automaticamente — útil em ambientes
+          barulhentos ou quando o painel não está em foco.
+        </P>
+        <List
+          items={[
+            "Ícone de som ativo — alertas habilitados",
+            "Ícone mudo (riscado) — alertas silenciados",
+          ]}
+        />
+        <Note>
+          A preferência de som é salva localmente no navegador. Ao reabrir a
+          página, o estado anterior é restaurado automaticamente.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "acoes-massa",
+    category: "pedidos",
+    title: "Ações em massa nos pedidos",
+    summary:
+      "Como cancelar todos os ativos ou excluir todos os cancelados de uma vez.",
+    bodyText:
+      "cancelar todos pedidos ativos massa lote bulk excluir cancelados permanente botão",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          <B>Cancelar todos os ativos</B>
+        </P>
+        <P>
+          Na aba <B>Ativos</B>, clique no botão <B>Cancelar todos (N)</B> no
+          canto superior direito da lista. Um modal de confirmação mostrará o
+          total de pedidos afetados.
+        </P>
+        <P>
+          Todos os pedidos ativos são cancelados e movidos para{" "}
+          <B>Finalizados</B>. O estoque de cada item é devolvido
+          automaticamente.
+        </P>
+        <P>
+          <B>Excluir todos os cancelados</B>
+        </P>
+        <P>
+          Na aba <B>Finalizados</B>, clique no botão{" "}
+          <B>Excluir cancelados</B>. Isso remove permanentemente todos os
+          pedidos com status Cancelado da fila atual.
+        </P>
+        <Warn>
+          A exclusão em massa é irreversível. Pedidos excluídos não aparecem
+          mais nos relatórios.
+        </Warn>
+      </div>
+    ),
+  },
+  {
+    id: "excluir-pedido",
+    category: "pedidos",
+    title: "Excluir um pedido permanentemente",
+    summary: "Como remover definitivamente um pedido finalizado ou cancelado.",
+    bodyText:
+      "excluir deletar remover pedido permanente definitivo apagar histórico lixeira",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na aba <B>Finalizados</B>, cada card tem um ícone de{" "}
+          <B>🗑 lixeira</B>. Clique nele para excluir o pedido
+          permanentemente.
+        </P>
+        <P>
+          Uma confirmação rápida aparece no próprio card. Confirme para
+          concluir.
+        </P>
+        <P>
+          A exclusão remove o pedido <B>e todo o histórico de chat</B>{" "}
+          associado a ele.
+        </P>
+        <Warn>
+          Pedidos excluídos não podem ser recuperados e não aparecem nos
+          relatórios. Use apenas para pedidos que não precisam mais constar
+          no histórico.
+        </Warn>
+        <Note>
+          Apenas usuários com permissão <code>delete_orders</code> veem o
+          botão de exclusão.
+        </Note>
+      </div>
+    ),
+  },
+
+  // ── ESTOQUE (novos) ──
+  {
+    id: "itens-destaque",
+    category: "estoque",
+    title: "Itens em destaque no cardápio",
+    summary:
+      "Como destacar um item para aparecer em posição privilegiada no app do cliente.",
+    bodyText:
+      "destaque featured estrela favorito cardápio topo prioridade item especial evidência",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na lista de itens do <B>Estoque</B>, cada item tem um ícone de{" "}
+          <B>estrela</B>. Clique nele para marcar ou desmarcar o item como
+          destaque.
+        </P>
+        <P>
+          Itens marcados como destaque ficam em <B>evidência no cardápio do
+          cliente</B>, sendo exibidos antes dos demais itens da mesma
+          categoria.
+        </P>
+        <P>
+          Use o destaque para promover itens sazonais, promoções ou os mais
+          pedidos da casa.
+        </P>
+        <Note>
+          O destaque não altera preço nem disponibilidade — é apenas uma
+          forma de dar mais visibilidade no cardápio.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "visibilidade-itens",
+    category: "estoque",
+    title: "Ocultar e mostrar itens do cardápio",
+    summary:
+      "Como esconder temporariamente um item ou subitem sem precisar excluí-lo.",
+    bodyText:
+      "visibilidade ocultar esconder mostrar exibir item subitem cardápio temporário invisível inativo ativo olho",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na lista de itens e subitens do <B>Estoque</B>, cada linha tem um
+          ícone de <B>olho</B>. Clique nele para alternar entre visível e
+          oculto.
+        </P>
+        <P>
+          Itens <B>ocultos</B> não aparecem no cardápio do cliente, mas
+          continuam existindo no sistema e podem ser reativados a qualquer
+          momento.
+        </P>
+        <P>Use ocultar para:</P>
+        <List
+          items={[
+            "Itens temporariamente indisponíveis (sem estoque mas sem data de retorno)",
+            "Itens sazonais fora de época",
+            "Itens em reformulação antes de voltar ao cardápio",
+          ]}
+        />
+        <Note>
+          Diferente do controle de estoque (que zera automaticamente quando
+          acaba), ocultar é manual — o item permanece oculto até você
+          reativar.
+        </Note>
+      </div>
+    ),
+  },
+
+  // ── IMPRESSORA (novos) ──
+  {
+    id: "auto-impressao",
+    category: "impressora",
+    title: "Auto-impressão de novas comandas",
+    summary:
+      "Como funciona a impressão automática ao receber um novo pedido.",
+    bodyText:
+      "auto impressão automática nova comanda pedido chega imprime automaticamente conectada badge não impresso",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Com a impressora conectada, o sistema imprime automaticamente a
+          comanda sempre que um <B>novo pedido chega</B> ao painel — sem
+          precisar clicar no ícone de impressão de cada card.
+        </P>
+        <P>
+          Se um pedido chegar com a impressora <B>desconectada</B>, o card
+          exibe o badge <B>Não impresso</B> em amarelo. Reconecte a
+          impressora e imprima manualmente pelo ícone no card.
+        </P>
+        <P>
+          O badge <B>Não impresso</B> desaparece assim que a comanda for
+          impressa manualmente ou quando o expediente for fechado.
+        </P>
+        <Note>
+          A auto-impressão funciona apenas enquanto a página de Pedidos está
+          aberta no navegador. Se a aba for fechada ou o computador entrar em
+          suspensão, novas comandas precisarão ser impressas manualmente.
+        </Note>
+      </div>
+    ),
+  },
+
+  // ── SISTEMA (novos) ──
+  {
+    id: "status-cinema",
+    category: "sistema",
+    title: "Status do cinema e tema sazonal",
+    summary:
+      "Como marcar o cinema como fechado e ativar temas de Natal, Halloween e outros.",
+    bodyText:
+      "cinema fechado aberto status tema sazonal natal christmas halloween páscoa easter evento especial animação decoração",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na página <B>Configurações do Site</B> {"›"}{" "}
+          <B>Configurações extras</B>, há dois controles de aparência do
+          site:
+        </P>
+        <P>
+          <B>Status do cinema</B>
+        </P>
+        <P>
+          Diferente do controle da lanchonete no Dashboard (que abre/fecha
+          para pedidos), este toggle exibe um aviso de{" "}
+          <B>&quot;Cinema fechado&quot;</B> no site do cliente.
+        </P>
+        <P>
+          Use ao final da temporada ou em períodos de manutenção — o app
+          continua acessível para navegação mesmo com o aviso ativo.
+        </P>
+        <P>
+          <B>Tema sazonal</B>
+        </P>
+        <P>
+          Selecione um tema para ativar uma decoração especial no site:
+        </P>
+        <List
+          items={[
+            "Natal 🎄 — decoração natalina",
+            "Halloween 🎃 — decoração de outubro",
+            "Páscoa 🐣 — decoração de páscoa",
+            "Nenhum — layout padrão",
+          ]}
+        />
+        <Note>
+          Lembre-se de clicar em <B>Salvar</B> após alterar o status ou o
+          tema.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "popup-site",
+    category: "sistema",
+    title: "Pop-up de anúncio no site",
+    summary:
+      "Como configurar o pop-up que aparece para o cliente ao abrir o app.",
+    bodyText:
+      "popup pop-up anúncio banner notificação site app cliente imagem título descrição ativar desativar habilitado galeria",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Em <B>Configurações do Site</B> {"›"} <B>Configurações extras</B>{" "}
+          {"›"} <B>Pop-up do site</B>, configure um anúncio que aparece
+          automaticamente quando o cliente abre o app.
+        </P>
+        <P>Para configurar:</P>
+        <List
+          items={[
+            "Clique em Editar na seção Pop-up do site",
+            "Faça upload de uma imagem ou cole a URL diretamente",
+            "Informe um título (ex: Novidades no Cine Drive-in!)",
+            "Adicione descrições — cada linha vira um parágrafo no pop-up",
+            "Ative o toggle Ativo para exibir o pop-up",
+            "Clique em Salvar",
+          ]}
+        />
+        <P>
+          Para <B>desativar temporariamente</B> sem perder o conteúdo,
+          basta comutar o toggle para <B>Inativo</B> e salvar.
+        </P>
+        <Note>
+          Imagens enviadas ficam salvas na galeria. Reutilize-as clicando nas
+          miniaturas exibidas abaixo do campo de imagem.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "meu-perfil",
+    category: "sistema",
+    title: "Editar meu perfil",
+    summary: "Como alterar seu nome de usuário, foto e senha.",
+    bodyText:
+      "perfil usuario nome foto senha alterar editar username password minha conta avatar pessoal",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Acesse a página <B>Meu Perfil</B> pelo menu de navegação lateral.
+        </P>
+        <P>Você pode alterar:</P>
+        <List
+          items={[
+            "Nome de usuário (username) — o @ que aparece nos logs e no chat",
+            "Foto de perfil — upload de imagem ou URL externa",
+            "Senha — informe a senha atual antes de definir a nova",
+          ]}
+        />
+        <P>
+          Após fazer as alterações, clique em <B>Salvar alterações</B>. Cada
+          campo é salvo individualmente — você pode alterar só a foto sem
+          mexer na senha, por exemplo.
+        </P>
+        <Note>
+          Alterações no username são refletidas nos logs futuros. Logs
+          anteriores continuam exibindo o nome antigo.
+        </Note>
+      </div>
+    ),
+  },
 ];
 
 // ── Helper components ──────────────────────────────────────────────────────────
@@ -1043,6 +1372,39 @@ function Warn({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Search highlight ──────────────────────────────────────────────────────────
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${escapeRegex(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase() ? (
+          <mark
+            key={i}
+            style={{
+              backgroundColor: "rgba(0,136,194,0.22)",
+              color: "inherit",
+              borderRadius: "2px",
+              padding: "0 2px",
+            }}
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 // ── Category config ────────────────────────────────────────────────────────────
 
 const CATEGORIES: {
@@ -1097,30 +1459,53 @@ const CATEGORIES: {
 
 // ── Article card ───────────────────────────────────────────────────────────────
 
-function ArticleCard({ article }: { article: Article }) {
+function ArticleCard({
+  article,
+  query,
+}: {
+  article: Article;
+  query: string;
+}) {
   const [open, setOpen] = useState(false);
   const cat = CATEGORIES.find((c) => c.key === article.category)!;
+
+  const q = query.trim().toLowerCase();
+  const inTitle = !!(q && article.title.toLowerCase().includes(q));
+  const inSummary = !!(q && article.summary.toLowerCase().includes(q));
+  const inBody = !!(
+    q &&
+    article.bodyText?.toLowerCase().includes(q) &&
+    !inTitle &&
+    !inSummary
+  );
+
+  // Body-match cards stay open while the query is active; user-opened cards
+  // stay open independently. Clicking a body-match card has no visible effect
+  // while searching (it can't be closed) — acceptable trade-off without extra state.
+  const isOpen = open || inBody;
 
   return (
     <div
       className="rounded-[var(--radius-lg)] overflow-hidden"
       style={{
         backgroundColor: "var(--color-bg-surface)",
-        border: "1px solid var(--color-border)",
+        border: `1px solid ${inTitle || inSummary || inBody ? "rgba(0,136,194,0.35)" : "var(--color-border)"}`,
       }}
     >
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-start gap-3 px-5 py-4 text-left cursor-pointer transition-colors"
         style={{
-          backgroundColor: open ? "var(--color-bg-elevated)" : "transparent",
+          backgroundColor: isOpen ? "var(--color-bg-elevated)" : "transparent",
         }}
         onMouseEnter={(e) => {
-          if (!open)
-            e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+          if (!isOpen)
+            e.currentTarget.style.backgroundColor =
+              "var(--color-bg-elevated)";
         }}
         onMouseLeave={(e) => {
-          if (!open) e.currentTarget.style.backgroundColor = "transparent";
+          if (!isOpen)
+            e.currentTarget.style.backgroundColor = "transparent";
         }}
       >
         <div className="flex-1 min-w-0">
@@ -1132,25 +1517,37 @@ function ArticleCard({ article }: { article: Article }) {
               {cat.icon}
               {cat.label}
             </span>
+            {inBody && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                style={{
+                  backgroundColor: "rgba(0,136,194,0.1)",
+                  color: "var(--color-primary)",
+                  border: "1px solid rgba(0,136,194,0.2)",
+                }}
+              >
+                resultado no conteúdo
+              </span>
+            )}
           </div>
           <p
             className="text-sm font-semibold"
             style={{ color: "var(--color-text-primary)" }}
           >
-            {article.title}
+            <Highlight text={article.title} query={query} />
           </p>
           <p
             className="text-xs mt-0.5"
             style={{ color: "var(--color-text-muted)" }}
           >
-            {article.summary}
+            <Highlight text={article.summary} query={query} />
           </p>
         </div>
         <FiChevronDown
           size={16}
           style={{
             color: "var(--color-text-muted)",
-            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 0.2s",
             flexShrink: 0,
             marginTop: 2,
@@ -1158,7 +1555,7 @@ function ArticleCard({ article }: { article: Article }) {
         />
       </button>
 
-      {open && (
+      {isOpen && (
         <div
           className="px-5 py-4 flex flex-col gap-3"
           style={{ borderTop: "1px solid var(--color-border)" }}
@@ -1185,7 +1582,8 @@ export default function HelpPage() {
       return (
         a.title.toLowerCase().includes(q) ||
         a.summary.toLowerCase().includes(q) ||
-        a.category.toLowerCase().includes(q)
+        a.category.toLowerCase().includes(q) ||
+        (a.bodyText?.toLowerCase().includes(q) ?? false)
       );
     });
   }, [search, activeCategory]);
@@ -1288,7 +1686,7 @@ export default function HelpPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((article) => (
-            <ArticleCard key={article.id} article={article} />
+            <ArticleCard key={article.id} article={article} query={search} />
           ))}
         </div>
       )}

@@ -39,6 +39,7 @@ import {
   FiShield,
   FiMapPin,
   FiPrinter,
+  FiSliders,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -175,7 +176,7 @@ function PrinterReminderToast({
 }) {
   return (
     <div
-      className="fixed bottom-4 left-4 z-40 w-full max-w-xs rounded-[var(--radius-xl)] overflow-hidden flex flex-col"
+      className="fixed bottom-4 left-4 z-40 w-full max-w-xs rounded-[var(--radius-xl)] overflow-hidden hidden sm:flex flex-col"
       style={{
         backgroundColor: "var(--color-bg-surface)",
         border: "1px solid rgba(245,158,11,0.35)",
@@ -1800,6 +1801,7 @@ function OrdersPageInner() {
   const [reactivateTarget, setReactivateTarget] = useState<Order | null>(null);
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [customerMsgTimes, setCustomerMsgTimes] = useState<
     Record<string, number>
   >({});
@@ -1866,7 +1868,10 @@ function OrdersPageInner() {
 
         if (snap.empty) {
           initializedOrdersRef.current.add(order.id);
-          customerMsgTimesRef.current = { ...customerMsgTimesRef.current, [order.id]: 0 };
+          customerMsgTimesRef.current = {
+            ...customerMsgTimesRef.current,
+            [order.id]: 0,
+          };
           setCustomerMsgTimes({ ...customerMsgTimesRef.current });
           return;
         }
@@ -1890,7 +1895,10 @@ function OrdersPageInner() {
         }
 
         initializedOrdersRef.current.add(order.id);
-        customerMsgTimesRef.current = { ...customerMsgTimesRef.current, [order.id]: msgTs };
+        customerMsgTimesRef.current = {
+          ...customerMsgTimesRef.current,
+          [order.id]: msgTs,
+        };
         setCustomerMsgTimes({ ...customerMsgTimesRef.current });
       });
     });
@@ -2372,8 +2380,8 @@ function OrdersPageInner() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-2">
+        {/* Filters – desktop */}
+        <div className="hidden sm:flex flex-col sm:flex-row gap-2">
           <div
             className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)]"
             style={{
@@ -2432,7 +2440,7 @@ function OrdersPageInner() {
           </div>
         </div>
         {tab === "active" && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="hidden sm:flex items-center gap-2 flex-wrap">
             <span
               className="text-xs flex-shrink-0"
               style={{ color: "var(--color-text-muted)" }}
@@ -2468,6 +2476,41 @@ function OrdersPageInner() {
             ))}
           </div>
         )}
+
+        {/* Filters – mobile button */}
+        <div className="flex sm:hidden">
+          <button
+            onClick={() => setShowFiltersModal(true)}
+            className="relative flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
+            style={{
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            <FiSliders size={14} />
+            Filtros
+            {(spotFilter ||
+              orderFilter ||
+              (tab === "active" && sortActive !== "newest")) && (
+              <span
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+                style={{
+                  backgroundColor: "var(--color-primary)",
+                  color: "white",
+                }}
+              >
+                {
+                  [
+                    spotFilter,
+                    orderFilter,
+                    tab === "active" && sortActive !== "newest",
+                  ].filter(Boolean).length
+                }
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -2828,6 +2871,172 @@ function OrdersPageInner() {
           setSnooze12h={setSnooze12h}
           onDismiss={dismissPrinterReminder}
         />
+      )}
+
+      {/* Filters modal – mobile only */}
+      {showFiltersModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:hidden"
+          style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+          onClick={() => setShowFiltersModal(false)}
+        >
+          <div
+            className="w-full rounded-t-[var(--radius-xl)] p-5 flex flex-col gap-4"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+              borderBottom: "none",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FiSliders
+                  size={15}
+                  style={{ color: "var(--color-text-muted)" }}
+                />
+                <p
+                  className="font-semibold text-sm"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Filtros
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFiltersModal(false)}
+                className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Vaga
+              </span>
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                <FiSearch
+                  size={14}
+                  style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+                />
+                <input
+                  type="number"
+                  value={spotFilter}
+                  onChange={(e) => setSpotFilter(e.target.value)}
+                  placeholder="Filtrar por vaga"
+                  className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                  style={{ color: "var(--color-text-primary)" }}
+                />
+                {spotFilter && (
+                  <button
+                    onClick={() => setSpotFilter("")}
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    <FiX size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Número do pedido
+              </span>
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                <FiSearch
+                  size={14}
+                  style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+                />
+                <input
+                  type="number"
+                  value={orderFilter}
+                  onChange={(e) => setOrderFilter(e.target.value)}
+                  placeholder="Número do pedido"
+                  className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                  style={{ color: "var(--color-text-primary)" }}
+                />
+                {orderFilter && (
+                  <button
+                    onClick={() => setOrderFilter("")}
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    <FiX size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {tab === "active" && (
+              <div className="flex flex-col gap-1.5">
+                <span
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Ordenar por
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(
+                    [
+                      { key: "newest", label: "Mais recente" },
+                      { key: "oldest", label: "Mais antigo" },
+                      { key: "spot", label: "Vaga" },
+                      { key: "value", label: "Valor" },
+                    ] as { key: SortOption; label: string }[]
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setSortActive(opt.key)}
+                      className="px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-all"
+                      style={{
+                        backgroundColor:
+                          sortActive === opt.key
+                            ? "var(--color-primary)"
+                            : "var(--color-bg-elevated)",
+                        color:
+                          sortActive === opt.key
+                            ? "white"
+                            : "var(--color-text-muted)",
+                        border: `1px solid ${sortActive === opt.key ? "var(--color-primary)" : "var(--color-border)"}`,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowFiltersModal(false)}
+              className="w-full py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 mt-1"
+              style={{
+                backgroundColor: "var(--color-primary)",
+                color: "white",
+              }}
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
       )}
 
       <SoundAlertButton />

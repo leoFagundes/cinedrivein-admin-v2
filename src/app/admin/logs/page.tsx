@@ -166,7 +166,7 @@ function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          className="flex items-center justify-between px-6 py-4"
+          className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4"
           style={{ borderBottom: "1px solid var(--color-border)" }}
         >
           <h2
@@ -183,7 +183,7 @@ function ConfirmModal({
             <FiX size={16} />
           </button>
         </div>
-        <div className="p-6 flex flex-col gap-5">
+        <div className="p-4 sm:p-6 flex flex-col gap-5">
           <div
             className="flex items-start gap-3 p-4 rounded-[var(--radius-md)]"
             style={{
@@ -327,8 +327,11 @@ function LogRow({
 
   return (
     <div
-      className="px-4 py-3.5 group transition-colors"
-      style={{ borderBottom: "1px solid var(--color-border)" }}
+      className="px-4 py-3 group transition-colors"
+      style={{
+        borderBottom: "1px solid var(--color-border)",
+        borderLeft: `3px solid ${cat.color}`,
+      }}
       onMouseEnter={(e) =>
         (e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)")
       }
@@ -339,7 +342,7 @@ function LogRow({
       <div className="flex items-start gap-3">
         {/* Category icon */}
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+          className="w-7 h-7 rounded-[var(--radius-md)] flex items-center justify-center flex-shrink-0 mt-0.5"
           style={{ backgroundColor: cat.bg, color: cat.color }}
         >
           {cat.icon}
@@ -347,7 +350,7 @@ function LogRow({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Description + time */}
+          {/* Description + delete */}
           <div className="flex items-start justify-between gap-3">
             <p
               className="text-sm font-medium leading-snug"
@@ -355,74 +358,73 @@ function LogRow({
             >
               {log.description}
             </p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span
-                className="text-xs hidden sm:block"
+            {canDelete && (
+              <button
+                onClick={() => onDelete(log.id)}
+                title="Excluir log"
+                className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
                 style={{ color: "var(--color-text-muted)" }}
-                title={log.createdAt.toLocaleString("pt-BR")}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    "rgba(239,68,68,0.1)";
+                  e.currentTarget.style.color = "var(--color-error)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = "var(--color-text-muted)";
+                }}
               >
-                {timeAgo(log.createdAt)}
-              </span>
-              {canDelete && (
-                <button
-                  onClick={() => onDelete(log.id)}
-                  title="Excluir log"
-                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-all"
-                  style={{ color: "var(--color-text-muted)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor =
-                      "rgba(239,68,68,0.1)";
-                    e.currentTarget.style.color = "var(--color-error)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.color = "var(--color-text-muted)";
-                  }}
-                >
-                  <FiTrash2 size={13} />
-                </button>
-              )}
-            </div>
+                <FiTrash2 size={13} />
+              </button>
+            )}
           </div>
 
-          {/* Meta row */}
-          <div className="flex flex-wrap items-center gap-2 mt-1">
+          {/* Meta row: category · actor · time */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1">
             <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium"
-              style={{ backgroundColor: cat.bg, color: cat.color }}
+              className="inline-flex items-center gap-1 text-xs font-medium"
+              style={{ color: cat.color }}
             >
+              {cat.icon}
               {cat.label}
+            </span>
+            <span
+              className="text-xs select-none"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              ·
+            </span>
+            <span
+              className="text-xs font-medium"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              @{log.performedBy.username}
+            </span>
+            <span
+              className="text-xs select-none"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              ·
             </span>
             <span
               className="text-xs"
               style={{ color: "var(--color-text-muted)" }}
+              title={log.createdAt.toLocaleString("pt-BR")}
             >
-              por{" "}
-              <span
-                className="font-medium"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                @{log.performedBy.username}
-              </span>
-            </span>
-            <span
-              className="text-xs sm:hidden"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              · {timeAgo(log.createdAt)}
+              {timeAgo(log.createdAt)}
             </span>
           </div>
 
           {/* Changes */}
           {hasChanges && (
             <div
-              className="mt-2.5 flex flex-col gap-1.5 pl-1"
+              className="mt-2 flex flex-col gap-1.5 pl-2"
               style={{ borderLeft: "2px solid var(--color-border)" }}
             >
               {log.changes!.map((c, i) => (
                 <div
                   key={i}
-                  className="flex items-start flex-wrap gap-x-2 gap-y-1 pl-2 min-w-0"
+                  className="flex items-start flex-wrap gap-x-2 gap-y-1 min-w-0"
                 >
                   <span
                     className="text-xs flex-shrink-0"
@@ -746,10 +748,19 @@ export default function LogsPage() {
       ) : (
         <>
           {/* Filters + Search */}
-          <div className="flex flex-col gap-3">
+          <div
+            className="flex flex-col gap-3 p-3 sm:p-4 rounded-[var(--radius-lg)]"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
             {/* Date range */}
             <div className="flex flex-wrap items-center gap-2">
-              <FiCalendar size={14} style={{ color: "var(--color-text-muted)" }} />
+              <FiCalendar size={13} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
+              <span className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>
+                Período:
+              </span>
               <input
                 type="date"
                 value={fromDate}
@@ -780,64 +791,68 @@ export default function LogsPage() {
                   style={{ color: "var(--color-text-muted)" }}
                 >
                   <FiX size={12} />
-                  Limpar datas
+                  Limpar
                 </button>
-              )}
-              {(fromDate || toDate) && (
-                <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                  {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-                </span>
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-              <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
-              {CATEGORY_FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setCategoryFilter(f.key)}
-                  className="px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium whitespace-nowrap cursor-pointer flex-shrink-0 transition-all"
+            <div
+              style={{ borderBottom: "1px solid var(--color-border)" }}
+            />
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+              <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1">
+                {CATEGORY_FILTERS.map((f) => {
+                  const meta = f.key !== "all" ? CATEGORY_META[f.key as LogCategory] : null;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setCategoryFilter(f.key)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs font-medium whitespace-nowrap cursor-pointer flex-shrink-0 transition-all"
+                      style={{
+                        backgroundColor:
+                          categoryFilter === f.key
+                            ? meta ? meta.bg : "var(--color-bg-elevated)"
+                            : "var(--color-bg-elevated)",
+                        color:
+                          categoryFilter === f.key
+                            ? meta ? meta.color : "var(--color-text-primary)"
+                            : "var(--color-text-secondary)",
+                        border: `1px solid ${categoryFilter === f.key ? (meta ? meta.color : "var(--color-border)") : "var(--color-border)"}`,
+                      }}
+                    >
+                      {meta && (
+                        <span style={{ display: "flex" }}>{meta.icon}</span>
+                      )}
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="relative flex-shrink-0">
+                <FiSearch
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--color-text-muted)" }}
+                />
+                <input
+                  type="text"
+                  placeholder="Buscar descrição ou usuário..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-9 pl-8 pr-4 text-sm rounded-[var(--radius-md)] outline-none w-full sm:w-60"
                   style={{
-                    backgroundColor:
-                      categoryFilter === f.key
-                        ? "var(--color-primary)"
-                        : "var(--color-bg-elevated)",
-                    color:
-                      categoryFilter === f.key
-                        ? "white"
-                        : "var(--color-text-secondary)",
-                    border: `1px solid ${categoryFilter === f.key ? "var(--color-primary)" : "var(--color-border)"}`,
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text-primary)",
                   }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            <div className="relative flex-shrink-0">
-              <FiSearch
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: "var(--color-text-muted)" }}
-              />
-              <input
-                type="text"
-                placeholder="Buscar nos logs..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 pl-8 pr-4 text-sm rounded-[var(--radius-md)] outline-none w-full sm:w-64"
-                style={{
-                  backgroundColor: "var(--color-bg-elevated)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-primary)",
-                }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.borderColor =
-                    "var(--color-border-focus)")
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.borderColor = "var(--color-border)")
-                }
-              />
+                  onFocus={(e) =>
+                    (e.currentTarget.style.borderColor = "var(--color-border-focus)")
+                  }
+                  onBlur={(e) =>
+                    (e.currentTarget.style.borderColor = "var(--color-border)")
+                  }
+                />
               </div>
             </div>
           </div>
@@ -897,17 +912,32 @@ export default function LogsPage() {
                   }}
                 >
                   <span
-                    className="text-xs font-semibold uppercase tracking-wide"
+                    className="text-xs font-semibold"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    {filtered.length} registro{filtered.length !== 1 ? "s" : ""}
-                    {(search || categoryFilter !== "all") && " (filtrados)"}
+                    {search || categoryFilter !== "all" ? (
+                      <>
+                        {filtered.length}{" "}
+                        resultado{filtered.length !== 1 ? "s" : ""}
+                      </>
+                    ) : hasMore ? (
+                      <>
+                        {logs.length}
+                        <span style={{ color: "var(--color-primary)" }}>+</span>
+                        {" "}carregados
+                      </>
+                    ) : (
+                      <>
+                        {logs.length}{" "}
+                        registro{logs.length !== 1 ? "s" : ""}
+                      </>
+                    )}
                   </span>
                   <span
                     className="text-xs"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    Mais recentes primeiro
+                    mais recentes primeiro
                   </span>
                 </div>
 
