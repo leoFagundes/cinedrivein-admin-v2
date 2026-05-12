@@ -775,7 +775,10 @@ function SessionCard({
               {classInfo && (
                 <span
                   className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-black flex-shrink-0"
-                  style={{ backgroundColor: classInfo.bg, color: classInfo.text }}
+                  style={{
+                    backgroundColor: classInfo.bg,
+                    color: classInfo.text,
+                  }}
                 >
                   {classInfo.label}
                 </span>
@@ -783,26 +786,44 @@ function SessionCard({
               {/* Action buttons — always visible on mobile */}
               <div className="flex gap-1 sm:hidden">
                 <button
-                  onClick={(e) => { e.stopPropagation(); onCopy(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCopy();
+                  }}
                   title="Copiar"
                   className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
-                  style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "white" }}
+                  style={{
+                    backgroundColor: "rgba(0,0,0,0.55)",
+                    color: "white",
+                  }}
                 >
                   <FiCopy size={12} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
                   title="Editar"
                   className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
-                  style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                  style={{
+                    backgroundColor: "var(--color-primary)",
+                    color: "white",
+                  }}
                 >
                   <FiEdit2 size={12} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
                   title="Remover"
                   className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
-                  style={{ backgroundColor: "rgba(239,68,68,0.8)", color: "white" }}
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.8)",
+                    color: "white",
+                  }}
                 >
                   <FiTrash2 size={12} />
                 </button>
@@ -1147,6 +1168,42 @@ function ExtraSettings({
     setPopUpFile(null);
   }
 
+  async function handleActivateTheme(value: EventType) {
+    setIsEvent(value);
+    const updates: Partial<SiteConfig> = {
+      isClosed,
+      isEvent: value,
+      popUpEnabled,
+      popUpTitle,
+      prices,
+      popUpDescriptions: popUpDescs
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean),
+      popUpImageHistory: imageHistory,
+    };
+    if (!popUpFile) updates.popUpImage = popUpImage;
+    await onSave(updates, popUpFile);
+    setPopUpFile(null);
+  }
+
+  const seasonalHint = (() => {
+    const month = new Date().getMonth() + 1;
+    const hints: {
+      value: EventType;
+      emoji: string;
+      label: string;
+      months: number[];
+    }[] = [
+      { value: "christmas", emoji: "🎄", label: "Natal", months: [11, 12] },
+      { value: "halloween", emoji: "🎃", label: "Halloween", months: [10] },
+      { value: "easter", emoji: "🐣", label: "Páscoa", months: [3, 4] },
+    ];
+    return (
+      hints.find((h) => h.months.includes(month) && isEvent !== h.value) ?? null
+    );
+  })();
+
   return (
     <div
       className="flex flex-col gap-5 p-6 rounded-[var(--radius-xl)]"
@@ -1172,6 +1229,48 @@ function ExtraSettings({
           {saving ? "Salvando..." : "Salvar"}
         </button>
       </div>
+
+      {/* Seasonal hint */}
+      {seasonalHint && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)]"
+          style={{
+            backgroundColor: "rgba(245,158,11,0.07)",
+            border: "1px solid rgba(245,158,11,0.25)",
+          }}
+        >
+          <span className="text-base flex-shrink-0 mt-0.5">
+            {seasonalHint.emoji}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Época de {seasonalHint.label}
+            </p>
+            <p
+              className="text-xs mt-0.5"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              O tema <strong>{seasonalHint.label}</strong> não está ativo. Que
+              tal ativá-lo?
+            </p>
+          </div>
+          <button
+            onClick={() => handleActivateTheme(seasonalHint.value)}
+            disabled={saving}
+            className="flex-shrink-0 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
+            style={{
+              backgroundColor: "rgba(245,158,11,0.15)",
+              color: "var(--color-warning)",
+              border: "1px solid rgba(245,158,11,0.35)",
+            }}
+          >
+            {saving ? "Salvando..." : "Ativar"}
+          </button>
+        </div>
+      )}
 
       {/* Cinema closed toggle */}
       <div className="flex flex-col gap-2">
