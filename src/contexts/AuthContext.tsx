@@ -186,12 +186,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const appUserData = await loadAppUser(credential.user.uid);
       setFirebaseUser(credential.user);
       setAppUser(appUserData);
-      log({
-        action: "login",
-        category: "auth",
-        description: `@${appUserData.username} fez login`,
-        performedBy: { uid: appUserData.uid, username: appUserData.username },
-      });
+      if (appUserData) {
+        log({
+          action: "login",
+          category: "auth",
+          description: `@${appUserData.username} fez login`,
+          performedBy: { uid: appUserData.uid, username: appUserData.username },
+        });
+      }
     } finally {
       signingInRef.current = false;
     }
