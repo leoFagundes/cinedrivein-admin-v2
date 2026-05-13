@@ -1427,6 +1427,30 @@ function QzTutorialModal({ onClose }: { onClose: () => void }) {
               <FiExternalLink size={11} />
               Baixar digital-certificate.txt
             </a>
+            <div
+              className="flex items-start gap-2 mt-2"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              <span className="text-xs leading-relaxed">
+                A <strong>chave privada</strong> fica no servidor e{" "}
+                <strong>não precisa ser copiada</strong> para o QZ Tray —
+                apenas o certificado acima é necessário. O download abaixo
+                serve somente como backup.
+              </span>
+            </div>
+            <a
+              href="/qz/private-key.txt"
+              download="private-key.txt"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium w-fit transition-opacity hover:opacity-70 cursor-pointer mt-1"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                color: "var(--color-text-muted)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <FiExternalLink size={11} />
+              Baixar private-key.txt (opcional)
+            </a>
           </Step>
           {/* Step 3 */}
           <Step number="3" title="Copiar o certificado para o QZ Tray">
