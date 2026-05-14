@@ -50,7 +50,7 @@ import { log } from "@/lib/logger";
 import NewOrderModal from "@/components/orders/NewOrderModal";
 import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
 import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
-import { Order, OrderPayment } from "@/types";
+import { Order, OrderItem, OrderPayment } from "@/types";
 import ThermalPrinterBar, {
   PrintOrderButton,
   usePrinter,
@@ -117,6 +117,28 @@ function ItemPhoto({ photo, name }: { photo?: string; name: string }) {
       <FiPackage size={16} />
     </div>
   );
+}
+
+function groupOrderItems(items: OrderItem[]): OrderItem[] {
+  const map = new Map<string, OrderItem>();
+  for (const item of items) {
+    const key = [
+      item.itemId,
+      item.value,
+      item.observation ?? "",
+      (item.additionals ?? []).slice().sort().join("\x00"),
+      (item.additionals_sauce ?? []).slice().sort().join("\x00"),
+      (item.additionals_drink ?? []).slice().sort().join("\x00"),
+      (item.additionals_sweet ?? []).slice().sort().join("\x00"),
+    ].join("|");
+    const existing = map.get(key);
+    if (existing) {
+      existing.quantity = (existing.quantity ?? 1) + (item.quantity ?? 1);
+    } else {
+      map.set(key, { ...item, quantity: item.quantity ?? 1 });
+    }
+  }
+  return Array.from(map.values());
 }
 
 // ── PrinterReminderToast ──────────────────────────────────────────────────────
@@ -478,7 +500,7 @@ function OrderCard({
             {order.username}
           </span>
         </div>
-        {order.phone && (
+        {order.phone && !/^9+$/.test(order.phone.replace(/\D/g, "")) && (
           <a
             href={`https://wa.me/55${order.phone.replace(/\D/g, "")}`}
             target="_blank"
@@ -494,7 +516,7 @@ function OrderCard({
 
       {/* Items */}
       <div className="flex flex-col flex-1">
-        {order.items.map((item, i) => {
+        {groupOrderItems(order.items).map((item, i) => {
           const extras = [
             ...(item.additionals ?? []).map((a) => `${a} (adicional)`),
             ...(item.additionals_sauce ?? []).map((a) => `${a} (molho)`),
@@ -971,7 +993,7 @@ function FinishedCard({
 
           {/* Itens */}
           <div style={{ borderTop: "1px solid var(--color-border)" }}>
-            {order.items.map((item, i) => {
+            {groupOrderItems(order.items).map((item, i) => {
               const extras = [
                 ...(item.additionals ?? []).map((a) => `${a} (adicional)`),
                 ...(item.additionals_sauce ?? []).map((a) => `${a} (molho)`),

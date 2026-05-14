@@ -48,6 +48,7 @@ import {
   FiChevronDown,
   FiTrash2,
   FiDownload,
+  FiMessageSquare,
 } from "react-icons/fi";
 import { generatePdfReport } from "@/lib/pdf-report";
 import { db, rtdb } from "@/lib/firebase";
@@ -341,6 +342,8 @@ export default function DashboardPage() {
   const [togglingStore, setTogglingStore] = useState(false);
   const [savingTimes, setSavingTimes] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(true);
+  const [isChatEnabled, setIsChatEnabled] = useState(true);
+  const [togglingChat, setTogglingChat] = useState(false);
 
   // ── Report ──
   const [reportDate, setReportDate] = useState("");
@@ -426,6 +429,7 @@ export default function DashboardPage() {
           setIsOpen(d.isOpen ?? false);
           setOpeningTime(d.openingTime ?? "18:00");
           setClosingTime(d.closingTime ?? "23:00");
+          setIsChatEnabled(d.chatEnabled ?? true);
         }
       } catch {
         // documento ainda não existe — mantém defaults
@@ -647,6 +651,38 @@ export default function DashboardPage() {
       toastError("Erro", "Não foi possível alterar o status.");
     } finally {
       setTogglingStore(false);
+    }
+  }
+
+  async function handleToggleChat() {
+    setTogglingChat(true);
+    try {
+      const newVal = !isChatEnabled;
+      await setDoc(
+        doc(db, "storeConfig", "main"),
+        { chatEnabled: newVal },
+        { merge: true },
+      );
+      setIsChatEnabled(newVal);
+      log({
+        action: newVal ? "Chat ativado" : "Chat desativado",
+        category: "site",
+        description: `Sistema de chat alterado para ${newVal ? "ativado" : "desativado"}`,
+        performedBy: { uid: appUser!.uid, username: appUser!.username },
+        changes: [
+          { field: "chatEnabled", from: String(!newVal), to: String(newVal) },
+        ],
+      });
+      success(
+        newVal ? "Chat ativado" : "Chat desativado",
+        newVal
+          ? "O chat está disponível para os clientes."
+          : "O chat foi desativado para os clientes.",
+      );
+    } catch {
+      toastError("Erro", "Não foi possível alterar o status do chat.");
+    } finally {
+      setTogglingChat(false);
     }
   }
 
@@ -1512,6 +1548,72 @@ export default function DashboardPage() {
                   {isOpen
                     ? "Aberta — pedidos ativos"
                     : "Fechada — pedidos desativados"}
+                </span>
+              </div>
+
+              {/* Chat toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p
+                    className="font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {isChatEnabled ? "Chat ativado" : "Chat desativado"}
+                  </p>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Controla se os clientes podem iniciar conversas pelo chat
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleChat}
+                  disabled={togglingChat || loadingConfig}
+                  className="cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
+                  style={{
+                    color: isChatEnabled
+                      ? "var(--color-success)"
+                      : "var(--color-error)",
+                  }}
+                >
+                  {isChatEnabled ? (
+                    <FiToggleRight size={42} />
+                  ) : (
+                    <FiToggleLeft size={42} />
+                  )}
+                </button>
+              </div>
+
+              {/* Chat status badge */}
+              <div
+                className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: isChatEnabled
+                    ? "rgba(34,197,94,0.08)"
+                    : "rgba(239,68,68,0.08)",
+                  border: `1px solid ${isChatEnabled ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+                }}
+              >
+                <FiMessageSquare
+                  size={14}
+                  style={{
+                    color: isChatEnabled
+                      ? "var(--color-success)"
+                      : "var(--color-error)",
+                  }}
+                />
+                <span
+                  className="text-sm font-medium"
+                  style={{
+                    color: isChatEnabled
+                      ? "var(--color-success)"
+                      : "var(--color-error)",
+                  }}
+                >
+                  {isChatEnabled
+                    ? "Chat ativo — clientes podem enviar mensagens"
+                    : "Chat inativo — clientes não podem enviar mensagens"}
                 </span>
               </div>
 

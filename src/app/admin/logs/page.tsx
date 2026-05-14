@@ -30,6 +30,7 @@ import {
   FiTrash2,
   FiAlertTriangle,
   FiCalendar,
+  FiUser,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -489,6 +490,10 @@ export default function LogsPage() {
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
+  const [userFilter, setUserFilter] = useState("");
+  const [allLogs, setAllLogs] = useState<Log[] | null>(null);
+  const [fetchAllLoading, setFetchAllLoading] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -561,6 +566,42 @@ export default function LogsPage() {
     }
     load();
   }, [fromDate, toDate]);
+
+  // Fetch admin usernames once for dropdown
+  useEffect(() => {
+    getDocs(query(collection(db, "users"), orderBy("username")))
+      .then((snap) =>
+        setAdminUsers(
+          snap.docs
+            .map((d) => d.data().username as string)
+            .filter(Boolean),
+        ),
+      )
+      .catch(() => {});
+  }, []);
+
+  // When any filter is active, fetch ALL logs (no limit) once, then filter client-side
+  const anyFilterActive = !!search || categoryFilter !== "all" || !!userFilter;
+
+  useEffect(() => {
+    if (!anyFilterActive) {
+      setAllLogs(null);
+      setFetchAllLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setFetchAllLoading(true);
+    const constraints: QueryConstraint[] = [];
+    if (fromDate) constraints.push(where("createdAt", ">=", Timestamp.fromDate(startOfDay(fromDate))));
+    if (toDate) constraints.push(where("createdAt", "<=", Timestamp.fromDate(endOfDay(toDate))));
+    getDocs(query(collection(db, "logs"), ...constraints, orderBy("createdAt", "desc")))
+      .then((snap) => {
+        if (!cancelled) setAllLogs(snap.docs.map(parseLog));
+      })
+      .catch((err) => console.error(err))
+      .finally(() => { if (!cancelled) setFetchAllLoading(false); });
+    return () => { cancelled = true; };
+  }, [anyFilterActive, fromDate, toDate]);
 
   async function loadMore() {
     if (!lastDoc) return;
@@ -651,14 +692,17 @@ export default function LogsPage() {
     }
   }
 
-  const filtered = logs.filter((l) => {
+  const sourceList = anyFilterActive ? (allLogs ?? []) : logs;
+
+  const filtered = sourceList.filter((l) => {
     const matchCat = categoryFilter === "all" || l.category === categoryFilter;
+    const matchUser = !userFilter || l.performedBy.username === userFilter;
     const matchSearch =
       !search ||
       l.description.toLowerCase().includes(search.toLowerCase()) ||
       l.performedBy.username.toLowerCase().includes(search.toLowerCase()) ||
       (l.target?.name ?? "").toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
+    return matchCat && matchUser && matchSearch;
   });
 
   return (
@@ -829,30 +873,59 @@ export default function LogsPage() {
                   );
                 })}
               </div>
-              <div className="relative flex-shrink-0">
-                <FiSearch
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "var(--color-text-muted)" }}
-                />
-                <input
-                  type="text"
-                  placeholder="Buscar descrição ou usuário..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9 pl-8 pr-4 text-sm rounded-[var(--radius-md)] outline-none w-full sm:w-60"
-                  style={{
-                    backgroundColor: "var(--color-bg-elevated)",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-text-primary)",
-                  }}
-                  onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--color-border-focus)")
-                  }
-                  onBlur={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--color-border)")
-                  }
-                />
+              <div className="flex gap-2 flex-shrink-0 flex-wrap sm:flex-nowrap">
+                {/* User dropdown */}
+                <div className="relative">
+                  <FiUser
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <select
+                    value={userFilter}
+                    onChange={(e) => setUserFilter(e.target.value)}
+                    className="h-9 pl-7 pr-3 text-sm rounded-[var(--radius-md)] outline-none appearance-none cursor-pointer w-full sm:w-44"
+                    style={{
+                      backgroundColor: userFilter ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                      border: `1px solid ${userFilter ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                      color: userFilter ? "var(--color-primary)" : "var(--color-text-secondary)",
+                    }}
+                  >
+                    <option value="">Todos os usuários</option>
+                    {adminUsers.map((u) => (
+                      <option key={u} value={u}>
+                        @{u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Search input */}
+                <div className="relative">
+                  <FiSearch
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Buscar descrição..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-9 pl-8 pr-4 text-sm rounded-[var(--radius-md)] outline-none w-full sm:w-52"
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-text-primary)",
+                    }}
+                    onFocus={(e) =>
+                      (e.currentTarget.style.borderColor = "var(--color-border-focus)")
+                    }
+                    onBlur={(e) =>
+                      (e.currentTarget.style.borderColor = "var(--color-border)")
+                    }
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -897,7 +970,7 @@ export default function LogsPage() {
                   className="text-sm"
                   style={{ color: "var(--color-text-muted)" }}
                 >
-                  {search || categoryFilter !== "all"
+                  {anyFilterActive
                     ? "Nenhum log encontrado."
                     : "Nenhum log registrado ainda."}
                 </p>
@@ -915,11 +988,15 @@ export default function LogsPage() {
                     className="text-xs font-semibold"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    {search || categoryFilter !== "all" ? (
-                      <>
-                        {filtered.length}{" "}
-                        resultado{filtered.length !== 1 ? "s" : ""}
-                      </>
+                    {anyFilterActive ? (
+                      fetchAllLoading ? (
+                        "Buscando..."
+                      ) : (
+                        <>
+                          {filtered.length}{" "}
+                          resultado{filtered.length !== 1 ? "s" : ""}
+                        </>
+                      )
                     ) : hasMore ? (
                       <>
                         {logs.length}
@@ -950,7 +1027,7 @@ export default function LogsPage() {
                   />
                 ))}
 
-                {hasMore && !search && categoryFilter === "all" && (
+                {hasMore && !anyFilterActive && (
                   <div
                     className="flex justify-center px-4 py-4"
                     style={{ borderTop: "1px solid var(--color-border)" }}

@@ -23,7 +23,7 @@ import {
   FiCopy,
   FiExternalLink,
 } from "react-icons/fi";
-import { Order } from "@/types";
+import { Order, OrderItem } from "@/types";
 import { useOrders } from "@/contexts/OrdersContext";
 
 // ── ESC/POS helpers ───────────────────────────────────────────────────────────
@@ -196,10 +196,34 @@ function resolvePortInfo(info: SerialPortInfo): {
   };
 }
 
+function groupOrderItems(items: OrderItem[]): OrderItem[] {
+  const map = new Map<string, OrderItem>();
+  for (const item of items) {
+    const key = [
+      item.itemId,
+      item.value,
+      item.observation ?? "",
+      (item.additionals ?? []).slice().sort().join("\x00"),
+      (item.additionals_sauce ?? []).slice().sort().join("\x00"),
+      (item.additionals_drink ?? []).slice().sort().join("\x00"),
+      (item.additionals_sweet ?? []).slice().sort().join("\x00"),
+    ].join("|");
+    const existing = map.get(key);
+    if (existing) {
+      existing.quantity = (existing.quantity ?? 1) + (item.quantity ?? 1);
+    } else {
+      map.set(key, { ...item, quantity: item.quantity ?? 1 });
+    }
+  }
+  return Array.from(map.values());
+}
+
 // ── Ticket builder ────────────────────────────────────────────────────────────
 
 const DIVIDER = "--------------------------------";
 const W = 32;
+const PAD = "  ";
+const CONTENT_W = W - PAD.length * 2;
 
 function logOrderTicket(order: Order): void {
   const hora = order.createdAt.toLocaleTimeString("pt-BR", {
@@ -228,11 +252,12 @@ function logOrderTicket(order: Order): void {
   lines.push(DIVIDER);
   lines.push("ITENS");
 
-  for (const item of order.items) {
+  for (const item of groupOrderItems(order.items)) {
     const qty = item.quantity ?? 1;
     const total = item.value * qty;
-    lines.push(rowLR(`${qty}x ${item.name}`, fmt(total)));
-    if (qty > 1) lines.push(`   unit: ${fmt(item.value)}`);
+    for (const line of itemRow(`${qty}x ${item.name}`, fmt(total), W)) {
+      lines.push(line);
+    }
     const grupos: Array<[string[] | undefined, string]> = [
       [item.additionals, ""],
       [item.additionals_sauce, "molho"],
@@ -263,15 +288,19 @@ function fmt(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
 }
 
-/** Left text + right text on the same line, space-between style.
- *  Truncates `left` if needed so there are always at least 2 spaces before `right`. */
+/** Left text + right text on the same line, space-between style. Never truncates. */
 function rowLR(left: string, right: string, width = 32): string {
-  const minSpaces = 2;
-  const maxLeft = width - right.length - minSpaces;
-  const safeLeft =
-    left.length > maxLeft ? left.slice(0, maxLeft - 1) + "." : left;
-  const spaces = Math.max(minSpaces, width - safeLeft.length - right.length);
-  return safeLeft + " ".repeat(spaces) + right;
+  const spaces = Math.max(2, width - left.length - right.length);
+  return left + " ".repeat(spaces) + right;
+}
+
+/** Item name + price: same line if fits, otherwise name on first line and price
+ *  right-aligned on the next line. Returns one or two strings. */
+function itemRow(name: string, price: string, width: number): string[] {
+  if (name.length + 2 + price.length <= width) {
+    return [rowLR(name, price, width)];
+  }
+  return [name, " ".repeat(Math.max(0, width - price.length)) + price];
 }
 
 export function buildOrderTicket(order: Order): Uint8Array {
@@ -303,30 +332,26 @@ export function buildOrderTicket(order: Order): Uint8Array {
 
   // ── Dados do cliente ───────────────────────────────────────────────────────
   add(CMD.alignLeft);
-  add(CMD.bold(true), CMD.text("CLIENTE"), CMD.bold(false));
-  add(CMD.text(`Nome: ${order.username}`));
+  add(CMD.bold(true), CMD.text(PAD + "CLIENTE"), CMD.bold(false));
+  add(CMD.text(PAD + `Nome: ${order.username}`));
   if (order.phone) {
-    add(CMD.text(`Tel:  ${order.phone}`));
+    add(CMD.text(PAD + `Tel:  ${order.phone}`));
   }
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
 
   // ── Itens ──────────────────────────────────────────────────────────────────
-  add(CMD.bold(true), CMD.text("ITENS"), CMD.bold(false));
+  add(CMD.bold(true), CMD.text(PAD + "ITENS"), CMD.bold(false));
 
-  for (const item of order.items) {
+  for (const item of groupOrderItems(order.items)) {
     const qty = item.quantity ?? 1;
-    // Se tem visibleValue, o valor real é o value (já normalizado)
-    // Se não tem, usa value normalmente
     const realValue = item.value;
     const total = realValue * qty;
 
     add(CMD.bold(true));
-    add(CMD.text(rowLR(`${qty}x ${item.name}`, fmt(total))));
-    add(CMD.bold(false));
-
-    if (qty > 1) {
-      add(CMD.text(`   unit: ${fmt(realValue)}`));
+    for (const line of itemRow(`${qty}x ${item.name}`, fmt(total), CONTENT_W)) {
+      add(CMD.text(PAD + line));
     }
+    add(CMD.bold(false));
 
     // Adicionais
     const grupos: Array<[string[] | undefined, string]> = [
@@ -338,23 +363,25 @@ export function buildOrderTicket(order: Order): Uint8Array {
     for (const [lista, label] of grupos) {
       if (!lista?.length) continue;
       for (const a of lista) {
-        add(CMD.text(`   + ${a}${label ? ` (${label})` : ""}`));
+        add(CMD.text(PAD + `  + ${a}${label ? ` (${label})` : ""}`));
       }
     }
 
     // Observação
     if (item.observation) {
-      add(CMD.text(`   Obs: ${item.observation}`));
+      add(CMD.text(PAD + `  Obs: ${item.observation}`));
     }
+
+    add(CMD.text(""));
   }
 
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
 
   // ── Totais ─────────────────────────────────────────────────────────────────
-  add(CMD.text(rowLR("Subtotal:", fmt(order.subtotal))));
-  add(CMD.text(rowLR("Taxa de servico:", fmt(order.serviceFee))));
+  add(CMD.text(PAD + rowLR("Subtotal:", fmt(order.subtotal), CONTENT_W)));
+  add(CMD.text(PAD + rowLR("Taxa de servico:", fmt(order.serviceFee), CONTENT_W)));
   add(CMD.bold(true));
-  add(CMD.text(rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee))));
+  add(CMD.text(PAD + rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee), CONTENT_W)));
   add(CMD.bold(false));
 
   // ── Rodapé ─────────────────────────────────────────────────────────────────

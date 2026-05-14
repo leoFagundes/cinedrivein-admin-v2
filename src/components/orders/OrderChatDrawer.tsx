@@ -258,6 +258,7 @@ export default function OrderChatDrawer({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [templates, setTemplates] = useState<ChatTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isChatEnabled, setIsChatEnabled] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -293,6 +294,16 @@ export default function OrderChatDrawer({
     });
     return unsub;
   }, [order.id]);
+
+  // Listen to chat enabled state
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
+      if (snap.exists()) {
+        setIsChatEnabled(snap.data().chatEnabled ?? true);
+      }
+    });
+    return unsub;
+  }, []);
 
   // Load templates once
   useEffect(() => {
@@ -558,6 +569,29 @@ export default function OrderChatDrawer({
             celular desligada.
           </span>
         </div>
+
+        {/* Chat desativado */}
+        {!isChatEnabled && (
+          <div
+            className="flex items-center gap-3 px-3 py-2.5 w-full flex-shrink-0"
+            style={{
+              backgroundColor: "rgba(239,68,68,0.08)",
+              borderBottom: "1px solid rgba(239,68,68,0.25)",
+            }}
+          >
+            <FiAlertTriangle
+              size={16}
+              style={{ color: "var(--color-error)", flexShrink: 0 }}
+            />
+            <span
+              className="text-xs font-semibold"
+              style={{ color: "var(--color-error)" }}
+            >
+              O sistema de chat está desativado — os clientes não podem enviar
+              mensagens no momento.
+            </span>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-2">
