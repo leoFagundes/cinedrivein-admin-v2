@@ -220,12 +220,40 @@ function groupOrderItems(items: OrderItem[]): OrderItem[] {
 
 // ── Ticket builder ────────────────────────────────────────────────────────────
 
-const DIVIDER = "--------------------------------";
-const W = 32;
-const PAD = "  ";
-const CONTENT_W = W - PAD.length * 2;
+export const PAPER_PRESETS = [
+  { label: "58 mm  (~32 colunas)", value: 32 },
+  { label: "80 mm  (~42 colunas)", value: 42 },
+  { label: "80 mm compacto  (~48 colunas)", value: 48 },
+] as const;
 
-function logOrderTicket(order: Order): void {
+export type PaperWidth = (typeof PAPER_PRESETS)[number]["value"];
+
+export interface TicketConfig {
+  paperWidth: PaperWidth;
+  feedLines: 2 | 4 | 6;
+  itemSpacing: 0 | 1 | 2;
+  sectionSpacing: 0 | 1;
+  headerPadding: 0 | 1 | 2;
+  compactAdditionalsSpacing: boolean;
+}
+
+export const DEFAULT_TICKET_CONFIG: TicketConfig = {
+  paperWidth: 42,
+  feedLines: 4,
+  itemSpacing: 1,
+  sectionSpacing: 0,
+  headerPadding: 0,
+  compactAdditionalsSpacing: false,
+};
+
+function logOrderTicket(
+  order: Order,
+  cfg: TicketConfig = DEFAULT_TICKET_CONFIG,
+): void {
+  const { paperWidth } = cfg;
+  const PAD = "  ";
+  const CONTENT_W = paperWidth - PAD.length * 2;
+  const DIVIDER = "-".repeat(paperWidth);
   const hora = order.createdAt.toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -241,7 +269,7 @@ function logOrderTicket(order: Order): void {
   lines.push(DIVIDER);
   lines.push(
     `VAGA ${order.spot}`.padStart(
-      Math.ceil((W + `VAGA ${order.spot}`.length) / 2),
+      Math.ceil((paperWidth + `VAGA ${order.spot}`.length) / 2),
     ),
   );
   lines.push(`Comanda #${order.orderNumber}  ${data} ${hora}`);
@@ -255,7 +283,7 @@ function logOrderTicket(order: Order): void {
   for (const item of groupOrderItems(order.items)) {
     const qty = item.quantity ?? 1;
     const total = item.value * qty;
-    for (const line of itemRow(`${qty}x ${item.name}`, fmt(total), W)) {
+    for (const line of itemRow(`${qty}x ${item.name}`, fmt(total), CONTENT_W)) {
       lines.push(line);
     }
     const grupos: Array<[string[] | undefined, string]> = [
@@ -274,9 +302,11 @@ function logOrderTicket(order: Order): void {
   }
 
   lines.push(DIVIDER);
-  lines.push(rowLR("Subtotal:", fmt(order.subtotal)));
-  lines.push(rowLR("Taxa de servico:", fmt(order.serviceFee)));
-  lines.push(rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee)));
+  lines.push(rowLR("Subtotal:", fmt(order.subtotal), CONTENT_W));
+  lines.push(rowLR("Taxa de servico:", fmt(order.serviceFee), CONTENT_W));
+  lines.push(
+    rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee), CONTENT_W),
+  );
   lines.push(DIVIDER);
   lines.push("Cine Drive-in");
   lines.push(DIVIDER);
@@ -303,7 +333,22 @@ function itemRow(name: string, price: string, width: number): string[] {
   return [name, " ".repeat(Math.max(0, width - price.length)) + price];
 }
 
-export function buildOrderTicket(order: Order): Uint8Array {
+export function buildOrderTicket(
+  order: Order,
+  cfg: TicketConfig = DEFAULT_TICKET_CONFIG,
+): Uint8Array {
+  const {
+    paperWidth,
+    feedLines,
+    itemSpacing,
+    sectionSpacing,
+    headerPadding,
+    compactAdditionalsSpacing,
+  } = cfg;
+  const PAD = "  ";
+  const CONTENT_W = paperWidth - PAD.length * 2;
+  const DIVIDER = "-".repeat(paperWidth);
+
   const parts: Uint8Array[] = [];
 
   const add = (...chunks: Uint8Array[]) => parts.push(...chunks);
@@ -312,6 +357,7 @@ export function buildOrderTicket(order: Order): Uint8Array {
   add(CMD.init);
 
   // ── Header: VAGA (negrito, grande, centrado) ──────────────────────────────
+  if (headerPadding > 0) add(CMD.feed(headerPadding));
   add(CMD.alignCenter, CMD.doubleHeight, CMD.bold(true));
   add(CMD.text(`VAGA ${order.spot}`));
   add(CMD.normal, CMD.bold(false));
@@ -338,6 +384,7 @@ export function buildOrderTicket(order: Order): Uint8Array {
     add(CMD.text(PAD + `Tel:  ${order.phone}`));
   }
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
+  if (sectionSpacing > 0) add(CMD.feed(sectionSpacing));
 
   // ── Itens ──────────────────────────────────────────────────────────────────
   add(CMD.bold(true), CMD.text(PAD + "ITENS"), CMD.bold(false));
@@ -372,23 +419,35 @@ export function buildOrderTicket(order: Order): Uint8Array {
       add(CMD.text(PAD + `  Obs: ${item.observation}`));
     }
 
-    add(CMD.text(""));
+    const hasExtras = grupos.some(([l]) => l?.length) || !!item.observation;
+    const gap =
+      compactAdditionalsSpacing && hasExtras
+        ? Math.max(0, itemSpacing - 1)
+        : itemSpacing;
+    if (gap > 0) add(CMD.feed(gap));
   }
 
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
+  if (sectionSpacing > 0) add(CMD.feed(sectionSpacing));
 
   // ── Totais ─────────────────────────────────────────────────────────────────
   add(CMD.text(PAD + rowLR("Subtotal:", fmt(order.subtotal), CONTENT_W)));
-  add(CMD.text(PAD + rowLR("Taxa de servico:", fmt(order.serviceFee), CONTENT_W)));
+  add(
+    CMD.text(PAD + rowLR("Taxa de servico:", fmt(order.serviceFee), CONTENT_W)),
+  );
   add(CMD.bold(true));
-  add(CMD.text(PAD + rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee), CONTENT_W)));
+  add(
+    CMD.text(
+      PAD + rowLR("TOTAL:", fmt(order.subtotal + order.serviceFee), CONTENT_W),
+    ),
+  );
   add(CMD.bold(false));
 
   // ── Rodapé ─────────────────────────────────────────────────────────────────
   add(CMD.alignCenter);
   add(CMD.text(DIVIDER));
   add(CMD.text("Cine Drive-in"));
-  add(CMD.feed(4));
+  add(CMD.feed(feedLines));
   add(CMD.feedAndCut);
 
   return concat(...parts);
@@ -421,6 +480,7 @@ export interface ReportData {
 }
 
 export function buildReportTicket(report: ReportData): Uint8Array {
+  const DIVIDER = "-".repeat(32);
   const parts: Uint8Array[] = [];
   const add = (...chunks: Uint8Array[]) => parts.push(...chunks);
 
@@ -547,6 +607,25 @@ function useThermalPrinterCore() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("cdi_printer_autoconnect") === "true";
   });
+  const [ticketConfig, setTicketConfigState] = useState<TicketConfig>(() => {
+    if (typeof window === "undefined") return DEFAULT_TICKET_CONFIG;
+    try {
+      const saved = localStorage.getItem("cdi_printer_ticket_config");
+      return saved
+        ? { ...DEFAULT_TICKET_CONFIG, ...JSON.parse(saved) }
+        : DEFAULT_TICKET_CONFIG;
+    } catch {
+      return DEFAULT_TICKET_CONFIG;
+    }
+  });
+
+  const setTicketConfig = (update: Partial<TicketConfig>) => {
+    setTicketConfigState((prev) => {
+      const next = { ...prev, ...update };
+      localStorage.setItem("cdi_printer_ticket_config", JSON.stringify(next));
+      return next;
+    });
+  };
   const [printerBarOpen, setPrinterBarOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const saved = localStorage.getItem("cdi_printer_bar_open");
@@ -834,7 +913,8 @@ function useThermalPrinterCore() {
       if (printOrderRef.current) return;
       printOrderRef.current = true;
       try {
-        await print(buildOrderTicket(order));
+        logOrderTicket(order, ticketConfig);
+        await print(buildOrderTicket(order, ticketConfig));
 
         const shouldPrintTwice = order.items.some(
           (item) => item.printTwice === true,
@@ -845,14 +925,85 @@ function useThermalPrinterCore() {
 
         if (shouldPrintTwice && !itsOnlyPrintTwiceItems) {
           await new Promise((resolve) => setTimeout(resolve, 800));
-          await print(buildOrderTicket(order));
+          await print(buildOrderTicket(order, ticketConfig));
         }
       } finally {
         printOrderRef.current = false;
       }
     },
-    [print],
+    [print, ticketConfig],
   );
+
+  const printTestOrder = useCallback(async () => {
+    const fakeOrder: Order = {
+      id: "test",
+      orderNumber: 99,
+      status: "active",
+      spot: 210,
+      username: "Cliente Teste",
+      phone: "(61) 99999-0000",
+      distanceMeters: null,
+      subtotal: 119.0,
+      serviceFee: 11.9,
+      serviceFeePaid: false,
+      discount: 0,
+      total: 130.9,
+      createdAt: new Date(),
+      payment: { money: 0, pix: 0, credit: 0, debit: 0 },
+      items: [
+        {
+          itemId: "1",
+          codItem: "01",
+          name: "Galinho Chicken Little",
+          value: 40.0,
+          quantity: 2,
+          trackStock: false,
+          printTwice: false,
+        },
+        {
+          itemId: "2",
+          codItem: "02",
+          name: "Como Treinar seu Dragao",
+          value: 25.0,
+          quantity: 1,
+          trackStock: false,
+          printTwice: false,
+          additionals_sauce: ["Maionese", "Barbecue"],
+          additionals_drink: ["Coca-cola Zero mini"],
+        },
+        {
+          itemId: "3",
+          codItem: "03",
+          name: "Divertidamente — Edicao Especial com Nome Muito Longo",
+          value: 32.0,
+          quantity: 1,
+          trackStock: false,
+          printTwice: false,
+          additionals: ["Bacon extra", "Queijo duplo"],
+          observation: "Sem cebola, por favor",
+        },
+        {
+          itemId: "4",
+          codItem: "04",
+          name: "Procurando Nemo",
+          value: 22.0,
+          quantity: 1,
+          trackStock: false,
+          printTwice: false,
+        },
+        {
+          itemId: "5",
+          codItem: "05",
+          name: "Procurando Nemo teste",
+          value: 25.0,
+          quantity: 2,
+          trackStock: false,
+          printTwice: false,
+        },
+      ],
+    };
+    await print(buildOrderTicket(fakeOrder, ticketConfig));
+  }, [print, ticketConfig]);
 
   const printHelloWorld = useCallback(async () => {
     const curiosidades = [
@@ -876,7 +1027,7 @@ function useThermalPrinterCore() {
       curiosidades[Math.floor(Math.random() * curiosidades.length)];
 
     console.log(
-      `\n🖨️  IMPRESSAO DE TESTE\n${DIVIDER}\nOla, Cine Drive-in!\n${DIVIDER}\nCuriosidade do dia:\n"${curiosidade}"\n${DIVIDER}\nImpressora conectada com sucesso\n${DIVIDER}`,
+      `\n🖨️  IMPRESSAO DE TESTE\n--------------------------------\nOla, Cine Drive-in!\n--------------------------------\nCuriosidade do dia:\n"${curiosidade}"\n--------------------------------\nImpressora conectada com sucesso\n--------------------------------`,
     );
 
     await print(
@@ -928,10 +1079,13 @@ function useThermalPrinterCore() {
     print,
     printOrder,
     printHelloWorld,
+    printTestOrder,
     autoConnect,
     setAutoConnect: handleSetAutoConnect,
     printerBarOpen,
     setPrinterBarOpen: handleSetPrinterBarOpen,
+    ticketConfig,
+    setTicketConfig,
   };
 }
 
@@ -958,10 +1112,13 @@ interface PrinterContextValue {
   print: (data: Uint8Array) => Promise<void>;
   printOrder: (order: Order) => Promise<void>;
   printHelloWorld: () => Promise<void>;
+  printTestOrder: () => Promise<void>;
   autoConnect: boolean;
   setAutoConnect: (v: boolean) => void;
   printerBarOpen: boolean;
   setPrinterBarOpen: (v: boolean) => void;
+  ticketConfig: TicketConfig;
+  setTicketConfig: (update: Partial<TicketConfig>) => void;
 }
 
 const PrinterContext = createContext<PrinterContextValue | null>(null);
@@ -1460,9 +1617,9 @@ function QzTutorialModal({ onClose }: { onClose: () => void }) {
             >
               <span className="text-xs leading-relaxed">
                 A <strong>chave privada</strong> fica no servidor e{" "}
-                <strong>não precisa ser copiada</strong> para o QZ Tray —
-                apenas o certificado acima é necessário. O download abaixo
-                serve somente como backup.
+                <strong>não precisa ser copiada</strong> para o QZ Tray — apenas
+                o certificado acima é necessário. O download abaixo serve
+                somente como backup.
               </span>
             </div>
             <a
@@ -1774,7 +1931,9 @@ function ChromeBadge() {
 
 // ── ThermalPrinterBar ─────────────────────────────────────────────────────────
 
-export default function ThermalPrinterBar({ modal = false }: { modal?: boolean } = {}) {
+export default function ThermalPrinterBar({
+  modal = false,
+}: { modal?: boolean } = {}) {
   const {
     status,
     isConnected,
@@ -1790,8 +1949,11 @@ export default function ThermalPrinterBar({ modal = false }: { modal?: boolean }
     connect,
     disconnect,
     printHelloWorld,
+    printTestOrder,
     printerBarOpen,
     setPrinterBarOpen,
+    ticketConfig,
+    setTicketConfig,
   } = usePrinter();
 
   const [showTutorial, setShowTutorial] = useState(false);
@@ -2053,7 +2215,7 @@ export default function ThermalPrinterBar({ modal = false }: { modal?: boolean }
               >
                 Impressora
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <QzPrinterSelector />
                 <button
                   onClick={printHelloWorld}
@@ -2066,28 +2228,278 @@ export default function ThermalPrinterBar({ modal = false }: { modal?: boolean }
                   }}
                 >
                   <FiZap size={11} />
-                  Imprimir teste
+                  Teste conexão
+                </button>
+                <button
+                  onClick={printTestOrder}
+                  disabled={status === "printing"}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundColor: "rgba(0,136,194,0.1)",
+                    color: "var(--color-primary)",
+                    border: "1px solid rgba(0,136,194,0.3)",
+                  }}
+                >
+                  <FiPrinter size={11} />
+                  Testar comanda
                 </button>
               </div>
             </div>
           )}
 
           {/* ── Grupo 3: Comportamento ── */}
-          <div className="flex flex-col gap-2 px-4 py-3">
+          <div className="flex flex-col gap-2 px-4 py-3 min-w-0">
             <span
               className="text-[10px] font-semibold uppercase tracking-widest"
               style={{ color: "var(--color-text-muted)" }}
             >
               Comportamento
             </span>
-            <div className="flex flex-col gap-2">
+
+            {/* Grid 2 colunas para os controles segmentados */}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {/* Largura do papel — ocupa as 2 colunas */}
+              <div className="col-span-2 flex flex-col gap-1">
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Largura do papel
+                </span>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {PAPER_PRESETS.map((preset, i) => {
+                    const active = ticketConfig.paperWidth === preset.value;
+                    return (
+                      <button
+                        key={preset.value}
+                        onClick={() =>
+                          setTicketConfig({
+                            paperWidth: preset.value as PaperWidth,
+                          })
+                        }
+                        className="flex-1 px-2 py-1 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          color: active ? "white" : "var(--color-text-muted)",
+                          borderRight:
+                            i < PAPER_PRESETS.length - 1
+                              ? "1px solid var(--color-border)"
+                              : "none",
+                        }}
+                      >
+                        {preset.value === 32
+                          ? "58 mm"
+                          : preset.value === 42
+                            ? "80 mm"
+                            : "80 mm+"}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  {
+                    PAPER_PRESETS.find(
+                      (p) => p.value === ticketConfig.paperWidth,
+                    )?.label
+                  }
+                </span>
+              </div>
+
+              {/* Avanço antes do corte */}
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Avanço antes do corte
+                </span>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {([2, 4, 6] as const).map((v, i) => {
+                    const active = ticketConfig.feedLines === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setTicketConfig({ feedLines: v })}
+                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          color: active ? "white" : "var(--color-text-muted)",
+                          borderRight:
+                            i < 2 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {v}L
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Espaço entre itens */}
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Espaço entre itens
+                </span>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {([0, 1, 2] as const).map((v, i) => {
+                    const active = ticketConfig.itemSpacing === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setTicketConfig({ itemSpacing: v })}
+                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          color: active ? "white" : "var(--color-text-muted)",
+                          borderRight:
+                            i < 2 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {v === 0 ? "0" : `${v}L`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Espaço entre seções */}
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Espaço entre seções
+                </span>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {([0, 1] as const).map((v, i) => {
+                    const active = ticketConfig.sectionSpacing === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setTicketConfig({ sectionSpacing: v })}
+                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          color: active ? "white" : "var(--color-text-muted)",
+                          borderRight:
+                            i < 1 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {v === 0 ? "Nenhum" : "1L"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Margem no topo */}
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Margem no topo
+                </span>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {([0, 1, 2] as const).map((v, i) => {
+                    const active = ticketConfig.headerPadding === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setTicketConfig({ headerPadding: v })}
+                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          color: active ? "white" : "var(--color-text-muted)",
+                          borderRight:
+                            i < 2 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {v === 0 ? "0" : `${v}L`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Toggles */}
+            <div
+              className="flex flex-col gap-1.5 pt-1"
+              style={{ borderTop: "1px solid var(--color-border)" }}
+            >
+              {/* Espaço compacto após adicionais */}
+              <label
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() =>
+                  setTicketConfig({
+                    compactAdditionalsSpacing:
+                      !ticketConfig.compactAdditionalsSpacing,
+                  })
+                }
+              >
+                <span
+                  className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
+                  style={{
+                    backgroundColor: ticketConfig.compactAdditionalsSpacing
+                      ? "var(--color-primary)"
+                      : "var(--color-border)",
+                  }}
+                >
+                  <span
+                    className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: ticketConfig.compactAdditionalsSpacing
+                        ? "translateX(14px)"
+                        : "translateX(2px)",
+                    }}
+                  />
+                </span>
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Espaço menor após itens com adicionais
+                </span>
+              </label>
               {/* Auto-imprimir */}
               <label
                 className="flex items-center gap-2 cursor-pointer"
                 onClick={() => setAutoPrint(!autoPrint)}
               >
                 <span
-                  className="relative inline-flex items-center w-7 h-4 rounded-full flex-shrink-0 transition-colors"
+                  className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
                   style={{
                     backgroundColor: autoPrint
                       ? "var(--color-success)"
@@ -2104,7 +2516,7 @@ export default function ThermalPrinterBar({ modal = false }: { modal?: boolean }
                   />
                 </span>
                 <span
-                  className="text-xs"
+                  className="text-[10px]"
                   style={{ color: "var(--color-text-secondary)" }}
                 >
                   Auto-imprimir novas comandas
@@ -2118,7 +2530,7 @@ export default function ThermalPrinterBar({ modal = false }: { modal?: boolean }
                   onClick={() => setAutoConnect(!autoConnect)}
                 >
                   <span
-                    className="relative inline-flex items-center w-7 h-4 rounded-full flex-shrink-0 transition-colors"
+                    className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
                     style={{
                       backgroundColor: autoConnect
                         ? "var(--color-primary)"
@@ -2135,7 +2547,7 @@ export default function ThermalPrinterBar({ modal = false }: { modal?: boolean }
                     />
                   </span>
                   <span
-                    className="text-xs"
+                    className="text-[10px]"
                     style={{ color: "var(--color-text-secondary)" }}
                   >
                     Conectar automaticamente ao abrir

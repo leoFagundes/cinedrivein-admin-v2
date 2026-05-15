@@ -23,6 +23,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
+import { useLock } from "@/contexts/LockContext";
 import { can } from "@/lib/access";
 import { db, rtdb } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -167,6 +168,7 @@ export default function Sidebar() {
   const { appUser, logOut } = useAuth();
   const { unseenCount, unreadChatsCount } = useOrders();
   const { success, error } = useToast();
+  const { lock } = useLock();
   const pathname = usePathname();
   const close = () => setMobileOpen(false);
   const onOrdersPage = pathname === "/admin/orders/";
@@ -423,28 +425,46 @@ export default function Sidebar() {
           </div>
         </Link>
 
-        <button
-          onClick={async () => {
-            try {
-              await logOut();
-              success("Até logo!", "Você saiu da sua conta.");
-            } catch {
-              error("Erro ao sair", "Tente novamente.");
-            }
-          }}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-[var(--radius-md)] text-sm transition-all duration-150 cursor-pointer"
-          style={{ color: "var(--color-text-muted)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
-            e.currentTarget.style.color = "var(--color-error)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "var(--color-text-muted)";
-          }}
-        >
-          <FiLogOut size={16} /> Sair
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={() => { lock(); close(); }}
+            className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)] text-sm transition-all duration-150 cursor-pointer"
+            style={{ color: "var(--color-text-muted)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+              e.currentTarget.style.color = "var(--color-primary)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "var(--color-text-muted)";
+            }}
+          >
+            <FiLock size={16} /> Trancar
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                await logOut();
+                success("Até logo!", "Você saiu da sua conta.");
+              } catch {
+                error("Erro ao sair", "Tente novamente.");
+              }
+            }}
+            className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)] text-sm transition-all duration-150 cursor-pointer"
+            style={{ color: "var(--color-text-muted)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+              e.currentTarget.style.color = "var(--color-error)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "var(--color-text-muted)";
+            }}
+          >
+            <FiLogOut size={16} /> Sair
+          </button>
+        </div>
       </div>
     </div>
   );

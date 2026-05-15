@@ -90,6 +90,10 @@ async function buildAdjustmentMap(
       for (const subName of allSubs) {
         const linkedItemId = nameToLinked.get(normalize(subName));
         if (!linkedItemId) continue;
+        // Skip if the subitem points to the same item being ordered — it's a
+        // flavor selector, not an independent stock unit. The parent item's
+        // direct deduction already accounts for this unit.
+        if (linkedItemId === item.itemId) continue;
         totals.set(linkedItemId, (totals.get(linkedItemId) ?? 0) + qty);
       }
     }

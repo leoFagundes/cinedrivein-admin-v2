@@ -66,7 +66,7 @@ function ItemCard({ item, onClick }: { item: StockItem; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col rounded-[var(--radius-md)] overflow-hidden text-left cursor-pointer transition-all"
+      className="relative flex flex-col rounded-[var(--radius-md)] overflow-hidden text-left cursor-pointer transition-all"
       style={{
         backgroundColor: "var(--color-bg-elevated)",
         border: "1px solid var(--color-border)",
@@ -97,20 +97,16 @@ function ItemCard({ item, onClick }: { item: StockItem; onClick: () => void }) {
       {item.trackStock && (
         <div className="absolute p-1 m-1">
           <div
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
             style={{
               backgroundColor:
                 item.quantity <= 0
-                  ? "rgba(239,68,68,0.12)"
+                  ? "rgba(239,68,68,0.92)"
                   : item.quantity <= 5
-                    ? "rgba(245,158,11,0.12)"
-                    : "rgba(34,197,94,0.1)",
-              color:
-                item.quantity <= 0
-                  ? "var(--color-error)"
-                  : item.quantity <= 5
-                    ? "var(--color-warning)"
-                    : "var(--color-success)",
+                    ? "rgba(180,110,0,0.92)"
+                    : "rgba(22,163,74,0.92)",
+              color: "white",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.45)",
             }}
           >
             <FiPackage size={10} className="flex-shrink-0" />
