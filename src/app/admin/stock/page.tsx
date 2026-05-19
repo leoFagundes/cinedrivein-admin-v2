@@ -11,9 +11,11 @@ import {
   deleteDoc,
   writeBatch,
   arrayRemove,
+  arrayUnion,
   serverTimestamp,
   query,
   orderBy,
+  where,
   getDoc,
   setDoc,
   onSnapshot,
@@ -28,6 +30,9 @@ import {
   FiBox,
   FiPlus,
   FiSearch,
+  FiBell,
+  FiSettings,
+  FiAlertCircle,
   FiEye,
   FiEyeOff,
   FiEdit2,
@@ -2454,6 +2459,29 @@ async function uploadPhoto(file: File, folder: string): Promise<string> {
 
 type Tab = "items" | "subitems" | "categories";
 
+function timeAgo(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const min = Math.floor(diff / 60_000);
+  const hr = Math.floor(diff / 3_600_000);
+  const day = Math.floor(diff / 86_400_000);
+  if (diff < 60_000) return "agora mesmo";
+  if (min < 60) return `há ${min} min`;
+  if (hr < 24) return `há ${hr}h`;
+  return `há ${day} dia${day !== 1 ? "s" : ""}`;
+}
+
+interface StockAlert {
+  id: string;
+  type: "zero_stock" | "low_stock";
+  itemId: string;
+  itemName: string;
+  itemPhoto?: string;
+  quantity: number;
+  resolved: boolean;
+  dismissedBy: string[];
+  createdAt: Date;
+}
+
 export default function StockPage() {
   const { appUser } = useAuth();
   const { success, error, info } = useToast();
@@ -2473,6 +2501,18 @@ export default function StockPage() {
   const [tab, setTab] = useState<Tab>("items");
   const [items, setItems] = useState<StockItem[]>([]);
   const [subitems, setSubitems] = useState<Subitem[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+  const [stockNotifSettings, setStockNotifSettings] = useState({
+    notifyZeroStock: true,
+    notifyLowStock: true,
+    lowStockThreshold: 5,
+    showBadge: true,
+  });
+  const [savingNotifSettings, setSavingNotifSettings] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState("5");
+  const notifRef = useRef<HTMLDivElement>(null);
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [loadingItems, setLoadingItems] = useState(true);
@@ -2508,6 +2548,89 @@ export default function StockPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [savingCategories, setSavingCategories] = useState(false);
 
+  // ── Close notif dropdown on outside click ──
+  useEffect(() => {
+    if (!notifOpen) return;
+    function handler(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [notifOpen]);
+
+  // ── Cleanup resolved alerts older than 7 days (runs once on mount) ──
+  useEffect(() => {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    getDocs(
+      query(
+        collection(db, "stockAlerts"),
+        where("resolved", "==", true),
+        where("createdAt", "<=", cutoff),
+      ),
+    ).then((snap) => {
+      if (snap.empty) return;
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      batch.commit().catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+
+  // ── Load notification settings ──
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "storeConfig", "stockNotifications"), (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        const s = {
+          notifyZeroStock: d.notifyZeroStock ?? true,
+          notifyLowStock: d.notifyLowStock ?? true,
+          lowStockThreshold: d.lowStockThreshold ?? 5,
+          showBadge: d.showBadge ?? true,
+        };
+        setStockNotifSettings(s);
+        setThresholdInput(String(s.lowStockThreshold));
+      }
+    });
+    return unsub;
+  }, []);
+
+  // ── Load stock alerts (unresolved only) ──
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, "stockAlerts"), where("resolved", "==", false), orderBy("createdAt", "desc")),
+      (snap) => {
+        setStockAlerts(
+          snap.docs.map((d) => ({
+            id: d.id,
+            type: d.data().type as StockAlert["type"],
+            itemId: d.data().itemId,
+            itemName: d.data().itemName,
+            itemPhoto: d.data().itemPhoto ?? undefined,
+            quantity: d.data().quantity ?? 0,
+            resolved: false,
+            dismissedBy: d.data().dismissedBy ?? [],
+            createdAt: d.data().createdAt?.toDate() ?? new Date(),
+          })),
+        );
+      },
+    );
+    return unsub;
+  }, []);
+
+  async function saveNotifSettings(patch: Partial<typeof stockNotifSettings>) {
+    setSavingNotifSettings(true);
+    const next = { ...stockNotifSettings, ...patch };
+    try {
+      await setDoc(doc(db, "storeConfig", "stockNotifications"), next, { merge: true });
+    } catch {
+      /* ignore */
+    } finally {
+      setSavingNotifSettings(false);
+    }
+  }
+
   // ── Load data ──
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -2515,31 +2638,31 @@ export default function StockPage() {
     const unsub = onSnapshot(
       query(collection(db, "items"), orderBy("createdAt", "desc")),
       (snap) => {
-        setItems(
-          snap.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              codItem: data.codItem ?? "",
-              name: data.name ?? "",
-              category: data.category ?? "",
-              description: data.description ?? "",
-              value: data.value ?? 0,
-              visibleValue: data.visibleValue ?? undefined,
-              quantity: data.quantity ?? 0,
-              photo: data.photo ?? undefined,
-              isVisible: data.isVisible ?? true,
-              isFeatured: data.isFeatured ?? false,
-              trackStock: data.trackStock ?? false,
-              printTwice: data.printTwice ?? false,
-              additionals: data.additionals ?? [],
-              additionals_sauce: data.additionals_sauce ?? [],
-              additionals_drink: data.additionals_drink ?? [],
-              additionals_sweet: data.additionals_sweet ?? [],
-              createdAt: data.createdAt?.toDate() ?? new Date(),
-            } as StockItem;
-          }),
-        );
+        const newItems = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            codItem: data.codItem ?? "",
+            name: data.name ?? "",
+            category: data.category ?? "",
+            description: data.description ?? "",
+            value: data.value ?? 0,
+            visibleValue: data.visibleValue ?? undefined,
+            quantity: data.quantity ?? 0,
+            photo: data.photo ?? undefined,
+            isVisible: data.isVisible ?? true,
+            isFeatured: data.isFeatured ?? false,
+            trackStock: data.trackStock ?? false,
+            printTwice: data.printTwice ?? false,
+            additionals: data.additionals ?? [],
+            additionals_sauce: data.additionals_sauce ?? [],
+            additionals_drink: data.additionals_drink ?? [],
+            additionals_sweet: data.additionals_sweet ?? [],
+            createdAt: data.createdAt?.toDate() ?? new Date(),
+          } as StockItem;
+        });
+
+        setItems(newItems);
         setLoadingItems(false);
       },
       () => {
@@ -3112,6 +3235,40 @@ export default function StockPage() {
     setCategoryOrder((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  // ── Stock notifications (derived from Firestore alerts) ──
+  const visibleAlerts = stockAlerts.filter(
+    (a) => !a.dismissedBy.includes(appUser?.uid ?? ""),
+  );
+
+  const allNotifications = visibleAlerts.map((a) => ({
+    alert: a,
+    type: a.type === "zero_stock" ? ("zero" as const) : ("low" as const),
+  }));
+
+  async function dismissNotif(alertId: string) {
+    if (!appUser) return;
+    await updateDoc(doc(db, "stockAlerts", alertId), {
+      dismissedBy: arrayUnion(appUser.uid),
+    });
+  }
+
+  function openAlertItem(alertId: string, itemId: string) {
+    const item = items.find((i) => i.id === itemId);
+    setNotifOpen(false);
+    setTab("items");
+    if (item) setItemModal({ open: true, editing: item });
+  }
+
+  async function dismissAllNotifs() {
+    if (!appUser) return;
+    const batch = writeBatch(db);
+    for (const { alert } of allNotifications) {
+      batch.update(doc(db, "stockAlerts", alert.id), { dismissedBy: arrayUnion(appUser.uid) });
+    }
+    await batch.commit();
+    setNotifOpen(false);
+  }
+
   // ── Render ──
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "items", label: "Itens", icon: <FiBox size={14} /> },
@@ -3142,6 +3299,251 @@ export default function StockPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Stock notifications bell */}
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => { setNotifOpen((v) => !v); setShowNotifSettings(false); }}
+              className="relative flex items-center justify-center w-9 h-9 rounded-[var(--radius-md)] cursor-pointer transition-colors"
+              style={{
+                backgroundColor: notifOpen ? "var(--color-bg-elevated)" : "transparent",
+                border: "1px solid var(--color-border)",
+                color: allNotifications.length > 0 ? "var(--color-warning)" : "var(--color-text-muted)",
+              }}
+              title="Notificações de estoque"
+            >
+              <FiBell size={16} />
+              {stockNotifSettings.showBadge && allNotifications.length > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 leading-none"
+                  style={{ backgroundColor: "var(--color-error)", color: "white" }}
+                >
+                  {allNotifications.length > 9 ? "9+" : allNotifications.length}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <div
+                className="absolute right-0 top-11 z-50 w-80 rounded-[var(--radius-lg)] overflow-hidden"
+                style={{
+                  backgroundColor: "var(--color-bg-surface)",
+                  border: "1px solid var(--color-border)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+                }}
+              >
+                {/* Header */}
+                <div
+                  className="flex items-center justify-between px-4 py-3 gap-2"
+                  style={{ borderBottom: "1px solid var(--color-border)" }}
+                >
+                  <span className="text-sm font-semibold flex-1" style={{ color: "var(--color-text-primary)" }}>
+                    {showNotifSettings ? "Configurações" : "Notificações de estoque"}
+                  </span>
+                  {!showNotifSettings && allNotifications.length > 0 && (
+                    <button
+                      onClick={dismissAllNotifs}
+                      className="text-xs cursor-pointer transition-opacity hover:opacity-70"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Limpar todas
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowNotifSettings((v) => !v)}
+                    className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                    style={{
+                      color: showNotifSettings ? "var(--color-primary)" : "var(--color-text-muted)",
+                    }}
+                    title="Configurações"
+                  >
+                    <FiSettings size={14} />
+                  </button>
+                </div>
+
+                {/* Painel de configurações */}
+                {showNotifSettings ? (
+                  <div className="flex flex-col gap-4 px-4 py-4">
+                    {/* Toggle badge */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <span
+                        className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
+                        style={{ backgroundColor: stockNotifSettings.showBadge ? "var(--color-primary)" : "var(--color-border)" }}
+                        onClick={() => saveNotifSettings({ showBadge: !stockNotifSettings.showBadge })}
+                      >
+                        <span
+                          className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                          style={{ transform: stockNotifSettings.showBadge ? "translateX(18px)" : "translateX(2px)" }}
+                        />
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                          Mostrar badge com contador
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                          Exibe o número de alertas ativos no ícone do sino
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Toggle estoque zerado */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <span
+                        className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
+                        style={{ backgroundColor: stockNotifSettings.notifyZeroStock ? "var(--color-error)" : "var(--color-border)" }}
+                        onClick={() => saveNotifSettings({ notifyZeroStock: !stockNotifSettings.notifyZeroStock })}
+                      >
+                        <span
+                          className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                          style={{ transform: stockNotifSettings.notifyZeroStock ? "translateX(18px)" : "translateX(2px)" }}
+                        />
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                          Estoque zerado
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                          Item ficou sem estoque e foi ocultado automaticamente
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Toggle estoque baixo */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <span
+                        className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
+                        style={{ backgroundColor: stockNotifSettings.notifyLowStock ? "var(--color-warning)" : "var(--color-border)" }}
+                        onClick={() => saveNotifSettings({ notifyLowStock: !stockNotifSettings.notifyLowStock })}
+                      >
+                        <span
+                          className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                          style={{ transform: stockNotifSettings.notifyLowStock ? "translateX(18px)" : "translateX(2px)" }}
+                        />
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                          Estoque baixo
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                          Item com quantidade abaixo do limite configurado
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Limite de estoque baixo */}
+                    {stockNotifSettings.notifyLowStock && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                          Limite de estoque baixo
+                        </span>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={99}
+                            value={thresholdInput}
+                            onChange={(e) => setThresholdInput(e.target.value)}
+                            className="w-20 px-3 py-1.5 text-sm rounded-[var(--radius-md)] outline-none"
+                            style={{
+                              backgroundColor: "var(--color-bg-elevated)",
+                              border: "1px solid var(--color-border)",
+                              color: "var(--color-text-primary)",
+                            }}
+                            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-border-focus)")}
+                            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                          />
+                          <button
+                            onClick={() => {
+                              const v = parseInt(thresholdInput);
+                              if (!isNaN(v) && v >= 1) saveNotifSettings({ lowStockThreshold: v });
+                            }}
+                            disabled={savingNotifSettings}
+                            className="flex-1 py-1.5 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                          >
+                            {savingNotifSettings ? "Salvando..." : "Salvar"}
+                          </button>
+                        </div>
+                        <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                          Notifica quando quantidade ≤ {stockNotifSettings.lowStockThreshold}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Lista de notificações */
+                  <div className="max-h-72 overflow-y-auto">
+                    {allNotifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2" style={{ opacity: 0.5 }}>
+                        <FiBell size={22} style={{ color: "var(--color-text-muted)" }} />
+                        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                          Nenhuma notificação
+                        </p>
+                      </div>
+                    ) : (
+                      allNotifications.map(({ alert, type }) => (
+                        <div
+                          key={alert.id}
+                          className="flex items-center gap-2 px-3 py-2.5"
+                          style={{ borderBottom: "1px solid var(--color-border)" }}
+                        >
+                          {/* Barra colorida */}
+                          <div
+                            className="w-1 self-stretch rounded-full flex-shrink-0"
+                            style={{ backgroundColor: type === "zero" ? "var(--color-error)" : "var(--color-warning)" }}
+                          />
+
+                          {/* Clicável: foto + texto */}
+                          <button
+                            onClick={() => openAlertItem(alert.id, alert.itemId)}
+                            className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer transition-opacity hover:opacity-75"
+                          >
+                            {alert.itemPhoto ? (
+                              <img
+                                src={alert.itemPhoto}
+                                alt={alert.itemName}
+                                className="w-8 h-8 rounded-[var(--radius-sm)] object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div
+                                className="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: "var(--color-bg-elevated)" }}
+                              >
+                                <FiBox size={13} style={{ color: "var(--color-text-muted)" }} />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>
+                                {alert.itemName}
+                              </p>
+                              <p className="text-[10px] mt-0.5" style={{ color: type === "zero" ? "var(--color-error)" : "var(--color-warning)" }}>
+                                {type === "zero"
+                                  ? "Zerado — ocultado automaticamente"
+                                  : `Estoque baixo — ${alert.quantity} restante${alert.quantity !== 1 ? "s" : ""}`}
+                              </p>
+                              <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                                {timeAgo(alert.createdAt)}
+                              </p>
+                            </div>
+                          </button>
+
+                          {/* X dispensar */}
+                          <button
+                            onClick={() => dismissNotif(alert.id)}
+                            className="flex-shrink-0 p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                            style={{ color: "var(--color-text-muted)" }}
+                            title="Dispensar"
+                          >
+                            <FiX size={13} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {tab === "items" && (
             <button
               onClick={() => setDownloadModal(true)}

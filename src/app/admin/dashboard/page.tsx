@@ -22,6 +22,8 @@ import {
   Area,
   BarChart,
   Bar,
+  ComposedChart,
+  Line,
   PieChart,
   Pie,
   Cell,
@@ -30,6 +32,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
 import {
@@ -224,6 +227,7 @@ function ChartCard({
   onRangeChange,
   onClearClick,
   count,
+  extra,
   children,
 }: {
   title: string;
@@ -231,6 +235,7 @@ function ChartCard({
   onRangeChange: (r: { from: string; to: string }) => void;
   onClearClick?: () => void;
   count: number;
+  extra?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -320,6 +325,7 @@ function ChartCard({
               Limpar
             </button>
           )}
+          {extra && <div className="ml-auto">{extra}</div>}
         </div>
       </div>
       <div className="p-5">{children}</div>
@@ -375,7 +381,11 @@ export default function DashboardPage() {
   const [revenueRange, setRevenueRange] = useState({ from: "", to: "" });
   const [ordersRange, setOrdersRange] = useState({ from: "", to: "" });
   const [topItemsRange, setTopItemsRange] = useState({ from: "", to: "" });
+  const [topItemsLimit, setTopItemsLimit] = useState<number>(8);
+  const [topItemsView, setTopItemsView] = useState<"items" | "subitems">("items");
   const [paymentRange, setPaymentRange] = useState({ from: "", to: "" });
+  const [revenueMode, setRevenueMode] = useState<"ambos" | "total" | "subtotal">("ambos");
+  const [paymentMode, setPaymentMode] = useState<"pie" | "bar">("pie");
 
   // Clear chart data modal
   const [clearModal, setClearModal] = useState<{
@@ -1293,13 +1303,29 @@ export default function DashboardPage() {
     Total: +s.revenue.total.toFixed(2),
     Subtotal: +s.revenue.subtotal.toFixed(2),
   }));
+  const revenueAvg =
+    revenueData.length > 0
+      ? +(revenueData.reduce((a, d) => a + d.Total, 0) / revenueData.length).toFixed(2)
+      : null;
 
   const ordersStats = filterStats(ordersRange);
-  const ordersData = ordersStats.map((s) => ({
-    date: fmtDate(s.date),
-    Finalizados: s.finishedOrders,
-    Cancelados: s.canceledOrders,
-  }));
+  const ordersData = ordersStats.map((s) => {
+    const total = s.finishedOrders + s.canceledOrders;
+    return {
+      date: fmtDate(s.date),
+      Finalizados: s.finishedOrders,
+      Cancelados: s.canceledOrders,
+      "Taxa %": total > 0 ? +((s.canceledOrders / total) * 100).toFixed(1) : 0,
+    };
+  });
+  const ordersTotals = ordersStats.reduce(
+    (acc, s) => ({ finished: acc.finished + s.finishedOrders, canceled: acc.canceled + s.canceledOrders }),
+    { finished: 0, canceled: 0 },
+  );
+  const ordersCancelRate =
+    ordersTotals.finished + ordersTotals.canceled > 0
+      ? ((ordersTotals.canceled / (ordersTotals.finished + ordersTotals.canceled)) * 100).toFixed(1)
+      : null;
 
   const topItemsStats = filterStats(topItemsRange);
   const topItemsAgg: Record<
@@ -1320,8 +1346,24 @@ export default function DashboardPage() {
     });
   const topItemsData = Object.values(topItemsAgg)
     .sort((a, b) => b.total - a.total)
-    .slice(0, 8)
+    .slice(0, topItemsLimit)
     .map((i) => ({ name: `${i.name} (${i.codItem})`, value: i.total }));
+
+  const additionalsAgg: Record<string, number> = {};
+  topItemsStats
+    .flatMap((s) => s.topItems)
+    .forEach((item) => {
+      if (!item.additionals) return;
+      Object.entries(item.additionals).forEach(([name, count]) => {
+        additionalsAgg[name] = (additionalsAgg[name] ?? 0) + count;
+      });
+    });
+  const additionalsData = Object.entries(additionalsAgg)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, topItemsLimit)
+    .map(([name, value]) => ({ name, value }));
+
+  const activeTopData = topItemsView === "items" ? topItemsData : additionalsData;
 
   const paymentStats = filterStats(paymentRange);
   const paymentData = paymentStats.reduce(
@@ -2432,80 +2474,57 @@ export default function DashboardPage() {
                 onRangeChange={setRevenueRange}
                 onClearClick={
                   canDeleteChartData
-                    ? () =>
-                        setClearModal({
-                          label: "Faturamento por dia",
-                          range: revenueRange,
-                        })
+                    ? () => setClearModal({ label: "Faturamento por dia", range: revenueRange })
                     : undefined
                 }
                 count={revenueStats.length}
+                extra={
+                  <div className="flex rounded-[var(--radius-sm)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                    {(["total", "subtotal", "ambos"] as const).map((m, i) => (
+                      <button
+                        key={m}
+                        onClick={() => setRevenueMode(m)}
+                        className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all capitalize"
+                        style={{
+                          backgroundColor: revenueMode === m ? "var(--color-primary)" : "transparent",
+                          color: revenueMode === m ? "white" : "var(--color-text-muted)",
+                          borderRight: i < 2 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {m === "ambos" ? "Ambos" : m === "total" ? "Total" : "Subtotal"}
+                      </button>
+                    ))}
+                  </div>
+                }
               >
                 <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart
-                    data={revenueData}
-                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                  >
+                  <AreaChart data={revenueData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                     <defs>
-                      <linearGradient
-                        id="gradTotal"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor={CHART_COLORS.primary}
-                          stopOpacity={0.3}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor={CHART_COLORS.primary}
-                          stopOpacity={0}
-                        />
+                      <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke={CHART_COLORS.border}
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="date"
-                      stroke={CHART_COLORS.text}
-                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
-                    />
-                    <YAxis
-                      stroke={CHART_COLORS.text}
-                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
-                      tickFormatter={(v) => `R$${v}`}
-                      width={55}
-                    />
-                    <Tooltip
-                      {...TOOLTIP_STYLE}
-                      formatter={(v) => fmtCurrency(Number(v ?? 0))}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="Total"
-                      stroke={CHART_COLORS.primary}
-                      fill="url(#gradTotal)"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="Subtotal"
-                      stroke={CHART_COLORS.teal}
-                      fill="none"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 3"
-                      dot={false}
-                    />
-                    <Legend
-                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
-                    />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                    <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
+                    <YAxis stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} tickFormatter={(v) => `R$${v}`} width={55} />
+                    <Tooltip {...TOOLTIP_STYLE} formatter={(v) => fmtCurrency(Number(v ?? 0))} />
+                    {(revenueMode === "total" || revenueMode === "ambos") && (
+                      <Area type="monotone" dataKey="Total" stroke={CHART_COLORS.primary} fill="url(#gradTotal)" strokeWidth={2} dot={false} />
+                    )}
+                    {(revenueMode === "subtotal" || revenueMode === "ambos") && (
+                      <Area type="monotone" dataKey="Subtotal" stroke={CHART_COLORS.teal} fill="none" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                    )}
+                    {revenueAvg !== null && (
+                      <ReferenceLine
+                        y={revenueAvg}
+                        stroke={CHART_COLORS.warning}
+                        strokeDasharray="5 3"
+                        strokeWidth={1.5}
+                        label={{ value: `Média ${fmtCurrency(revenueAvg)}`, fill: CHART_COLORS.warning, fontSize: 10, position: "insideTopRight" }}
+                      />
+                    )}
+                    <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -2517,48 +2536,43 @@ export default function DashboardPage() {
                 onRangeChange={setOrdersRange}
                 onClearClick={
                   canDeleteChartData
-                    ? () =>
-                        setClearModal({ label: "Pedidos", range: ordersRange })
+                    ? () => setClearModal({ label: "Pedidos", range: ordersRange })
                     : undefined
                 }
                 count={ordersStats.length}
+                extra={
+                  ordersCancelRate !== null ? (
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        {ordersTotals.finished + ordersTotals.canceled} pedidos
+                      </span>
+                      <span
+                        className="px-1.5 py-0.5 rounded-full font-semibold"
+                        style={{ backgroundColor: "rgba(239,68,68,0.12)", color: "var(--color-error)" }}
+                      >
+                        {ordersCancelRate}% cancelados
+                      </span>
+                    </div>
+                  ) : undefined
+                }
               >
                 <ResponsiveContainer width="100%" height={220}>
-                  <BarChart
-                    data={ordersData}
-                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                    barGap={2}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke={CHART_COLORS.border}
-                      vertical={false}
+                  <ComposedChart data={ordersData} margin={{ top: 4, right: 36, bottom: 0, left: 0 }} barGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                    <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
+                    <YAxis yAxisId="left" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} width={30} />
+                    <YAxis yAxisId="right" orientation="right" stroke={CHART_COLORS.warning} tick={{ fill: CHART_COLORS.warning, fontSize: 10 }} width={32} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip
+                      {...TOOLTIP_STYLE}
+                      formatter={(v, name) =>
+                        name === "Taxa %" ? [`${v}%`, "Taxa cancelamento"] : [v, name]
+                      }
                     />
-                    <XAxis
-                      dataKey="date"
-                      stroke={CHART_COLORS.text}
-                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
-                    />
-                    <YAxis
-                      stroke={CHART_COLORS.text}
-                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
-                      width={30}
-                    />
-                    <Tooltip {...TOOLTIP_STYLE} />
-                    <Legend
-                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
-                    />
-                    <Bar
-                      dataKey="Finalizados"
-                      fill={CHART_COLORS.success}
-                      radius={[3, 3, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="Cancelados"
-                      fill={CHART_COLORS.error}
-                      radius={[3, 3, 0, 0]}
-                    />
-                  </BarChart>
+                    <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
+                    <Bar yAxisId="left" dataKey="Finalizados" fill={CHART_COLORS.success} radius={[3, 3, 0, 0]} />
+                    <Bar yAxisId="left" dataKey="Cancelados" fill={CHART_COLORS.error} radius={[3, 3, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="Taxa %" stroke={CHART_COLORS.warning} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </ChartCard>
             </div>
@@ -2579,21 +2593,67 @@ export default function DashboardPage() {
                     : undefined
                 }
                 count={topItemsStats.length}
+                extra={
+                  <div className="flex items-center gap-2">
+                    {/* View toggle */}
+                    <div
+                      className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                      style={{ border: "1px solid var(--color-border)" }}
+                    >
+                      {(["items", "subitems"] as const).map((v, i) => (
+                        <button
+                          key={v}
+                          onClick={() => setTopItemsView(v)}
+                          className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                          style={{
+                            backgroundColor: topItemsView === v ? "var(--color-primary)" : "transparent",
+                            color: topItemsView === v ? "white" : "var(--color-text-muted)",
+                            borderRight: i < 1 ? "1px solid var(--color-border)" : "none",
+                          }}
+                        >
+                          {v === "items" ? "Itens" : "Subitens"}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Limit selector */}
+                    <div
+                      className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                      style={{ border: "1px solid var(--color-border)" }}
+                    >
+                      {([5, 8, 10, 15, Infinity] as const).map((n, i) => (
+                        <button
+                          key={n}
+                          onClick={() => setTopItemsLimit(n)}
+                          className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                          style={{
+                            backgroundColor: topItemsLimit === n ? "var(--color-primary)" : "transparent",
+                            color: topItemsLimit === n ? "white" : "var(--color-text-muted)",
+                            borderRight: i < 4 ? "1px solid var(--color-border)" : "none",
+                          }}
+                        >
+                          {n === Infinity ? "Tudo" : n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                }
               >
-                {topItemsData.length === 0 ? (
+                {activeTopData.length === 0 ? (
                   <p
                     className="text-sm text-center py-8"
                     style={{ color: "var(--color-text-muted)" }}
                   >
-                    Sem dados no período
+                    {topItemsView === "subitems"
+                      ? "Sem dados de subitens no período"
+                      : "Sem dados no período"}
                   </p>
                 ) : (
                   <ResponsiveContainer
                     width="100%"
-                    height={topItemsData.length * 36 + 20}
+                    height={activeTopData.length * 36 + 20}
                   >
                     <BarChart
-                      data={topItemsData}
+                      data={activeTopData}
                       layout="vertical"
                       margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
                     >
@@ -2629,30 +2689,41 @@ export default function DashboardPage() {
                 )}
               </ChartCard>
 
-              {/* Payment pie chart */}
+              {/* Payment chart */}
               <ChartCard
                 title="Distribuição por pagamento"
                 range={paymentRange}
                 onRangeChange={setPaymentRange}
                 onClearClick={
                   canDeleteChartData
-                    ? () =>
-                        setClearModal({
-                          label: "Distribuição por pagamento",
-                          range: paymentRange,
-                        })
+                    ? () => setClearModal({ label: "Distribuição por pagamento", range: paymentRange })
                     : undefined
                 }
                 count={paymentStats.length}
+                extra={
+                  <div className="flex rounded-[var(--radius-sm)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                    {(["pie", "bar"] as const).map((m, i) => (
+                      <button
+                        key={m}
+                        onClick={() => setPaymentMode(m)}
+                        className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: paymentMode === m ? "var(--color-primary)" : "transparent",
+                          color: paymentMode === m ? "white" : "var(--color-text-muted)",
+                          borderRight: i < 1 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {m === "pie" ? "Pizza" : "Barras"}
+                      </button>
+                    ))}
+                  </div>
+                }
               >
                 {paymentPieData.length === 0 ? (
-                  <p
-                    className="text-sm text-center py-8"
-                    style={{ color: "var(--color-text-muted)" }}
-                  >
+                  <p className="text-sm text-center py-8" style={{ color: "var(--color-text-muted)" }}>
                     Sem dados no período
                   </p>
-                ) : (
+                ) : paymentMode === "pie" ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie
@@ -2664,31 +2735,44 @@ export default function DashboardPage() {
                         paddingAngle={3}
                         dataKey="value"
                         nameKey="name"
-                        label={({ name, percent }) =>
-                          `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        label={({ name, percent, value }) =>
+                          `${name} ${((percent ?? 0) * 100).toFixed(0)}% · ${fmtCurrency(value)}`
                         }
                         labelLine={false}
-                        fontSize={11}
+                        fontSize={10}
                         fill={CHART_COLORS.text}
                       >
                         {paymentPieData.map((_, index) => (
-                          <Cell
-                            key={index}
-                            fill={PIE_COLORS[index % PIE_COLORS.length]}
-                          />
+                          <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                         ))}
                       </Pie>
+                      <Tooltip {...TOOLTIP_STYLE} formatter={(v) => fmtCurrency(Number(v ?? 0))} />
+                      <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={paymentPieData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                      <XAxis dataKey="name" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
+                      <YAxis stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} tickFormatter={(v) => `R$${v}`} width={60} />
                       <Tooltip
                         {...TOOLTIP_STYLE}
+                        contentStyle={{
+                          ...TOOLTIP_STYLE.contentStyle,
+                          backgroundColor: "var(--color-bg-elevated)",
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+                        }}
+                        cursor={{ fill: "rgba(255,255,255,0.06)" }}
+                        itemStyle={{ color: "var(--color-text-primary)" }}
                         formatter={(v) => fmtCurrency(Number(v ?? 0))}
                       />
-                      <Legend
-                        wrapperStyle={{
-                          color: CHART_COLORS.text,
-                          fontSize: 12,
-                        }}
-                      />
-                    </PieChart>
+                      <Bar dataKey="value" name="Valor" radius={[4, 4, 0, 0]}>
+                        {paymentPieData.map((_, index) => (
+                          <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 )}
               </ChartCard>

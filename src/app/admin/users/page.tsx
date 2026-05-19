@@ -26,7 +26,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can, canAny } from "@/lib/access";
 import { AppUser, Permission, PermissionProfile, UserStatus } from "@/types";
-import { PERMISSION_GROUPS, PERMISSION_META, ALL_PERMISSIONS, PermissionGroup } from "@/lib/permissions";
+import {
+  PERMISSION_GROUPS,
+  PERMISSION_META,
+  ALL_PERMISSIONS,
+  PermissionGroup,
+} from "@/lib/permissions";
 import { log } from "@/lib/logger";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 import Input from "@/components/ui/Input";
@@ -502,7 +507,10 @@ function EditUserModal({
           label="Usuário"
           placeholder="Nome de usuário"
           value={username}
-          onChange={(e) => { setUsername(e.target.value); setUsernameError(""); }}
+          onChange={(e) => {
+            setUsername(e.target.value);
+            setUsernameError("");
+          }}
           icon={<FiUser size={16} />}
           error={usernameError}
           autoComplete="off"
@@ -516,7 +524,10 @@ function EditUserModal({
             icon={<FiMail size={16} />}
             className="opacity-50 cursor-not-allowed"
           />
-          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+          <span
+            className="text-xs"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             E-mail não pode ser alterado.
           </span>
         </div>
@@ -700,7 +711,9 @@ function ProfileModal({
       } else {
         n.add(p);
         // Selecting a non-view perm auto-enables the section's view perm
-        const group = PERMISSION_GROUPS.find((g) => g.permissions.includes(p) && g.viewPerm !== p);
+        const group = PERMISSION_GROUPS.find(
+          (g) => g.permissions.includes(p) && g.viewPerm !== p,
+        );
         if (group) n.add(group.viewPerm);
       }
       return n;
@@ -723,7 +736,9 @@ function ProfileModal({
   function toggleAll() {
     setPerms((prev) => {
       const allSelected = ALL_PERMISSIONS.every((p) => prev.has(p));
-      return allSelected ? new Set<Permission>() : new Set<Permission>(ALL_PERMISSIONS);
+      return allSelected
+        ? new Set<Permission>()
+        : new Set<Permission>(ALL_PERMISSIONS);
     });
   }
 
@@ -749,25 +764,37 @@ function ProfileModal({
           label="Nome do perfil"
           placeholder="Ex: Caixa, Gerente..."
           value={name}
-          onChange={(e) => { setName(e.target.value); setNameError(""); }}
+          onChange={(e) => {
+            setName(e.target.value);
+            setNameError("");
+          }}
           error={nameError}
           autoFocus
         />
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
               Permissões
             </p>
             <button
               onClick={toggleAll}
               className="text-xs px-2.5 py-1 rounded cursor-pointer transition-all"
               style={{
-                backgroundColor: ALL_PERMISSIONS.every((p) => perms.has(p)) ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                backgroundColor: ALL_PERMISSIONS.every((p) => perms.has(p))
+                  ? "var(--color-primary-light)"
+                  : "var(--color-bg-elevated)",
                 border: `1px solid ${ALL_PERMISSIONS.every((p) => perms.has(p)) ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
-                color: ALL_PERMISSIONS.every((p) => perms.has(p)) ? "var(--color-primary)" : "var(--color-text-secondary)",
+                color: ALL_PERMISSIONS.every((p) => perms.has(p))
+                  ? "var(--color-primary)"
+                  : "var(--color-text-secondary)",
               }}
             >
-              {ALL_PERMISSIONS.every((p) => perms.has(p)) ? "Desmarcar tudo" : "Selecionar tudo"}
+              {ALL_PERMISSIONS.every((p) => perms.has(p))
+                ? "Desmarcar tudo"
+                : "Selecionar tudo"}
             </button>
           </div>
           {PERMISSION_GROUPS.map((group) => {
@@ -776,16 +803,23 @@ function ProfileModal({
             return (
               <div key={group.label}>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     {group.label}
                   </p>
                   <button
                     onClick={() => toggleSection(group)}
                     className="text-xs px-2 py-0.5 rounded cursor-pointer transition-all"
                     style={{
-                      backgroundColor: allInSection ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                      backgroundColor: allInSection
+                        ? "var(--color-primary-light)"
+                        : "var(--color-bg-elevated)",
                       border: `1px solid ${allInSection ? "rgba(0,136,194,0.3)" : "var(--color-border)"}`,
-                      color: allInSection ? "var(--color-primary)" : "var(--color-text-muted)",
+                      color: allInSection
+                        ? "var(--color-primary)"
+                        : "var(--color-text-muted)",
                     }}
                   >
                     {allInSection ? "Desmarcar seção" : "Selecionar seção"}
@@ -803,7 +837,9 @@ function ProfileModal({
                         onClick={() => !isDisabled && toggle(perm)}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)] text-left transition-all"
                         style={{
-                          backgroundColor: checked ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                          backgroundColor: checked
+                            ? "var(--color-primary-light)"
+                            : "var(--color-bg-elevated)",
                           border: `1px solid ${checked ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
                           cursor: isDisabled ? "not-allowed" : "pointer",
                           opacity: isDisabled ? 0.45 : 1,
@@ -812,17 +848,25 @@ function ProfileModal({
                         <div
                           className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
                           style={{
-                            backgroundColor: checked ? "var(--color-primary)" : "transparent",
+                            backgroundColor: checked
+                              ? "var(--color-primary)"
+                              : "transparent",
                             border: `1.5px solid ${checked ? "var(--color-primary)" : "var(--color-border)"}`,
                           }}
                         >
                           {checked && <FiCheck size={10} color="white" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap" style={{ color: "var(--color-text-primary)" }}>
+                          <p
+                            className="text-sm font-medium flex items-center gap-1.5 flex-wrap"
+                            style={{ color: "var(--color-text-primary)" }}
+                          >
                             {meta.label}
                             {isViewPerm && (
-                              <span className="text-xs font-normal" style={{ color: "var(--color-text-muted)" }}>
+                              <span
+                                className="text-xs font-normal"
+                                style={{ color: "var(--color-text-muted)" }}
+                              >
                                 (requerido para a seção)
                               </span>
                             )}
@@ -840,7 +884,10 @@ function ProfileModal({
                               </span>
                             )}
                           </p>
-                          <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                          <p
+                            className="text-xs"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
                             {meta.description}
                           </p>
                           {perm === "manage_profiles" && (
@@ -848,8 +895,12 @@ function ProfileModal({
                               className="text-xs mt-1 flex items-start gap-1"
                               style={{ color: "var(--color-warning)" }}
                             >
-                              <FiAlertTriangle size={10} className="flex-shrink-0 mt-0.5" />
-                              Quem tem essa permissão pode criar perfis com qualquer acesso e atribuí-los a outros usuários.
+                              <FiAlertTriangle
+                                size={10}
+                                className="flex-shrink-0 mt-0.5"
+                              />
+                              Quem tem essa permissão pode criar perfis com
+                              qualquer acesso e atribuí-los a outros usuários.
                             </p>
                           )}
                         </div>
@@ -939,7 +990,14 @@ function UserCard({
                 className="text-xs truncate"
                 style={{ color: "var(--color-primary)", opacity: 0.85 }}
               >
-                <FiShield size={10} style={{ display: "inline", marginRight: 3, verticalAlign: "middle" }} />
+                <FiShield
+                  size={10}
+                  style={{
+                    display: "inline",
+                    marginRight: 3,
+                    verticalAlign: "middle",
+                  }}
+                />
                 {user.profileName ?? "Sem perfil"}
               </p>
             )}
@@ -1302,22 +1360,22 @@ export default function UsersPage() {
   useEffect(() => {
     // Busca apenas a categoria "auth" — filtra action client-side para
     // evitar índice composto no Firestore.
-    getDocs(
-      query(collection(db, "logs"), where("category", "==", "auth")),
-    ).then((snap) => {
-      const map: Record<string, Date> = {};
-      for (const d of snap.docs) {
-        const data = d.data();
-        if (data.action !== "login") continue;
-        const username = data.performedBy?.username as string | undefined;
-        if (!username) continue;
-        const ts: number = data.createdAt?.toMillis?.() ?? 0;
-        if (!map[username] || ts > map[username].getTime()) {
-          map[username] = data.createdAt?.toDate?.() ?? new Date(ts);
+    getDocs(query(collection(db, "logs"), where("category", "==", "auth")))
+      .then((snap) => {
+        const map: Record<string, Date> = {};
+        for (const d of snap.docs) {
+          const data = d.data();
+          if (data.action !== "login") continue;
+          const username = data.performedBy?.username as string | undefined;
+          if (!username) continue;
+          const ts: number = data.createdAt?.toMillis?.() ?? 0;
+          if (!map[username] || ts > map[username].getTime()) {
+            map[username] = data.createdAt?.toDate?.() ?? new Date(ts);
+          }
         }
-      }
-      setLastLogins(map);
-    }).catch(() => {});
+        setLastLogins(map);
+      })
+      .catch(() => {});
   }, []);
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -1908,12 +1966,14 @@ export default function UsersPage() {
                                       className="text-xs"
                                       style={{ color: "var(--color-primary)" }}
                                     >
-                                      Owner
+                                      Desenvolvedor
                                     </span>
                                   ) : (
                                     <span
                                       className="text-xs flex items-center gap-1"
-                                      style={{ color: "var(--color-text-muted)" }}
+                                      style={{
+                                        color: "var(--color-text-muted)",
+                                      }}
                                     >
                                       <FiShield size={10} />
                                       {user.profileName ?? "Sem perfil"}
@@ -2004,78 +2064,86 @@ export default function UsersPage() {
                                       </button>
                                     </>
                                   )}
-                                {(canManageUsers || canDeleteUsers) && !user.isOwner && (
-                                  <>
-                                    {canManageUsers && user.status === "approved" && (
-                                      <button
-                                        onClick={() => setAssignTarget(user)}
-                                        title="Atribuir perfil"
-                                        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                                        style={{
-                                          backgroundColor:
-                                            "var(--color-bg-elevated)",
-                                          color: "var(--color-text-secondary)",
-                                          border:
-                                            "1px solid var(--color-border)",
-                                        }}
-                                        onMouseEnter={(e) =>
-                                          (e.currentTarget.style.borderColor =
-                                            "var(--color-primary)")
-                                        }
-                                        onMouseLeave={(e) =>
-                                          (e.currentTarget.style.borderColor =
-                                            "var(--color-border)")
-                                        }
-                                      >
-                                        <FiShield size={13} />
-                                      </button>
-                                    )}
-                                    {canManageUsers && (
-                                      <button
-                                        onClick={() => setEditTarget(user)}
-                                        title="Editar"
-                                        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                                        style={{
-                                          backgroundColor:
-                                            "var(--color-bg-elevated)",
-                                          color: "var(--color-text-secondary)",
-                                          border: "1px solid var(--color-border)",
-                                        }}
-                                        onMouseEnter={(e) =>
-                                          (e.currentTarget.style.borderColor =
-                                            "var(--color-primary)")
-                                        }
-                                        onMouseLeave={(e) =>
-                                          (e.currentTarget.style.borderColor =
-                                            "var(--color-border)")
-                                        }
-                                      >
-                                        <FiEdit2 size={13} />
-                                      </button>
-                                    )}
-                                    {canDeleteUsers && (
-                                      <button
-                                        onClick={() => setDeleteTarget(user)}
-                                        title="Excluir"
-                                        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
-                                        style={{
-                                          backgroundColor: "rgba(239,68,68,0.08)",
-                                          color: "var(--color-error)",
-                                        }}
-                                        onMouseEnter={(e) =>
-                                          (e.currentTarget.style.backgroundColor =
-                                            "rgba(239,68,68,0.2)")
-                                        }
-                                        onMouseLeave={(e) =>
-                                          (e.currentTarget.style.backgroundColor =
-                                            "rgba(239,68,68,0.08)")
-                                        }
-                                      >
-                                        <FiTrash2 size={13} />
-                                      </button>
-                                    )}
-                                  </>
-                                )}
+                                {(canManageUsers || canDeleteUsers) &&
+                                  !user.isOwner && (
+                                    <>
+                                      {canManageUsers &&
+                                        user.status === "approved" && (
+                                          <button
+                                            onClick={() =>
+                                              setAssignTarget(user)
+                                            }
+                                            title="Atribuir perfil"
+                                            className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                                            style={{
+                                              backgroundColor:
+                                                "var(--color-bg-elevated)",
+                                              color:
+                                                "var(--color-text-secondary)",
+                                              border:
+                                                "1px solid var(--color-border)",
+                                            }}
+                                            onMouseEnter={(e) =>
+                                              (e.currentTarget.style.borderColor =
+                                                "var(--color-primary)")
+                                            }
+                                            onMouseLeave={(e) =>
+                                              (e.currentTarget.style.borderColor =
+                                                "var(--color-border)")
+                                            }
+                                          >
+                                            <FiShield size={13} />
+                                          </button>
+                                        )}
+                                      {canManageUsers && (
+                                        <button
+                                          onClick={() => setEditTarget(user)}
+                                          title="Editar"
+                                          className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                                          style={{
+                                            backgroundColor:
+                                              "var(--color-bg-elevated)",
+                                            color:
+                                              "var(--color-text-secondary)",
+                                            border:
+                                              "1px solid var(--color-border)",
+                                          }}
+                                          onMouseEnter={(e) =>
+                                            (e.currentTarget.style.borderColor =
+                                              "var(--color-primary)")
+                                          }
+                                          onMouseLeave={(e) =>
+                                            (e.currentTarget.style.borderColor =
+                                              "var(--color-border)")
+                                          }
+                                        >
+                                          <FiEdit2 size={13} />
+                                        </button>
+                                      )}
+                                      {canDeleteUsers && (
+                                        <button
+                                          onClick={() => setDeleteTarget(user)}
+                                          title="Excluir"
+                                          className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                                          style={{
+                                            backgroundColor:
+                                              "rgba(239,68,68,0.08)",
+                                            color: "var(--color-error)",
+                                          }}
+                                          onMouseEnter={(e) =>
+                                            (e.currentTarget.style.backgroundColor =
+                                              "rgba(239,68,68,0.2)")
+                                          }
+                                          onMouseLeave={(e) =>
+                                            (e.currentTarget.style.backgroundColor =
+                                              "rgba(239,68,68,0.08)")
+                                          }
+                                        >
+                                          <FiTrash2 size={13} />
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
                                 {!canApproveUsers &&
                                   !canManageUsers &&
                                   !canDeleteUsers &&
@@ -2239,29 +2307,30 @@ export default function UsersPage() {
           onClose={() => setProfileModal({ open: false })}
         />
       )}
-      {deleteProfileTarget && (() => {
-        const affected = users.filter(
-          (u) => u.profileId === deleteProfileTarget.id && !u.isOwner,
-        ).length;
-        return (
-          <DeleteConfirmModal
-            title={`Excluir perfil "${deleteProfileTarget.name}"`}
-            description={
-              affected > 0
-                ? `Este perfil está atribuído a ${affected} usuário${affected !== 1 ? "s" : ""}. Ao excluí-lo, eles ficarão sem perfil e poderão perder acesso a funcionalidades.`
-                : `Nenhum usuário está usando este perfil. A exclusão não afetará ninguém.`
-            }
-            onConfirm={async () => {
-              setDeleteProfileLoading(true);
-              await handleDeleteProfile(deleteProfileTarget.id);
-              setDeleteProfileLoading(false);
-              setDeleteProfileTarget(null);
-            }}
-            onClose={() => setDeleteProfileTarget(null)}
-            loading={deleteProfileLoading}
-          />
-        );
-      })()}
+      {deleteProfileTarget &&
+        (() => {
+          const affected = users.filter(
+            (u) => u.profileId === deleteProfileTarget.id && !u.isOwner,
+          ).length;
+          return (
+            <DeleteConfirmModal
+              title={`Excluir perfil "${deleteProfileTarget.name}"`}
+              description={
+                affected > 0
+                  ? `Este perfil está atribuído a ${affected} usuário${affected !== 1 ? "s" : ""}. Ao excluí-lo, eles ficarão sem perfil e poderão perder acesso a funcionalidades.`
+                  : `Nenhum usuário está usando este perfil. A exclusão não afetará ninguém.`
+              }
+              onConfirm={async () => {
+                setDeleteProfileLoading(true);
+                await handleDeleteProfile(deleteProfileTarget.id);
+                setDeleteProfileLoading(false);
+                setDeleteProfileTarget(null);
+              }}
+              onClose={() => setDeleteProfileTarget(null)}
+              loading={deleteProfileLoading}
+            />
+          );
+        })()}
     </div>
   );
 }
