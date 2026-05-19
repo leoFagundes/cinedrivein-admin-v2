@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   FiPrinter,
+  FiSettings,
   FiZap,
   FiWifi,
   FiWifiOff,
@@ -1957,6 +1958,7 @@ export default function ThermalPrinterBar({
   } = usePrinter();
 
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const cfg = STATUS_CFG[status];
   const isBusy = status === "connecting" || status === "printing";
@@ -2248,312 +2250,184 @@ export default function ThermalPrinterBar({
           )}
 
           {/* ── Grupo 3: Comportamento ── */}
-          <div className="flex flex-col gap-2 px-4 py-3 min-w-0">
-            <span
-              className="text-[10px] font-semibold uppercase tracking-widest"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              Comportamento
-            </span>
-
-            {/* Grid 2 colunas para os controles segmentados */}
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-              {/* Largura do papel — ocupa as 2 colunas */}
-              <div className="col-span-2 flex flex-col gap-1">
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Largura do papel
-                </span>
-                <div
-                  className="flex rounded-[var(--radius-md)] overflow-hidden"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {PAPER_PRESETS.map((preset, i) => {
-                    const active = ticketConfig.paperWidth === preset.value;
-                    return (
-                      <button
-                        key={preset.value}
-                        onClick={() =>
-                          setTicketConfig({
-                            paperWidth: preset.value as PaperWidth,
-                          })
-                        }
-                        className="flex-1 px-2 py-1 text-[10px] font-medium cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "var(--color-primary)"
-                            : "transparent",
-                          color: active ? "white" : "var(--color-text-muted)",
-                          borderRight:
-                            i < PAPER_PRESETS.length - 1
-                              ? "1px solid var(--color-border)"
-                              : "none",
-                        }}
-                      >
-                        {preset.value === 32
-                          ? "58 mm"
-                          : preset.value === 42
-                            ? "80 mm"
-                            : "80 mm+"}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  {
-                    PAPER_PRESETS.find(
-                      (p) => p.value === ticketConfig.paperWidth,
-                    )?.label
-                  }
-                </span>
-              </div>
-
-              {/* Avanço antes do corte */}
-              <div className="flex flex-col gap-1">
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Avanço antes do corte
-                </span>
-                <div
-                  className="flex rounded-[var(--radius-md)] overflow-hidden"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {([2, 4, 6] as const).map((v, i) => {
-                    const active = ticketConfig.feedLines === v;
-                    return (
-                      <button
-                        key={v}
-                        onClick={() => setTicketConfig({ feedLines: v })}
-                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "var(--color-primary)"
-                            : "transparent",
-                          color: active ? "white" : "var(--color-text-muted)",
-                          borderRight:
-                            i < 2 ? "1px solid var(--color-border)" : "none",
-                        }}
-                      >
-                        {v}L
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Espaço entre itens */}
-              <div className="flex flex-col gap-1">
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Espaço entre itens
-                </span>
-                <div
-                  className="flex rounded-[var(--radius-md)] overflow-hidden"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {([0, 1, 2] as const).map((v, i) => {
-                    const active = ticketConfig.itemSpacing === v;
-                    return (
-                      <button
-                        key={v}
-                        onClick={() => setTicketConfig({ itemSpacing: v })}
-                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "var(--color-primary)"
-                            : "transparent",
-                          color: active ? "white" : "var(--color-text-muted)",
-                          borderRight:
-                            i < 2 ? "1px solid var(--color-border)" : "none",
-                        }}
-                      >
-                        {v === 0 ? "0" : `${v}L`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Espaço entre seções */}
-              <div className="flex flex-col gap-1">
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Espaço entre seções
-                </span>
-                <div
-                  className="flex rounded-[var(--radius-md)] overflow-hidden"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {([0, 1] as const).map((v, i) => {
-                    const active = ticketConfig.sectionSpacing === v;
-                    return (
-                      <button
-                        key={v}
-                        onClick={() => setTicketConfig({ sectionSpacing: v })}
-                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "var(--color-primary)"
-                            : "transparent",
-                          color: active ? "white" : "var(--color-text-muted)",
-                          borderRight:
-                            i < 1 ? "1px solid var(--color-border)" : "none",
-                        }}
-                      >
-                        {v === 0 ? "Nenhum" : "1L"}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Margem no topo */}
-              <div className="flex flex-col gap-1">
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Margem no topo
-                </span>
-                <div
-                  className="flex rounded-[var(--radius-md)] overflow-hidden"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {([0, 1, 2] as const).map((v, i) => {
-                    const active = ticketConfig.headerPadding === v;
-                    return (
-                      <button
-                        key={v}
-                        onClick={() => setTicketConfig({ headerPadding: v })}
-                        className="flex-1 px-1.5 py-1 text-[10px] font-medium cursor-pointer transition-all"
-                        style={{
-                          backgroundColor: active
-                            ? "var(--color-primary)"
-                            : "transparent",
-                          color: active ? "white" : "var(--color-text-muted)",
-                          borderRight:
-                            i < 2 ? "1px solid var(--color-border)" : "none",
-                        }}
-                      >
-                        {v === 0 ? "0" : `${v}L`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+          <div className="flex flex-col gap-2 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-text-muted)" }}>
+                Comportamento
+              </span>
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
+                style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}
+              >
+                <FiSettings size={10} /> Comanda
+              </button>
             </div>
 
-            {/* Toggles */}
-            <div
-              className="flex flex-col gap-1.5 pt-1"
-              style={{ borderTop: "1px solid var(--color-border)" }}
-            >
-              {/* Espaço compacto após adicionais */}
-              <label
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() =>
-                  setTicketConfig({
-                    compactAdditionalsSpacing:
-                      !ticketConfig.compactAdditionalsSpacing,
-                  })
-                }
-              >
-                <span
-                  className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
-                  style={{
-                    backgroundColor: ticketConfig.compactAdditionalsSpacing
-                      ? "var(--color-primary)"
-                      : "var(--color-border)",
-                  }}
-                >
-                  <span
-                    className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                    style={{
-                      transform: ticketConfig.compactAdditionalsSpacing
-                        ? "translateX(14px)"
-                        : "translateX(2px)",
-                    }}
-                  />
+            <div className="flex flex-col gap-1.5">
+              <label className="flex items-center gap-2 cursor-pointer" onClick={() => setAutoPrint(!autoPrint)}>
+                <span className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
+                  style={{ backgroundColor: autoPrint ? "var(--color-success)" : "var(--color-border)" }}>
+                  <span className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                    style={{ transform: autoPrint ? "translateX(14px)" : "translateX(2px)" }} />
                 </span>
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Espaço menor após itens com adicionais
-                </span>
-              </label>
-              {/* Auto-imprimir */}
-              <label
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() => setAutoPrint(!autoPrint)}
-              >
-                <span
-                  className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
-                  style={{
-                    backgroundColor: autoPrint
-                      ? "var(--color-success)"
-                      : "var(--color-border)",
-                  }}
-                >
-                  <span
-                    className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                    style={{
-                      transform: autoPrint
-                        ? "translateX(14px)"
-                        : "translateX(2px)",
-                    }}
-                  />
-                </span>
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
+                <span className="text-[10px]" style={{ color: "var(--color-text-secondary)" }}>
                   Auto-imprimir novas comandas
                 </span>
               </label>
 
-              {/* Auto-conectar — só para QZ Tray */}
               {connectionMode === "qztray" && (
-                <label
-                  className="flex items-center gap-2 cursor-pointer"
-                  onClick={() => setAutoConnect(!autoConnect)}
-                >
-                  <span
-                    className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
-                    style={{
-                      backgroundColor: autoConnect
-                        ? "var(--color-primary)"
-                        : "var(--color-border)",
-                    }}
-                  >
-                    <span
-                      className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                      style={{
-                        transform: autoConnect
-                          ? "translateX(14px)"
-                          : "translateX(2px)",
-                      }}
-                    />
+                <label className="flex items-center gap-2 cursor-pointer" onClick={() => setAutoConnect(!autoConnect)}>
+                  <span className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
+                    style={{ backgroundColor: autoConnect ? "var(--color-primary)" : "var(--color-border)" }}>
+                    <span className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                      style={{ transform: autoConnect ? "translateX(14px)" : "translateX(2px)" }} />
                   </span>
-                  <span
-                    className="text-[10px]"
-                    style={{ color: "var(--color-text-secondary)" }}
-                  >
+                  <span className="text-[10px]" style={{ color: "var(--color-text-secondary)" }}>
                     Conectar automaticamente ao abrir
                   </span>
                 </label>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings modal */}
+      {showSettingsModal && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+          onClick={() => setShowSettingsModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden flex flex-col"
+            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--color-border)" }}>
+              <div className="flex items-center gap-2">
+                <FiSettings size={15} style={{ color: "var(--color-primary)" }} />
+                <p className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>
+                  Configurações da comanda
+                </p>
+              </div>
+              <button onClick={() => setShowSettingsModal(false)} className="p-1.5 cursor-pointer transition-opacity hover:opacity-70" style={{ color: "var(--color-text-muted)" }}>
+                <FiX size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 flex flex-col gap-5 overflow-y-auto max-h-[70vh]">
+
+              {/* Largura do papel */}
+              <div className="flex flex-col gap-2">
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Largura do papel</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                    {PAPER_PRESETS.find((p) => p.value === ticketConfig.paperWidth)?.label}
+                  </p>
+                </div>
+                <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  {PAPER_PRESETS.map((preset, i) => {
+                    const active = ticketConfig.paperWidth === preset.value;
+                    return (
+                      <button key={preset.value} onClick={() => setTicketConfig({ paperWidth: preset.value as PaperWidth })}
+                        className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
+                        style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < PAPER_PRESETS.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                        {preset.value === 32 ? "58 mm" : preset.value === 42 ? "80 mm" : "80 mm+"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Grid 2 colunas */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Avanço antes do corte */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Avanço antes do corte</p>
+                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                    {([2, 4, 6] as const).map((v, i) => {
+                      const active = ticketConfig.feedLines === v;
+                      return (
+                        <button key={v} onClick={() => setTicketConfig({ feedLines: v })}
+                          className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
+                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 2 ? "1px solid var(--color-border)" : "none" }}>
+                          {v}L
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Espaço entre itens */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Espaço entre itens</p>
+                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                    {([0, 1, 2] as const).map((v, i) => {
+                      const active = ticketConfig.itemSpacing === v;
+                      return (
+                        <button key={v} onClick={() => setTicketConfig({ itemSpacing: v })}
+                          className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
+                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 2 ? "1px solid var(--color-border)" : "none" }}>
+                          {v === 0 ? "0" : `${v}L`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Espaço entre seções */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Espaço entre seções</p>
+                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                    {([0, 1] as const).map((v, i) => {
+                      const active = ticketConfig.sectionSpacing === v;
+                      return (
+                        <button key={v} onClick={() => setTicketConfig({ sectionSpacing: v })}
+                          className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
+                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 1 ? "1px solid var(--color-border)" : "none" }}>
+                          {v === 0 ? "Nenhum" : "1L"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Margem no topo */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Margem no topo</p>
+                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                    {([0, 1, 2] as const).map((v, i) => {
+                      const active = ticketConfig.headerPadding === v;
+                      return (
+                        <button key={v} onClick={() => setTicketConfig({ headerPadding: v })}
+                          className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
+                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 2 ? "1px solid var(--color-border)" : "none" }}>
+                          {v === 0 ? "0" : `${v}L`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle espaço compacto */}
+              <label className="flex items-center gap-3 cursor-pointer" onClick={() => setTicketConfig({ compactAdditionalsSpacing: !ticketConfig.compactAdditionalsSpacing })}>
+                <span className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 transition-colors"
+                  style={{ backgroundColor: ticketConfig.compactAdditionalsSpacing ? "var(--color-primary)" : "var(--color-border)" }}>
+                  <span className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                    style={{ transform: ticketConfig.compactAdditionalsSpacing ? "translateX(18px)" : "translateX(2px)" }} />
+                </span>
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Espaço menor após adicionais</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                    Itens com adicionais recebem menos espaço abaixo
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
         </div>

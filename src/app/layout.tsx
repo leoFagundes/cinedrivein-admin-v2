@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
 import Providers from "@/components/layout/Providers";
+import VersionBanner from "@/components/layout/VersionBanner";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -35,6 +36,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <ToastProvider>
+          <VersionBanner />
           <Providers>{children}</Providers>
         </ToastProvider>
       </body>

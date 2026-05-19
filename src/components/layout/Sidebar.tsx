@@ -356,23 +356,33 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <Link
-        href="/admin/help"
-        onClick={close}
-        className="flex items-center gap-2 w-full px-3 py-1.5 rounded-[var(--radius-md)] text-xs mb-1 transition-all duration-150 cursor-pointer"
-        style={{ color: "var(--color-text-muted)" }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
-          e.currentTarget.style.color = "var(--color-text-secondary)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = "transparent";
-          e.currentTarget.style.color = "var(--color-text-muted)";
-        }}
-      >
-        <FiHelpCircle size={14} />
-        Ajuda
-      </Link>
+      <div className="flex items-center justify-between gap-2 px-3">
+        <Link
+          href="/admin/help"
+          onClick={close}
+          className="flex items-center gap-2 w-fit px-3 py-1.5 rounded-[var(--radius-md)] text-xs mb-1 transition-all duration-150 cursor-pointer"
+          style={{ color: "var(--color-text-muted)" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+            e.currentTarget.style.color = "var(--color-text-secondary)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+            e.currentTarget.style.color = "var(--color-text-muted)";
+          }}
+        >
+          <FiHelpCircle size={14} />
+          Ajuda
+        </Link>
+        {process.env.NEXT_PUBLIC_APP_VERSION && (
+          <p
+            className="text-[10px] text-center pb-2"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
+          </p>
+        )}
+      </div>
 
       <div
         className="p-3 flex-shrink-0"
@@ -427,11 +437,15 @@ export default function Sidebar() {
 
         <div className="flex gap-1">
           <button
-            onClick={() => { lock(); close(); }}
+            onClick={() => {
+              lock();
+              close();
+            }}
             className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)] text-sm transition-all duration-150 cursor-pointer"
             style={{ color: "var(--color-text-muted)" }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+              e.currentTarget.style.backgroundColor =
+                "var(--color-bg-elevated)";
               e.currentTarget.style.color = "var(--color-primary)";
             }}
             onMouseLeave={(e) => {
@@ -454,7 +468,8 @@ export default function Sidebar() {
             className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)] text-sm transition-all duration-150 cursor-pointer"
             style={{ color: "var(--color-text-muted)" }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+              e.currentTarget.style.backgroundColor =
+                "var(--color-bg-elevated)";
               e.currentTarget.style.color = "var(--color-error)";
             }}
             onMouseLeave={(e) => {
