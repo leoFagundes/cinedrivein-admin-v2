@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
-import { FiRefreshCw, FiX, FiClock } from "react-icons/fi";
+import { FiRefreshCw, FiX } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 
 const CURRENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
@@ -52,25 +52,14 @@ export default function VersionBanner() {
               ? "A atualização pode já estar disponível. Tente recarregar agora."
               : "Atualização em andamento — aguarde alguns minutos e tente novamente."}
           </p>
-          {canRetry && (
-            <button
-              onClick={() => window.location.reload()}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold cursor-pointer transition-opacity hover:opacity-80 shrink-0"
-              style={{ backgroundColor: "var(--color-warning)", color: "white" }}
-            >
-              <FiRefreshCw size={12} />
-              Recarregar
-            </button>
-          )}
-          {!canRetry && (
-            <span
-              className="flex items-center gap-1 text-xs shrink-0 opacity-60"
-              style={{ color: "var(--color-warning)" }}
-            >
-              <FiClock size={12} />
-              Aguarde...
-            </span>
-          )}
+          <button
+            onClick={() => window.location.reload()}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold cursor-pointer transition-opacity hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--color-warning)", color: "white" }}
+          >
+            <FiRefreshCw size={12} className={!canRetry ? "animate-spin" : ""} />
+            Recarregar
+          </button>
         </>
       ) : (
         <>
