@@ -10,17 +10,21 @@ if (!version) {
   process.exit(1);
 }
 
-// Read .env.local
-const envPath = path.join(__dirname, "../.env.local");
-if (!fs.existsSync(envPath)) {
-  console.error("❌ .env.local não encontrado.");
-  process.exit(1);
-}
-const env = fs.readFileSync(envPath, "utf-8");
-const get = (key) => env.match(new RegExp(`${key}="?([^"\n]+)"?`))?.[1]?.trim();
+// Read credentials — prefer process.env (Vercel/CI), fall back to .env.local (dev)
+let apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+let projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
-const apiKey = get("NEXT_PUBLIC_FIREBASE_API_KEY");
-const projectId = get("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+if (!apiKey || !projectId) {
+  const envPath = path.join(__dirname, "../.env.local");
+  if (!fs.existsSync(envPath)) {
+    console.error("❌ .env.local não encontrado e variáveis de ambiente ausentes.");
+    process.exit(1);
+  }
+  const env = fs.readFileSync(envPath, "utf-8");
+  const get = (key) => env.match(new RegExp(`${key}="?([^"\n]+)"?`))?.[1]?.trim();
+  apiKey = get("NEXT_PUBLIC_FIREBASE_API_KEY");
+  projectId = get("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+}
 
 if (!apiKey || !projectId) {
   console.error("❌ NEXT_PUBLIC_FIREBASE_API_KEY ou NEXT_PUBLIC_FIREBASE_PROJECT_ID não encontrados no .env.local.");
