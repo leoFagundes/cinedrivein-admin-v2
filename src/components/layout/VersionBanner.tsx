@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
-import { FiRefreshCw, FiX } from "react-icons/fi";
+import { FiRefreshCw, FiX, FiClock } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 
 const CURRENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+const RETRY_DELAY_MS = 3 * 60 * 1000; // 3 minutos
 
 export default function VersionBanner() {
   const [outdated, setOutdated] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
+  const [waitingRetry, setWaitingRetry] = useState(false);
+  const [canRetry, setCanRetry] = useState(false);
 
   useEffect(() => {
     return onSnapshot(doc(db, "storeConfig", "version"), (snap) => {
@@ -20,6 +23,12 @@ export default function VersionBanner() {
       if (remote !== CURRENT_VERSION) setOutdated(true);
     });
   }, []);
+
+  function handleUpdate() {
+    setWaitingRetry(true);
+    setCanRetry(false);
+    setTimeout(() => setCanRetry(true), RETRY_DELAY_MS);
+  }
 
   if (!outdated || dismissed) return null;
 
@@ -35,17 +44,50 @@ export default function VersionBanner() {
         className="w-2 h-2 rounded-full shrink-0"
         style={{ backgroundColor: "var(--color-warning)" }}
       />
-      <p className="flex-1 text-xs" style={{ color: "var(--color-warning)" }}>
-        Nova versão disponível{remoteVersion ? ` (${remoteVersion})` : ""} — recarregue para atualizar.
-      </p>
-      <button
-        onClick={() => window.location.reload()}
-        className="flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-md)] text-xs font-semibold cursor-pointer transition-opacity hover:opacity-80 shrink-0"
-        style={{ backgroundColor: "var(--color-warning)", color: "white" }}
-      >
-        <FiRefreshCw size={12} />
-        Atualizar
-      </button>
+
+      {waitingRetry ? (
+        <>
+          <p className="flex-1 text-xs" style={{ color: "var(--color-warning)" }}>
+            {canRetry
+              ? "A atualização pode já estar disponível. Tente recarregar agora."
+              : "Atualização em andamento — aguarde alguns minutos e tente novamente."}
+          </p>
+          {canRetry && (
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold cursor-pointer transition-opacity hover:opacity-80 shrink-0"
+              style={{ backgroundColor: "var(--color-warning)", color: "white" }}
+            >
+              <FiRefreshCw size={12} />
+              Recarregar
+            </button>
+          )}
+          {!canRetry && (
+            <span
+              className="flex items-center gap-1 text-xs shrink-0 opacity-60"
+              style={{ color: "var(--color-warning)" }}
+            >
+              <FiClock size={12} />
+              Aguarde...
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="flex-1 text-xs" style={{ color: "var(--color-warning)" }}>
+            Nova versão disponível{remoteVersion ? ` (${remoteVersion})` : ""} — recarregue para atualizar.
+          </p>
+          <button
+            onClick={handleUpdate}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold cursor-pointer transition-opacity hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--color-warning)", color: "white" }}
+          >
+            <FiRefreshCw size={12} />
+            Atualizar
+          </button>
+        </>
+      )}
+
       <button
         onClick={() => setDismissed(true)}
         className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70 shrink-0"
