@@ -480,8 +480,12 @@ export interface ReportData {
   topItems: ReportTopItem[];
 }
 
-export function buildReportTicket(report: ReportData): Uint8Array {
-  const DIVIDER = "-".repeat(32);
+export function buildReportTicket(
+  report: ReportData,
+  cfg: TicketConfig = DEFAULT_TICKET_CONFIG,
+): Uint8Array {
+  const { paperWidth, feedLines, headerPadding, sectionSpacing } = cfg;
+  const DIVIDER = "-".repeat(paperWidth);
   const parts: Uint8Array[] = [];
   const add = (...chunks: Uint8Array[]) => parts.push(...chunks);
 
@@ -495,6 +499,7 @@ export function buildReportTicket(report: ReportData): Uint8Array {
   add(CMD.init);
 
   // ── Header: data grande e negrito ─────────────────────────────────────────
+  if (headerPadding > 0) add(CMD.feed(headerPadding));
   add(CMD.alignCenter, CMD.doubleHeight, CMD.bold(true));
   add(CMD.text(dateLabel));
   add(CMD.normal, CMD.bold(false));
@@ -505,41 +510,41 @@ export function buildReportTicket(report: ReportData): Uint8Array {
   // ── Resumo de pedidos ──────────────────────────────────────────────────────
   add(CMD.alignLeft);
   add(CMD.bold(true), CMD.text("PEDIDOS"), CMD.bold(false));
-  add(CMD.text(rowLR("Finalizados:", String(report.finishedOrders))));
-  add(CMD.text(rowLR("Cancelados:", String(report.canceledOrders))));
+  add(CMD.text(rowLR("Finalizados:", String(report.finishedOrders), paperWidth)));
+  add(CMD.text(rowLR("Cancelados:", String(report.canceledOrders), paperWidth)));
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
+  if (sectionSpacing > 0) add(CMD.feed(sectionSpacing));
 
   // ── Pagamentos ────────────────────────────────────────────────────────────
   add(CMD.bold(true), CMD.text("PAGAMENTOS"), CMD.bold(false));
   if (report.revenue.money > 0)
-    add(CMD.text(rowLR("Dinheiro:", fmt(report.revenue.money))));
+    add(CMD.text(rowLR("Dinheiro:", fmt(report.revenue.money), paperWidth)));
   if (report.revenue.pix > 0)
-    add(CMD.text(rowLR("Pix:", fmt(report.revenue.pix))));
+    add(CMD.text(rowLR("Pix:", fmt(report.revenue.pix), paperWidth)));
   if (report.revenue.credit > 0)
-    add(CMD.text(rowLR("Credito:", fmt(report.revenue.credit))));
+    add(CMD.text(rowLR("Credito:", fmt(report.revenue.credit), paperWidth)));
   if (report.revenue.debit > 0)
-    add(CMD.text(rowLR("Debito:", fmt(report.revenue.debit))));
+    add(CMD.text(rowLR("Debito:", fmt(report.revenue.debit), paperWidth)));
   add(CMD.text(DIVIDER));
-  add(CMD.text(rowLR("Subtotal:", fmt(report.revenue.subtotal))));
-  add(CMD.text(rowLR("Taxa de servico:", fmt(report.revenue.serviceFee))));
+  add(CMD.text(rowLR("Subtotal:", fmt(report.revenue.subtotal), paperWidth)));
+  add(CMD.text(rowLR("Taxa de servico:", fmt(report.revenue.serviceFee), paperWidth)));
   add(CMD.bold(true));
   if ((report.revenue.discount ?? 0) > 0)
-    add(CMD.text(rowLR("Desconto:", `- ${fmt(report.revenue.discount!)}`)));
-  add(CMD.text(rowLR("TOTAL:", fmt(report.revenue.total))));
+    add(CMD.text(rowLR("Desconto:", `- ${fmt(report.revenue.discount!)}`, paperWidth)));
+  add(CMD.text(rowLR("TOTAL:", fmt(report.revenue.total), paperWidth)));
   add(CMD.bold(false));
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
+  if (sectionSpacing > 0) add(CMD.feed(sectionSpacing));
 
   // ── Itens vendidos ────────────────────────────────────────────────────────
   add(CMD.bold(true), CMD.text("ITENS VENDIDOS"), CMD.bold(false));
 
   for (const item of report.topItems) {
-    // "2x  20  Esqueceram de Mim"
     const codPart = item.codItem ? `${item.codItem}` : "";
     add(CMD.bold(true));
     add(CMD.text(`${item.quantity}x  (${codPart}) ${item.name}`));
     add(CMD.bold(false));
 
-    // Adicionais: "+ Bacon (adicional): 1x"
     if (item.additionals) {
       for (const [adicName, count] of Object.entries(item.additionals)) {
         add(CMD.text(`   + ${adicName}: ${count}x`));
@@ -551,7 +556,7 @@ export function buildReportTicket(report: ReportData): Uint8Array {
   add(CMD.alignCenter);
   add(CMD.text(DIVIDER));
   add(CMD.text("Cine Drive-in"));
-  add(CMD.feed(4));
+  add(CMD.feed(feedLines));
   add(CMD.feedAndCut);
 
   return concat(...parts);

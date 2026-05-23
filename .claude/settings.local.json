@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:github.com)",
-      "Bash(xargs -I {} basename {})"
+      "Bash(xargs -I {} basename {})",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cinedrivein-admin-v2\" -Recurse -Depth 2)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(ConvertTo-Json -Depth 1)",
+      "Bash(xargs grep -l \"buildReportTicket\\\\|printReport\")"
     ]
   }
 }

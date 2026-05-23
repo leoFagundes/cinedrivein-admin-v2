@@ -339,7 +339,7 @@ export default function DashboardPage() {
   const { appUser, loading: authLoading } = useAuth();
   const { activeOrders } = useOrders();
   const { success, error: toastError, info } = useToast();
-  const { isConnected, print } = usePrinter();
+  const { isConnected, print, ticketConfig } = usePrinter();
 
   // ── Store control ──
   const [isOpen, setIsOpen] = useState(false);
@@ -1292,7 +1292,7 @@ export default function DashboardPage() {
     };
 
     // buildReportTicket precisa tratar data já formatada (contém "/")
-    print(buildReportTicket(reportData));
+    print(buildReportTicket(reportData, ticketConfig));
   }
 
   // ── Chart data (per-chart filtered) ────────────────────────────────────────
@@ -1787,6 +1787,19 @@ export default function DashboardPage() {
                     {stats.length}
                   </span>
                 </div>
+                {stats[0] && (
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: "var(--color-text-muted)" }}>
+                      Desde
+                    </span>
+                    <span
+                      className="font-semibold"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      {stats[0].date.split("-").reverse().join("/")}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {archivableCount === 0 ? (
@@ -2272,11 +2285,12 @@ export default function DashboardPage() {
                             debit: reportRevenue.debit,
                             subtotal: reportRevenue.subtotal,
                             serviceFee: reportRevenue.serviceFee,
+                            discount: reportRevenue.discount,
                             total: reportRevenue.total,
                           },
                           topItems: reportItems,
                         };
-                        print(buildReportTicket(reportData));
+                        print(buildReportTicket(reportData, ticketConfig));
                       }}
                       disabled={!isConnected}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm cursor-pointer transition-opacity hover:opacity-70 disabled:opacity-40 disabled:cursor-not-allowed"
