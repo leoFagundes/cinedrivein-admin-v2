@@ -82,6 +82,9 @@ const CHART_COLORS = {
   text: "#525870",
 };
 
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const WEEKCOUNT_OPTIONS = [3, 5, 7, 10, 15];
+
 const TOOLTIP_STYLE = {
   contentStyle: {
     backgroundColor: "var(--color-bg-surface)",
@@ -228,6 +231,8 @@ function ChartCard({
   onClearClick,
   count,
   extra,
+  compareToggle,
+  weekdayControls,
   children,
 }: {
   title: string;
@@ -236,6 +241,8 @@ function ChartCard({
   onClearClick?: () => void;
   count: number;
   extra?: React.ReactNode;
+  compareToggle?: React.ReactNode;
+  weekdayControls?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -258,6 +265,7 @@ function ChartCard({
             {title}
           </p>
           <div className="flex items-center gap-2">
+            {compareToggle}
             {count > 0 && (
               <span
                 className="text-xs"
@@ -279,51 +287,55 @@ function ChartCard({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="date"
-            value={range.from}
-            onChange={(e) => onRangeChange({ ...range, from: e.target.value })}
-            className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
-            style={{
-              backgroundColor: range.from
-                ? "var(--color-primary-light)"
-                : "var(--color-bg-elevated)",
-              border: `1px solid ${range.from ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
-              color: range.from
-                ? "var(--color-primary)"
-                : "var(--color-text-muted)",
-            }}
-          />
-          <span
-            className="text-xs"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            até
-          </span>
-          <input
-            type="date"
-            value={range.to}
-            onChange={(e) => onRangeChange({ ...range, to: e.target.value })}
-            className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
-            style={{
-              backgroundColor: range.to
-                ? "var(--color-primary-light)"
-                : "var(--color-bg-elevated)",
-              border: `1px solid ${range.to ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
-              color: range.to
-                ? "var(--color-primary)"
-                : "var(--color-text-muted)",
-            }}
-          />
-          {(range.from || range.to) && (
-            <button
-              onClick={() => onRangeChange({ from: "", to: "" })}
-              className="flex items-center gap-1 text-xs cursor-pointer transition-opacity hover:opacity-70"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              <FiX size={11} />
-              Limpar
-            </button>
+          {weekdayControls ?? (
+            <>
+              <input
+                type="date"
+                value={range.from}
+                onChange={(e) => onRangeChange({ ...range, from: e.target.value })}
+                className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
+                style={{
+                  backgroundColor: range.from
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
+                  border: `1px solid ${range.from ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                  color: range.from
+                    ? "var(--color-primary)"
+                    : "var(--color-text-muted)",
+                }}
+              />
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                até
+              </span>
+              <input
+                type="date"
+                value={range.to}
+                onChange={(e) => onRangeChange({ ...range, to: e.target.value })}
+                className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
+                style={{
+                  backgroundColor: range.to
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
+                  border: `1px solid ${range.to ? "rgba(0,136,194,0.4)" : "var(--color-border)"}`,
+                  color: range.to
+                    ? "var(--color-primary)"
+                    : "var(--color-text-muted)",
+                }}
+              />
+              {(range.from || range.to) && (
+                <button
+                  onClick={() => onRangeChange({ from: "", to: "" })}
+                  className="flex items-center gap-1 text-xs cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  <FiX size={11} />
+                  Limpar
+                </button>
+              )}
+            </>
           )}
           {extra && <div className="ml-auto">{extra}</div>}
         </div>
@@ -386,6 +398,14 @@ export default function DashboardPage() {
   const [paymentRange, setPaymentRange] = useState({ from: "", to: "" });
   const [revenueMode, setRevenueMode] = useState<"ambos" | "total" | "subtotal">("ambos");
   const [paymentMode, setPaymentMode] = useState<"pie" | "bar">("pie");
+
+  // Weekday comparison mode
+  const [revenueCompare, setRevenueCompare] = useState<"period" | "weekday">("period");
+  const [revenueWeekday, setRevenueWeekday] = useState(6);
+  const [revenueWeekCount, setRevenueWeekCount] = useState(7);
+  const [ordersCompare, setOrdersCompare] = useState<"period" | "weekday">("period");
+  const [ordersWeekday, setOrdersWeekday] = useState(6);
+  const [ordersWeekCount, setOrdersWeekCount] = useState(7);
 
   // Clear chart data modal
   const [clearModal, setClearModal] = useState<{
@@ -459,7 +479,7 @@ export default function DashboardPage() {
           query(
             collection(db, "dailyStats"),
             orderBy("date", "asc"),
-            limit(30),
+            limit(365),
           ),
         );
         setStats(
@@ -925,7 +945,7 @@ export default function DashboardPage() {
 
       // Refresh stats
       const statsSnap = await getDocs(
-        query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(30)),
+        query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(365)),
       );
       setStats(
         statsSnap.docs.map((d) => ({
@@ -1082,6 +1102,15 @@ export default function DashboardPage() {
       if (range.to && s.date > range.to) return false;
       return true;
     });
+  }
+
+  function getWeekdayStats(weekday: number, count: number) {
+    return stats
+      .filter((s) => {
+        const [y, m, d] = s.date.split("-").map(Number);
+        return new Date(y, m - 1, d).getDay() === weekday;
+      })
+      .slice(-count);
   }
 
   async function handleDeleteDay(dateKey: string) {
@@ -1297,7 +1326,10 @@ export default function DashboardPage() {
 
   // ── Chart data (per-chart filtered) ────────────────────────────────────────
 
-  const revenueStats = filterStats(revenueRange);
+  const revenueStats =
+    revenueCompare === "weekday"
+      ? getWeekdayStats(revenueWeekday, revenueWeekCount)
+      : filterStats(revenueRange);
   const revenueData = revenueStats.map((s) => ({
     date: fmtDate(s.date),
     Total: +s.revenue.total.toFixed(2),
@@ -1308,7 +1340,10 @@ export default function DashboardPage() {
       ? +(revenueData.reduce((a, d) => a + d.Total, 0) / revenueData.length).toFixed(2)
       : null;
 
-  const ordersStats = filterStats(ordersRange);
+  const ordersStats =
+    ordersCompare === "weekday"
+      ? getWeekdayStats(ordersWeekday, ordersWeekCount)
+      : filterStats(ordersRange);
   const ordersData = ordersStats.map((s) => {
     const total = s.finishedOrders + s.canceledOrders;
     return {
@@ -2492,6 +2527,71 @@ export default function DashboardPage() {
                     : undefined
                 }
                 count={revenueStats.length}
+                compareToggle={
+                  <div
+                    className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
+                    {(["period", "weekday"] as const).map((m, i) => (
+                      <button
+                        key={m}
+                        onClick={() => setRevenueCompare(m)}
+                        className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: revenueCompare === m ? "var(--color-primary)" : "transparent",
+                          color: revenueCompare === m ? "white" : "var(--color-text-muted)",
+                          borderRight: i === 0 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {m === "period" ? "Período" : "Semana"}
+                      </button>
+                    ))}
+                  </div>
+                }
+                weekdayControls={
+                  revenueCompare === "weekday" ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div
+                        className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                        style={{ border: "1px solid var(--color-border)" }}
+                      >
+                        {WEEKDAYS.map((label, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setRevenueWeekday(idx)}
+                            className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                            style={{
+                              backgroundColor: revenueWeekday === idx ? "var(--color-primary)" : "transparent",
+                              color: revenueWeekday === idx ? "white" : "var(--color-text-muted)",
+                              borderRight: idx < 6 ? "1px solid var(--color-border)" : "none",
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div
+                        className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                        style={{ border: "1px solid var(--color-border)" }}
+                      >
+                        {WEEKCOUNT_OPTIONS.map((n, i) => (
+                          <button
+                            key={n}
+                            onClick={() => setRevenueWeekCount(n)}
+                            className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                            style={{
+                              backgroundColor: revenueWeekCount === n ? "var(--color-primary)" : "transparent",
+                              color: revenueWeekCount === n ? "white" : "var(--color-text-muted)",
+                              borderRight: i < WEEKCOUNT_OPTIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+                            }}
+                          >
+                            {n}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : undefined
+                }
                 extra={
                   <div className="flex rounded-[var(--radius-sm)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
                     {(["total", "subtotal", "ambos"] as const).map((m, i) => (
@@ -2554,6 +2654,71 @@ export default function DashboardPage() {
                     : undefined
                 }
                 count={ordersStats.length}
+                compareToggle={
+                  <div
+                    className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
+                    {(["period", "weekday"] as const).map((m, i) => (
+                      <button
+                        key={m}
+                        onClick={() => setOrdersCompare(m)}
+                        className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: ordersCompare === m ? "var(--color-primary)" : "transparent",
+                          color: ordersCompare === m ? "white" : "var(--color-text-muted)",
+                          borderRight: i === 0 ? "1px solid var(--color-border)" : "none",
+                        }}
+                      >
+                        {m === "period" ? "Período" : "Semana"}
+                      </button>
+                    ))}
+                  </div>
+                }
+                weekdayControls={
+                  ordersCompare === "weekday" ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div
+                        className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                        style={{ border: "1px solid var(--color-border)" }}
+                      >
+                        {WEEKDAYS.map((label, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setOrdersWeekday(idx)}
+                            className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                            style={{
+                              backgroundColor: ordersWeekday === idx ? "var(--color-primary)" : "transparent",
+                              color: ordersWeekday === idx ? "white" : "var(--color-text-muted)",
+                              borderRight: idx < 6 ? "1px solid var(--color-border)" : "none",
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div
+                        className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                        style={{ border: "1px solid var(--color-border)" }}
+                      >
+                        {WEEKCOUNT_OPTIONS.map((n, i) => (
+                          <button
+                            key={n}
+                            onClick={() => setOrdersWeekCount(n)}
+                            className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
+                            style={{
+                              backgroundColor: ordersWeekCount === n ? "var(--color-primary)" : "transparent",
+                              color: ordersWeekCount === n ? "white" : "var(--color-text-muted)",
+                              borderRight: i < WEEKCOUNT_OPTIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+                            }}
+                          >
+                            {n}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : undefined
+                }
                 extra={
                   ordersCancelRate !== null ? (
                     <div className="flex items-center gap-2 text-[10px]">

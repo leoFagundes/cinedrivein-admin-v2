@@ -1128,6 +1128,79 @@ const ARTICLES: Article[] = [
       </div>
     ),
   },
+  {
+    id: "itens-promocao",
+    category: "estoque",
+    title: "Marcar um item como promoção",
+    summary:
+      "Como ativar a promoção em um item, exibir preço riscado e badge vermelho no cardápio.",
+    bodyText:
+      "promoção promocao desconto preço original riscado badge vermelho cardápio tag em promoção filtro",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Ao <B>editar um item</B> no Estoque, há uma seção{" "}
+          <B>Em promoção</B> abaixo do campo de preço. Clique no toggle para
+          ativar.
+        </P>
+        <P>Com a promoção ativa, um campo adicional aparece:</P>
+        <List
+          items={[
+            "Preço original (antes da promoção) — o valor que será exibido riscado no cardápio do cliente",
+          ]}
+        />
+        <P>
+          Na <B>listagem do Estoque</B>, o item ganha um badge vermelho{" "}
+          <B>Promoção</B> e exibe o preço original riscado abaixo do preço
+          atual em vermelho.
+        </P>
+        <P>
+          No <B>cardápio do cliente</B>, itens em promoção aparecem no{" "}
+          <B>topo da categoria</B> — acima dos itens em destaque — com borda
+          vermelha, etiqueta <B>🏷️ Promoção</B> e preço original riscado
+          em cinza acima do preço atual em vermelho.
+        </P>
+        <P>
+          Para filtrar apenas os itens em promoção na página de Estoque, use
+          o seletor <B>Visibilidade</B> e escolha <B>Em promoção</B>.
+        </P>
+        <Note>
+          Se o campo de preço original não for preenchido, o badge vermelho
+          ainda aparece, mas sem o preço riscado.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "ordem-categorias",
+    category: "estoque",
+    title: "Ordenar as categorias do cardápio",
+    summary:
+      "Como definir a sequência de exibição das categorias no app do cliente usando drag-and-drop.",
+    bodyText:
+      "ordem categorias cardápio arrastar drag drop reordenar posição sequência organizar seção",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na página de <B>Estoque</B>, role até a seção{" "}
+          <B>Ordem do cardápio</B>. Ela lista todas as categorias existentes
+          em cards arrastáveis.
+        </P>
+        <P>
+          Arraste os cards para reposicionar as categorias na ordem desejada
+          e clique em <B>Salvar ordem</B> para confirmar.
+        </P>
+        <P>
+          A nova sequência é refletida imediatamente no cardápio do cliente
+          após salvar.
+        </P>
+        <Note>
+          A ordenação afeta apenas a sequência das categorias no menu — não
+          altera a ordem dos itens dentro de cada categoria.
+        </Note>
+      </div>
+    ),
+  },
 
   // ── IMPRESSORA (novos) ──
   {
@@ -1277,6 +1350,80 @@ const ARTICLES: Article[] = [
         <Note>
           Alterações no username são refletidas nos logs futuros. Logs
           anteriores continuam exibindo o nome antigo.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "versao-sistema",
+    category: "sistema",
+    title: "Banner de nova versão",
+    summary:
+      "O que fazer quando a faixa amarela de 'Nova versão disponível' aparece no painel.",
+    bodyText:
+      "versão atualizar banner faixa amarela nova versão disponível recarregar atualização sistema deploy publicar",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Quando uma nova versão do painel admin é publicada, uma{" "}
+          <B>faixa amarela</B> aparece no topo da tela informando:{" "}
+          <B>Nova versão disponível — recarregue para atualizar.</B>
+        </P>
+        <P>
+          Clique em <B>Atualizar</B>. O sistema aguarda cerca de{" "}
+          <B>3 minutos</B> para o deploy ser concluído no servidor — um
+          spinner indica que está aguardando. Quando o tempo passa, o botão
+          muda para <B>Recarregar</B>.
+        </P>
+        <P>
+          Clique em <B>Recarregar</B> para carregar a nova versão. Caso
+          prefira continuar trabalhando antes, clique no <B>✕</B> para
+          fechar a faixa e recarregar manualmente depois.
+        </P>
+        <Note>
+          O delay de 3 minutos existe porque o deploy leva alguns minutos
+          para concluir no servidor — recarregar antes pode trazer a versão
+          desatualizada.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "tela-bloqueada",
+    category: "sistema",
+    title: "Trancar a tela",
+    summary:
+      "Como bloquear o painel sem sair da conta e desbloquear com sua senha.",
+    bodyText:
+      "trancar bloquear tela bloqueada senha desbloquear segurança lock painel afastou cadeado",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na <B>barra lateral</B>, no rodapé ao lado do seu perfil, clique
+          em <B>Trancar</B> (ícone de cadeado).
+        </P>
+        <P>
+          A tela é coberta imediatamente por uma sobreposição com desfoque,
+          exibindo seu avatar, nome e o status <B>Tela bloqueada</B>. Nenhuma
+          ação no painel é possível até que a tela seja desbloqueada.
+        </P>
+        <P>Para desbloquear:</P>
+        <List
+          items={[
+            "Digite sua senha no campo exibido",
+            "Clique em Desbloquear — a senha é verificada diretamente no Firebase",
+            "Se a senha estiver correta, o painel volta ao estado normal",
+            "Se estiver incorreta, aparece a mensagem 'Senha incorreta' e o campo é limpo",
+          ]}
+        />
+        <P>
+          Na tela de bloqueio há também o botão <B>Sair da conta</B> — use-o
+          caso queira encerrar a sessão completamente ao invés de apenas
+          desbloquear.
+        </P>
+        <Note>
+          O bloqueio é salvo na sessão do navegador. Se fechar e reabrir a
+          aba, a tela continuará bloqueada até a senha ser inserida.
         </Note>
       </div>
     ),

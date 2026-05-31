@@ -7,7 +7,8 @@
       "Bash(Select-Object FullName, PSIsContainer)",
       "Bash(ConvertTo-Json -Depth 1)",
       "Bash(xargs grep -l \"buildReportTicket\\\\|printReport\")",
-      "Bash(Test-Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-web-v2\\\\scripts\")"
+      "Bash(Test-Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-web-v2\\\\scripts\")",
+      "Bash(npx tsc *)"
     ]
   }
 }
