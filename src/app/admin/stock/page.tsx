@@ -51,6 +51,7 @@ import {
   FiZap,
   FiPrinter,
   FiInfo,
+  FiTag,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1426,6 +1427,8 @@ interface ItemForm {
   quantity: string;
   isVisible: boolean;
   isFeatured: boolean;
+  isPromotion: boolean;
+  promotionOriginalPrice: string;
   trackStock: boolean;
   printTwice: boolean;
   additionals: string[];
@@ -1552,6 +1555,8 @@ function ItemModal({
     quantity: existing?.quantity?.toString() ?? "0",
     isVisible: existing?.isVisible ?? true,
     isFeatured: existing?.isFeatured ?? false,
+    isPromotion: existing?.isPromotion ?? false,
+    promotionOriginalPrice: existing?.promotionOriginalPrice?.toString() ?? "",
     trackStock: existing?.trackStock ?? false,
     printTwice: existing?.printTwice ?? false,
     additionals: existing?.additionals ?? [],
@@ -1715,6 +1720,54 @@ function ItemModal({
           value={form.visibleValue}
           onChange={(e) => set("visibleValue", e.target.value)}
         />
+      </div>
+
+      {/* Promoção */}
+      <div
+        className="rounded-[var(--radius-md)] transition-all"
+        style={{
+          border: `1px solid ${form.isPromotion ? "rgba(239,68,68,0.4)" : "var(--color-border)"}`,
+          backgroundColor: form.isPromotion
+            ? "rgba(239,68,68,0.06)"
+            : "var(--color-bg-elevated)",
+        }}
+      >
+        <div className="flex items-center gap-2 px-3 py-3 select-none">
+          <button
+            type="button"
+            onClick={() => set("isPromotion", !form.isPromotion)}
+            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+            style={{
+              color: form.isPromotion
+                ? "var(--color-error)"
+                : "var(--color-text-secondary)",
+            }}
+          >
+            <FiTag size={14} className="flex-shrink-0" />
+            <span className="truncate">
+              {form.isPromotion ? "Em promoção" : "Sem promoção"}
+            </span>
+          </button>
+          <InfoTooltip
+            align="right"
+            text="Marca o item como em promoção. Informe o preço original para que o cliente veja o desconto com o valor riscado."
+          />
+        </div>
+        {form.isPromotion && (
+          <div
+            className="px-3 pt-3 pb-3"
+            style={{ borderTop: "1px solid rgba(239,68,68,0.2)" }}
+          >
+            <Input
+              label="Preço original (antes da promoção)"
+              type="number"
+              step="0.01"
+              placeholder="0,00 — exibido riscado para o cliente"
+              value={form.promotionOriginalPrice}
+              onChange={(e) => set("promotionOriginalPrice", e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <Section title="Configurações" />
@@ -2230,20 +2283,35 @@ function ItemCard({
           </span>
         </div>
 
-        {/* Featured badge */}
-        {item.isFeatured && (
-          <div
-            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-            style={{
-              backgroundColor: "var(--color-warning)",
-              color: "white",
-              boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
-            }}
-          >
-            <FiStar size={9} />
-            Destaque
-          </div>
-        )}
+        {/* Top-left badges: Destaque + Promoção */}
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+          {item.isFeatured && (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+              style={{
+                backgroundColor: "var(--color-warning)",
+                color: "white",
+                boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
+              }}
+            >
+              <FiStar size={9} />
+              Destaque
+            </div>
+          )}
+          {item.isPromotion && (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+              style={{
+                backgroundColor: "var(--color-error)",
+                color: "white",
+                boxShadow: "0 1px 6px rgba(0,0,0,0.4)",
+              }}
+            >
+              <FiTag size={9} />
+              Promoção
+            </div>
+          )}
+        </div>
 
         {/* Hidden badge
         {!item.isVisible && (
@@ -2326,9 +2394,21 @@ function ItemCard({
         {/* Price + stock */}
         <div className="flex items-end justify-between mt-1">
           <div className="flex flex-col gap-0">
+            {item.isPromotion && item.promotionOriginalPrice != null && (
+              <span
+                className="text-[10px] line-through"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {formatBRL(item.promotionOriginalPrice)}
+              </span>
+            )}
             <span
               className="text-base font-bold leading-tight"
-              style={{ color: "var(--color-primary)" }}
+              style={{
+                color: item.isPromotion
+                  ? "var(--color-error)"
+                  : "var(--color-primary)",
+              }}
             >
               {formatBRL(item.visibleValue ?? item.value)}
             </span>
@@ -2531,6 +2611,7 @@ export default function StockPage() {
     | "featured"
     | "trackStock"
     | "noTrackStock"
+    | "promotion"
   >("all");
 
   // ── Modals ──
@@ -2569,37 +2650,45 @@ export default function StockPage() {
         where("resolved", "==", true),
         where("createdAt", "<=", cutoff),
       ),
-    ).then((snap) => {
-      if (snap.empty) return;
-      const batch = writeBatch(db);
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      batch.commit().catch(() => {});
-    }).catch(() => {});
+    )
+      .then((snap) => {
+        if (snap.empty) return;
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        batch.commit().catch(() => {});
+      })
+      .catch(() => {});
   }, []);
-
 
   // ── Load notification settings ──
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "storeConfig", "stockNotifications"), (snap) => {
-      if (snap.exists()) {
-        const d = snap.data();
-        const s = {
-          notifyZeroStock: d.notifyZeroStock ?? true,
-          notifyLowStock: d.notifyLowStock ?? true,
-          lowStockThreshold: d.lowStockThreshold ?? 5,
-          showBadge: d.showBadge ?? true,
-        };
-        setStockNotifSettings(s);
-        setThresholdInput(String(s.lowStockThreshold));
-      }
-    });
+    const unsub = onSnapshot(
+      doc(db, "storeConfig", "stockNotifications"),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          const s = {
+            notifyZeroStock: d.notifyZeroStock ?? true,
+            notifyLowStock: d.notifyLowStock ?? true,
+            lowStockThreshold: d.lowStockThreshold ?? 5,
+            showBadge: d.showBadge ?? true,
+          };
+          setStockNotifSettings(s);
+          setThresholdInput(String(s.lowStockThreshold));
+        }
+      },
+    );
     return unsub;
   }, []);
 
   // ── Load stock alerts (unresolved only) ──
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, "stockAlerts"), where("resolved", "==", false), orderBy("createdAt", "desc")),
+      query(
+        collection(db, "stockAlerts"),
+        where("resolved", "==", false),
+        orderBy("createdAt", "desc"),
+      ),
       (snap) => {
         setStockAlerts(
           snap.docs.map((d) => ({
@@ -2623,7 +2712,9 @@ export default function StockPage() {
     setSavingNotifSettings(true);
     const next = { ...stockNotifSettings, ...patch };
     try {
-      await setDoc(doc(db, "storeConfig", "stockNotifications"), next, { merge: true });
+      await setDoc(doc(db, "storeConfig", "stockNotifications"), next, {
+        merge: true,
+      });
     } catch {
       /* ignore */
     } finally {
@@ -2652,6 +2743,8 @@ export default function StockPage() {
             photo: data.photo ?? undefined,
             isVisible: data.isVisible ?? true,
             isFeatured: data.isFeatured ?? false,
+            isPromotion: data.isPromotion ?? false,
+            promotionOriginalPrice: data.promotionOriginalPrice ?? undefined,
             trackStock: data.trackStock ?? false,
             printTwice: data.printTwice ?? false,
             additionals: data.additionals ?? [],
@@ -2742,6 +2835,8 @@ export default function StockPage() {
             return i.trackStock === true;
           case "noTrackStock":
             return i.trackStock !== true;
+          case "promotion":
+            return i.isPromotion === true;
           default:
             return true;
         }
@@ -2798,6 +2893,11 @@ export default function StockPage() {
         photo: photoUrl ?? null,
         isVisible: form.isVisible,
         isFeatured: form.isFeatured,
+        isPromotion: form.isPromotion,
+        promotionOriginalPrice:
+          form.isPromotion && form.promotionOriginalPrice
+            ? parseFloat(form.promotionOriginalPrice)
+            : null,
         trackStock: form.trackStock,
         printTwice: form.printTwice,
         additionals: form.additionals,
@@ -2877,6 +2977,27 @@ export default function StockPage() {
             field: "Impressão 2x",
             from: old.printTwice ? "Sim" : "Não",
             to: data.printTwice ? "Sim" : "Não",
+          });
+        if (data.isPromotion !== (old.isPromotion ?? false))
+          changes.push({
+            field: "Promoção",
+            from: old.isPromotion ? "Sim" : "Não",
+            to: data.isPromotion ? "Sim" : "Não",
+          });
+        if (
+          (data.promotionOriginalPrice ?? null) !==
+          (old.promotionOriginalPrice ?? null)
+        )
+          changes.push({
+            field: "Preço original (promoção)",
+            from:
+              old.promotionOriginalPrice != null
+                ? formatBRL(old.promotionOriginalPrice)
+                : null,
+            to:
+              data.promotionOriginalPrice != null
+                ? formatBRL(data.promotionOriginalPrice)
+                : null,
           });
         if (file)
           changes.push({
@@ -3263,7 +3384,9 @@ export default function StockPage() {
     if (!appUser) return;
     const batch = writeBatch(db);
     for (const { alert } of allNotifications) {
-      batch.update(doc(db, "stockAlerts", alert.id), { dismissedBy: arrayUnion(appUser.uid) });
+      batch.update(doc(db, "stockAlerts", alert.id), {
+        dismissedBy: arrayUnion(appUser.uid),
+      });
     }
     await batch.commit();
     setNotifOpen(false);
@@ -3302,12 +3425,20 @@ export default function StockPage() {
           {/* Stock notifications bell */}
           <div className="relative" ref={notifRef}>
             <button
-              onClick={() => { setNotifOpen((v) => !v); setShowNotifSettings(false); }}
+              onClick={() => {
+                setNotifOpen((v) => !v);
+                setShowNotifSettings(false);
+              }}
               className="relative flex items-center justify-center w-9 h-9 rounded-[var(--radius-md)] cursor-pointer transition-colors"
               style={{
-                backgroundColor: notifOpen ? "var(--color-bg-elevated)" : "transparent",
+                backgroundColor: notifOpen
+                  ? "var(--color-bg-elevated)"
+                  : "transparent",
                 border: "1px solid var(--color-border)",
-                color: allNotifications.length > 0 ? "var(--color-warning)" : "var(--color-text-muted)",
+                color:
+                  allNotifications.length > 0
+                    ? "var(--color-warning)"
+                    : "var(--color-text-muted)",
               }}
               title="Notificações de estoque"
             >
@@ -3315,7 +3446,10 @@ export default function StockPage() {
               {stockNotifSettings.showBadge && allNotifications.length > 0 && (
                 <span
                   className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 leading-none"
-                  style={{ backgroundColor: "var(--color-error)", color: "white" }}
+                  style={{
+                    backgroundColor: "var(--color-error)",
+                    color: "white",
+                  }}
                 >
                   {allNotifications.length > 9 ? "9+" : allNotifications.length}
                 </span>
@@ -3336,8 +3470,13 @@ export default function StockPage() {
                   className="flex items-center justify-between px-4 py-3 gap-2"
                   style={{ borderBottom: "1px solid var(--color-border)" }}
                 >
-                  <span className="text-sm font-semibold flex-1" style={{ color: "var(--color-text-primary)" }}>
-                    {showNotifSettings ? "Configurações" : "Notificações de estoque"}
+                  <span
+                    className="text-sm font-semibold flex-1"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {showNotifSettings
+                      ? "Configurações"
+                      : "Notificações de estoque"}
                   </span>
                   {!showNotifSettings && allNotifications.length > 0 && (
                     <button
@@ -3352,7 +3491,9 @@ export default function StockPage() {
                     onClick={() => setShowNotifSettings((v) => !v)}
                     className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
                     style={{
-                      color: showNotifSettings ? "var(--color-primary)" : "var(--color-text-muted)",
+                      color: showNotifSettings
+                        ? "var(--color-primary)"
+                        : "var(--color-text-muted)",
                     }}
                     title="Configurações"
                   >
@@ -3367,19 +3508,37 @@ export default function StockPage() {
                     <label className="flex items-start gap-3 cursor-pointer">
                       <span
                         className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
-                        style={{ backgroundColor: stockNotifSettings.showBadge ? "var(--color-primary)" : "var(--color-border)" }}
-                        onClick={() => saveNotifSettings({ showBadge: !stockNotifSettings.showBadge })}
+                        style={{
+                          backgroundColor: stockNotifSettings.showBadge
+                            ? "var(--color-primary)"
+                            : "var(--color-border)",
+                        }}
+                        onClick={() =>
+                          saveNotifSettings({
+                            showBadge: !stockNotifSettings.showBadge,
+                          })
+                        }
                       >
                         <span
                           className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                          style={{ transform: stockNotifSettings.showBadge ? "translateX(18px)" : "translateX(2px)" }}
+                          style={{
+                            transform: stockNotifSettings.showBadge
+                              ? "translateX(18px)"
+                              : "translateX(2px)",
+                          }}
                         />
                       </span>
                       <div className="flex-1">
-                        <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                        <p
+                          className="text-xs font-semibold"
+                          style={{ color: "var(--color-text-primary)" }}
+                        >
                           Mostrar badge com contador
                         </p>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                        <p
+                          className="text-[10px] mt-0.5"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
                           Exibe o número de alertas ativos no ícone do sino
                         </p>
                       </div>
@@ -3389,19 +3548,38 @@ export default function StockPage() {
                     <label className="flex items-start gap-3 cursor-pointer">
                       <span
                         className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
-                        style={{ backgroundColor: stockNotifSettings.notifyZeroStock ? "var(--color-error)" : "var(--color-border)" }}
-                        onClick={() => saveNotifSettings({ notifyZeroStock: !stockNotifSettings.notifyZeroStock })}
+                        style={{
+                          backgroundColor: stockNotifSettings.notifyZeroStock
+                            ? "var(--color-error)"
+                            : "var(--color-border)",
+                        }}
+                        onClick={() =>
+                          saveNotifSettings({
+                            notifyZeroStock:
+                              !stockNotifSettings.notifyZeroStock,
+                          })
+                        }
                       >
                         <span
                           className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                          style={{ transform: stockNotifSettings.notifyZeroStock ? "translateX(18px)" : "translateX(2px)" }}
+                          style={{
+                            transform: stockNotifSettings.notifyZeroStock
+                              ? "translateX(18px)"
+                              : "translateX(2px)",
+                          }}
                         />
                       </span>
                       <div className="flex-1">
-                        <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                        <p
+                          className="text-xs font-semibold"
+                          style={{ color: "var(--color-text-primary)" }}
+                        >
                           Estoque zerado
                         </p>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                        <p
+                          className="text-[10px] mt-0.5"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
                           Item ficou sem estoque e foi ocultado automaticamente
                         </p>
                       </div>
@@ -3411,19 +3589,37 @@ export default function StockPage() {
                     <label className="flex items-start gap-3 cursor-pointer">
                       <span
                         className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
-                        style={{ backgroundColor: stockNotifSettings.notifyLowStock ? "var(--color-warning)" : "var(--color-border)" }}
-                        onClick={() => saveNotifSettings({ notifyLowStock: !stockNotifSettings.notifyLowStock })}
+                        style={{
+                          backgroundColor: stockNotifSettings.notifyLowStock
+                            ? "var(--color-warning)"
+                            : "var(--color-border)",
+                        }}
+                        onClick={() =>
+                          saveNotifSettings({
+                            notifyLowStock: !stockNotifSettings.notifyLowStock,
+                          })
+                        }
                       >
                         <span
                           className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                          style={{ transform: stockNotifSettings.notifyLowStock ? "translateX(18px)" : "translateX(2px)" }}
+                          style={{
+                            transform: stockNotifSettings.notifyLowStock
+                              ? "translateX(18px)"
+                              : "translateX(2px)",
+                          }}
                         />
                       </span>
                       <div className="flex-1">
-                        <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                        <p
+                          className="text-xs font-semibold"
+                          style={{ color: "var(--color-text-primary)" }}
+                        >
                           Estoque baixo
                         </p>
-                        <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                        <p
+                          className="text-[10px] mt-0.5"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
                           Item com quantidade abaixo do limite configurado
                         </p>
                       </div>
@@ -3432,7 +3628,10 @@ export default function StockPage() {
                     {/* Limite de estoque baixo */}
                     {stockNotifSettings.notifyLowStock && (
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wide"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
                           Limite de estoque baixo
                         </span>
                         <div className="flex gap-2">
@@ -3448,23 +3647,37 @@ export default function StockPage() {
                               border: "1px solid var(--color-border)",
                               color: "var(--color-text-primary)",
                             }}
-                            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-border-focus)")}
-                            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                            onFocus={(e) =>
+                              (e.currentTarget.style.borderColor =
+                                "var(--color-border-focus)")
+                            }
+                            onBlur={(e) =>
+                              (e.currentTarget.style.borderColor =
+                                "var(--color-border)")
+                            }
                           />
                           <button
                             onClick={() => {
                               const v = parseInt(thresholdInput);
-                              if (!isNaN(v) && v >= 1) saveNotifSettings({ lowStockThreshold: v });
+                              if (!isNaN(v) && v >= 1)
+                                saveNotifSettings({ lowStockThreshold: v });
                             }}
                             disabled={savingNotifSettings}
                             className="flex-1 py-1.5 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
-                            style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                            style={{
+                              backgroundColor: "var(--color-primary)",
+                              color: "white",
+                            }}
                           >
                             {savingNotifSettings ? "Salvando..." : "Salvar"}
                           </button>
                         </div>
-                        <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                          Notifica quando quantidade ≤ {stockNotifSettings.lowStockThreshold}
+                        <p
+                          className="text-[10px]"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          Notifica quando quantidade ≤{" "}
+                          {stockNotifSettings.lowStockThreshold}
                         </p>
                       </div>
                     )}
@@ -3473,9 +3686,18 @@ export default function StockPage() {
                   /* Lista de notificações */
                   <div className="max-h-72 overflow-y-auto">
                     {allNotifications.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 gap-2" style={{ opacity: 0.5 }}>
-                        <FiBell size={22} style={{ color: "var(--color-text-muted)" }} />
-                        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      <div
+                        className="flex flex-col items-center justify-center py-8 gap-2"
+                        style={{ opacity: 0.5 }}
+                      >
+                        <FiBell
+                          size={22}
+                          style={{ color: "var(--color-text-muted)" }}
+                        />
+                        <p
+                          className="text-xs"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
                           Nenhuma notificação
                         </p>
                       </div>
@@ -3484,17 +3706,26 @@ export default function StockPage() {
                         <div
                           key={alert.id}
                           className="flex items-center gap-2 px-3 py-2.5"
-                          style={{ borderBottom: "1px solid var(--color-border)" }}
+                          style={{
+                            borderBottom: "1px solid var(--color-border)",
+                          }}
                         >
                           {/* Barra colorida */}
                           <div
                             className="w-1 self-stretch rounded-full flex-shrink-0"
-                            style={{ backgroundColor: type === "zero" ? "var(--color-error)" : "var(--color-warning)" }}
+                            style={{
+                              backgroundColor:
+                                type === "zero"
+                                  ? "var(--color-error)"
+                                  : "var(--color-warning)",
+                            }}
                           />
 
                           {/* Clicável: foto + texto */}
                           <button
-                            onClick={() => openAlertItem(alert.id, alert.itemId)}
+                            onClick={() =>
+                              openAlertItem(alert.id, alert.itemId)
+                            }
                             className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer transition-opacity hover:opacity-75"
                           >
                             {alert.itemPhoto ? (
@@ -3506,21 +3737,40 @@ export default function StockPage() {
                             ) : (
                               <div
                                 className="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"
-                                style={{ backgroundColor: "var(--color-bg-elevated)" }}
+                                style={{
+                                  backgroundColor: "var(--color-bg-elevated)",
+                                }}
                               >
-                                <FiBox size={13} style={{ color: "var(--color-text-muted)" }} />
+                                <FiBox
+                                  size={13}
+                                  style={{ color: "var(--color-text-muted)" }}
+                                />
                               </div>
                             )}
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>
+                              <p
+                                className="text-xs font-semibold truncate"
+                                style={{ color: "var(--color-text-primary)" }}
+                              >
                                 {alert.itemName}
                               </p>
-                              <p className="text-[10px] mt-0.5" style={{ color: type === "zero" ? "var(--color-error)" : "var(--color-warning)" }}>
+                              <p
+                                className="text-[10px] mt-0.5"
+                                style={{
+                                  color:
+                                    type === "zero"
+                                      ? "var(--color-error)"
+                                      : "var(--color-warning)",
+                                }}
+                              >
                                 {type === "zero"
                                   ? "Zerado — ocultado automaticamente"
                                   : `Estoque baixo — ${alert.quantity} restante${alert.quantity !== 1 ? "s" : ""}`}
                               </p>
-                              <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                              <p
+                                className="text-[10px] mt-0.5"
+                                style={{ color: "var(--color-text-muted)" }}
+                              >
                                 {timeAgo(alert.createdAt)}
                               </p>
                             </div>
@@ -3744,6 +3994,7 @@ export default function StockPage() {
                     <option value="noTrackStock">
                       Sem controle de estoque
                     </option>
+                    <option value="promotion">Em promoção</option>
                   </select>
                 </div>
               </div>

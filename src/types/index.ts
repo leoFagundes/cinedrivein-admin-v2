@@ -265,6 +265,8 @@ export interface StockItem {
   photo?: string;
   isVisible: boolean;
   isFeatured: boolean;
+  isPromotion?: boolean;
+  promotionOriginalPrice?: number;
   trackStock: boolean;
   printTwice: boolean;
   additionals: string[];
