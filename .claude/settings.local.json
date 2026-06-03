@@ -8,7 +8,9 @@
       "Bash(ConvertTo-Json -Depth 1)",
       "Bash(xargs grep -l \"buildReportTicket\\\\|printReport\")",
       "Bash(Test-Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-web-v2\\\\scripts\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cinedrivein-admin-v2\\\\src\\\\app\\\\admin\\\\estoque\" -Recurse -Force | Select-Object FullName, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"Dir\"}else{\"File\"}}} | Sort-Object FullName)",
+      "PowerShell(ls \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cinedrivein-admin-v2\\\\src\\\\app\\\\admin\\\\\" | foreach { Write-Host \"$\\($_.Name\\) - $\\($_.PSIsContainer\\)\" })"
     ]
   }
 }

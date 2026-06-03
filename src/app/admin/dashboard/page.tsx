@@ -943,6 +943,14 @@ export default function DashboardPage() {
       // Reset order number counter so next day starts from #1
       await setDoc(doc(db, "counters", "orders"), { last: 0 });
 
+      // Clean up FCM lock documents that accumulate from push notification sessions
+      const fcmSnap = await getDocs(collection(db, "_fcm_locks"));
+      for (let i = 0; i < fcmSnap.docs.length; i += 500) {
+        const batch = writeBatch(db);
+        fcmSnap.docs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+
       // Refresh stats
       const statsSnap = await getDocs(
         query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(365)),

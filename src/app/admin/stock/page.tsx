@@ -52,6 +52,8 @@ import {
   FiPrinter,
   FiInfo,
   FiTag,
+  FiUpload,
+  FiRotateCcw,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -484,12 +486,14 @@ function Modal({
   children,
   footer,
   wide,
+  subheader,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
   wide?: boolean;
+  subheader?: React.ReactNode;
 }) {
   return (
     <div
@@ -527,6 +531,16 @@ function Modal({
             <FiX size={16} />
           </button>
         </div>
+
+        {/* Subheader fixo — abas ou filtros */}
+        {subheader && (
+          <div
+            className="flex-shrink-0"
+            style={{ borderBottom: "1px solid var(--color-border)" }}
+          >
+            {subheader}
+          </div>
+        )}
 
         {/* Corpo scrollável */}
         <div className="overflow-y-auto flex-1 p-6 flex flex-col gap-4">
@@ -1530,12 +1544,276 @@ function InfoTooltip({
   );
 }
 
+// ─── CSV Import helpers ───────────────────────────────────────────────────────
+
+interface ParsedCsvItem {
+  nome: string;
+  categoria: string;
+  descricao: string;
+  codigo: string;
+  preco: number;
+  quantidade: number;
+  controle_estoque: boolean;
+  visivel: boolean;
+}
+
+interface CsvParseError {
+  line: number;
+  message: string;
+}
+
+const CSV_COLUMNS = [
+  {
+    name: "nome",
+    label: "Nome",
+    required: true,
+    type: "Texto",
+    example: "Hambúrguer Duplo",
+    hint: "Nome exibido no cardápio",
+  },
+  {
+    name: "categoria",
+    label: "Categoria",
+    required: true,
+    type: "Texto",
+    example: "Lanches",
+    hint: "Agrupa os itens no cardápio",
+  },
+  {
+    name: "preco",
+    label: "Preço",
+    required: true,
+    type: "Número",
+    example: "25.90",
+    hint: "Use ponto como separador decimal",
+  },
+  {
+    name: "codigo",
+    label: "Código",
+    required: false,
+    type: "Texto",
+    example: "001",
+    hint: "Deixe vazio para gerar automaticamente",
+  },
+  {
+    name: "descricao",
+    label: "Descrição",
+    required: false,
+    type: "Texto",
+    example: "Pão brioche com queijo",
+    hint: "Texto descritivo abaixo do nome",
+  },
+  {
+    name: "quantidade",
+    label: "Quantidade",
+    required: false,
+    type: "Número inteiro",
+    example: "50",
+    hint: "Estoque inicial (padrão: 0)",
+  },
+  {
+    name: "controle_estoque",
+    label: "Controle estoque",
+    required: false,
+    type: "sim / não",
+    example: "sim",
+    hint: "Desconta do estoque a cada pedido",
+  },
+  {
+    name: "visivel",
+    label: "Visível",
+    required: false,
+    type: "sim / não",
+    example: "sim",
+    hint: "Se omitido, o item fica visível",
+  },
+] as const;
+
+function generateRandomCode(existingCodes: string[] | Set<string>): string {
+  const set =
+    existingCodes instanceof Set ? existingCodes : new Set(existingCodes);
+  let code = "";
+  do {
+    const length = Math.floor(Math.random() * 5) + 1;
+    const num = Math.floor(Math.random() * Math.pow(10, length));
+    code = String(num).padStart(length, "0");
+  } while (set.has(code));
+  return code;
+}
+
+function parseCsvLine(line: string, delimiter: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else inQuotes = !inQuotes;
+    } else if (ch === delimiter && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function detectDelimiter(headerLine: string): string {
+  const commas = (headerLine.match(/,/g) ?? []).length;
+  const semicolons = (headerLine.match(/;/g) ?? []).length;
+  return semicolons > commas ? ";" : ",";
+}
+
+function parseCsvText(
+  text: string,
+  existingCodes: string[] = [],
+): {
+  rows: ParsedCsvItem[];
+  errors: CsvParseError[];
+  warnings: CsvParseError[];
+} {
+  const existingCodeSet = new Set(existingCodes.map((c) => c.toLowerCase()));
+  const lines = text
+    .replace(/^﻿/, "") // strip UTF-8 BOM
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return {
+      rows: [],
+      errors: [
+        {
+          line: 0,
+          message:
+            "O arquivo está vazio ou não contém dados além do cabeçalho.",
+        },
+      ],
+      warnings: [],
+    };
+  }
+  const delimiter = detectDelimiter(lines[0]);
+  const header = parseCsvLine(lines[0], delimiter).map((h) =>
+    h.toLowerCase().trim().replace(/\s+/g, "_"),
+  );
+  const missing = (["nome", "categoria", "preco"] as const).filter(
+    (r) => !header.includes(r),
+  );
+  if (missing.length > 0) {
+    return {
+      rows: [],
+      errors: [
+        {
+          line: 1,
+          message: `Colunas obrigatórias não encontradas: ${missing.map((m) => `"${m}"`).join(", ")}. Baixe o modelo e use-o como base.`,
+        },
+      ],
+      warnings: [],
+    };
+  }
+  const rows: ParsedCsvItem[] = [];
+  const errors: CsvParseError[] = [];
+  const warnings: CsvParseError[] = [];
+  // tracks codes seen within this CSV to catch internal duplicates
+  const seenCodes = new Map<string, number>(); // normalised code → line number
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCsvLine(lines[i], delimiter);
+    const row: Record<string, string> = {};
+    header.forEach((h, idx) => {
+      row[h] = (vals[idx] ?? "").trim();
+    });
+    // Skip unfilled template rows — only the pre-generated code is present
+    if (!row.nome && !row.categoria && !row.preco) continue;
+    const errs: string[] = [];
+    if (!row.nome) errs.push('"nome" é obrigatório');
+    if (!row.categoria) errs.push('"categoria" é obrigatória');
+    const preco = parseFloat((row.preco ?? "").replace(",", "."));
+    if (!row.preco || isNaN(preco) || preco < 0)
+      errs.push('"preco" inválido — use ponto como separador decimal (ex: 25.90)');
+    if (errs.length) {
+      errors.push({ line: i + 1, message: errs.join(" · ") });
+      continue;
+    }
+    // Duplicate code within the CSV itself
+    const codeKey = (row.codigo ?? "").toLowerCase();
+    if (codeKey) {
+      if (seenCodes.has(codeKey)) {
+        errors.push({
+          line: i + 1,
+          message: `Código "${row.codigo}" repetido — já aparece na linha ${seenCodes.get(codeKey)}. Cada item deve ter um código único.`,
+        });
+        continue;
+      }
+      seenCodes.set(codeKey, i + 1);
+      // Code already used by an existing system item
+      if (existingCodeSet.has(codeKey)) {
+        warnings.push({
+          line: i + 1,
+          message: `Código "${row.codigo}" já existe no sistema — um novo código será gerado automaticamente para este item.`,
+        });
+        row.codigo = ""; // cleared so handleSaveItemsBatch regenerates it
+      }
+    }
+    const qty = parseInt(row.quantidade ?? "0");
+    rows.push({
+      nome: row.nome,
+      categoria: row.categoria,
+      descricao: row.descricao ?? "",
+      codigo: row.codigo ?? "",
+      preco,
+      quantidade: isNaN(qty) ? 0 : Math.max(0, qty),
+      controle_estoque: (row.controle_estoque ?? "").toLowerCase() === "sim",
+      visivel: (row.visivel ?? "sim").toLowerCase() !== "não",
+    });
+  }
+  return { rows, errors, warnings };
+}
+
+function downloadTemplateCsv(count: number, existingCodes: string[]) {
+  // codigo comes first so the user can fill remaining columns left-to-right
+  const TEMPLATE_COLUMNS = [
+    "codigo",
+    "nome",
+    "categoria",
+    "preco",
+    "descricao",
+    "quantidade",
+    "controle_estoque",
+    "visivel",
+  ];
+  const codeSet = new Set(existingCodes);
+  const safeCount = Math.max(1, Math.min(500, count));
+  const dataRows: string[] = [];
+  for (let i = 0; i < safeCount; i++) {
+    const code = generateRandomCode(codeSet);
+    codeSet.add(code);
+    // Only codigo is pre-filled; all other fields are empty
+    const row = TEMPLATE_COLUMNS.map((col) => (col === "codigo" ? code : ""));
+    dataRows.push(row.join(","));
+  }
+  const csv = `${TEMPLATE_COLUMNS.join(",")}\n${dataRows.join("\n")}`;
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "modelo-importacao-itens.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Item Modal ───────────────────────────────────────────────────────────────
+
 function ItemModal({
   existing,
   allSubitems,
   categories,
   existingCodes,
   onSave,
+  onBatchSave,
   onClose,
 }: {
   existing?: StockItem;
@@ -1543,6 +1821,9 @@ function ItemModal({
   categories: string[];
   existingCodes: string[];
   onSave: (data: ItemForm, file: File | null | undefined) => Promise<void>;
+  onBatchSave?: (
+    rows: ParsedCsvItem[],
+  ) => Promise<{ imported: number; failed: number }>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<ItemForm>({
@@ -1571,6 +1852,24 @@ function ItemModal({
   const [loading, setLoading] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
 
+  // CSV import tab state (only used when creating, not editing)
+  const [activeTab, setActiveTab] = useState<"manual" | "csv">("manual");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvParsed, setCsvParsed] = useState<{
+    rows: ParsedCsvItem[];
+    errors: CsvParseError[];
+    warnings: CsvParseError[];
+  } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importDone, setImportDone] = useState<{
+    imported: number;
+    failed: number;
+  } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [showExcelTip, setShowExcelTip] = useState(false);
+  const [templateRowCount, setTemplateRowCount] = useState(10);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   function set<K extends keyof ItemForm>(k: K, v: ItemForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
     setErrors((p) => ({ ...p, [k]: undefined }));
@@ -1592,24 +1891,57 @@ function ItemModal({
     setLoading(false);
   }
 
-  function generateRandomCode(existingCodes: string[]): string {
-    let code = "";
-
-    do {
-      const length = Math.floor(Math.random() * 5) + 1; // 1 a 5 dígitos
-      const num = Math.floor(Math.random() * Math.pow(10, length));
-      code = String(num).padStart(length, "0");
-    } while (existingCodes.includes(code));
-
-    return code;
+  function handleCsvFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".csv") && !file.type.includes("csv"))
+      return;
+    setCsvFile(file);
+    setCsvParsed(null);
+    setImportDone(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setCsvParsed(parseCsvText(text, existingCodes));
+    };
+    reader.readAsText(file, "UTF-8");
   }
 
-  return (
-    <Modal
-      title={existing ? "Editar item" : "Novo item"}
-      onClose={onClose}
-      wide
-      footer={
+  async function handleImport() {
+    if (!onBatchSave || !csvParsed || csvParsed.rows.length === 0) return;
+    setImporting(true);
+    const result = await onBatchSave(csvParsed.rows);
+    setImportDone(result);
+    setImporting(false);
+  }
+
+  const isCreating = !existing;
+
+  // Tab subheader — only shown when creating a new item
+  const tabSubheader = isCreating ? (
+    <div className="flex">
+      {(["manual", "csv"] as const).map((t) => (
+        <button
+          key={t}
+          onClick={() => setActiveTab(t)}
+          className="flex-1 py-3 text-sm font-medium cursor-pointer transition-colors"
+          style={{
+            color:
+              activeTab === t
+                ? "var(--color-primary)"
+                : "var(--color-text-muted)",
+            borderBottom: `2px solid ${activeTab === t ? "var(--color-primary)" : "transparent"}`,
+            backgroundColor: "transparent",
+          }}
+        >
+          {t === "manual" ? "Criar manualmente" : "Importar via CSV"}
+        </button>
+      ))}
+    </div>
+  ) : undefined;
+
+  // Footer — differs between tabs
+  const footer = (() => {
+    if (!isCreating || activeTab === "manual") {
+      return (
         <button
           onClick={handleSave}
           disabled={loading}
@@ -1622,300 +1954,1184 @@ function ItemModal({
               ? "Salvar alterações"
               : "Criar item"}
         </button>
-      }
-    >
-      <Section title="Informações básicas" />
-      <div className="grid grid-cols-2 items-end gap-3">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-end gap-2">
-            <div className="flex-1 min-w-0">
-              <Input
-                label="Código do item"
-                placeholder="Ex: 001"
-                value={form.codItem}
-                onChange={(e) => set("codItem", e.target.value)}
-                error={errors.codItem}
-                autoFocus
-              />
-            </div>
-            {!existing && (
-              <button
-                type="button"
-                onClick={() => {
-                  const code = generateRandomCode([
-                    ...existingCodes,
-                    ...generatedCodes,
-                  ]);
-
-                  setGeneratedCodes((prev) => [...prev, code]);
-                  set("codItem", code);
-                }}
-                className="h-10 px-3 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-all flex-shrink-0"
-                style={{
-                  backgroundColor: "var(--color-bg-elevated)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-secondary)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.borderColor = "var(--color-primary)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.borderColor = "var(--color-border)")
-                }
-                title="Gerar próximo código disponível"
-              >
-                Gerar
-              </button>
-            )}
-          </div>
-        </div>
-        <Input
-          label="Quantidade"
-          type="number"
-          placeholder="0"
-          value={form.quantity}
-          onChange={(e) => set("quantity", e.target.value)}
-          error={errors.quantity}
-        />
-      </div>
-      <Input
-        label="Nome"
-        placeholder="Nome do item"
-        value={form.name}
-        onChange={(e) => set("name", e.target.value)}
-        error={errors.name}
-      />
-      <Input
-        label="Descrição"
-        placeholder="Descrição do item"
-        value={form.description}
-        onChange={(e) => set("description", e.target.value)}
-      />
-      <CategoryInput
-        value={form.category}
-        onChange={(v) => {
-          set("category", v);
-          setErrors((p) => ({ ...p, category: undefined }));
-        }}
-        categories={categories}
-        error={errors.category}
-      />
-
-      <Section title="Preço" />
-      <div className="grid grid-cols-2 items-end gap-3">
-        <Input
-          label="Valor (R$)"
-          type="number"
-          step="0.01"
-          placeholder="0,00"
-          value={form.value}
-          onChange={(e) => set("value", e.target.value)}
-          error={errors.value}
-        />
-        <Input
-          label="Valor visível ao cliente (opcional)"
-          type="number"
-          step="0.01"
-          placeholder="0,00 — deixe vazio para usar o valor acima"
-          value={form.visibleValue}
-          onChange={(e) => set("visibleValue", e.target.value)}
-        />
-      </div>
-
-      {/* Promoção */}
-      <div
-        className="rounded-[var(--radius-md)] transition-all"
+      );
+    }
+    // CSV tab footer
+    if (importDone) {
+      return (
+        <button
+          onClick={onClose}
+          className="w-full h-10 rounded-md text-sm font-medium text-white cursor-pointer"
+          style={{ backgroundColor: "var(--color-primary)" }}
+        >
+          Fechar
+        </button>
+      );
+    }
+    const canImport =
+      csvParsed && csvParsed.rows.length > 0 && csvParsed.errors.length === 0;
+    return (
+      <button
+        onClick={handleImport}
+        disabled={!canImport || importing}
+        className="w-full h-10 rounded-md text-sm font-medium text-white cursor-pointer disabled:opacity-40 transition-all"
         style={{
-          border: `1px solid ${form.isPromotion ? "rgba(239,68,68,0.4)" : "var(--color-border)"}`,
-          backgroundColor: form.isPromotion
-            ? "rgba(239,68,68,0.06)"
+          backgroundColor: canImport
+            ? "var(--color-primary)"
             : "var(--color-bg-elevated)",
+          color: canImport ? "white" : "var(--color-text-muted)",
+          border: canImport ? "none" : "1px solid var(--color-border)",
         }}
       >
-        <div className="flex items-center gap-2 px-3 py-3 select-none">
-          <button
-            type="button"
-            onClick={() => set("isPromotion", !form.isPromotion)}
-            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
-            style={{
-              color: form.isPromotion
-                ? "var(--color-error)"
-                : "var(--color-text-secondary)",
-            }}
-          >
-            <FiTag size={14} className="flex-shrink-0" />
-            <span className="truncate">
-              {form.isPromotion ? "Em promoção" : "Sem promoção"}
-            </span>
-          </button>
-          <InfoTooltip
-            align="right"
-            text="Marca o item como em promoção. Informe o preço original para que o cliente veja o desconto com o valor riscado."
-          />
-        </div>
-        {form.isPromotion && (
-          <div
-            className="px-3 pt-3 pb-3"
-            style={{ borderTop: "1px solid rgba(239,68,68,0.2)" }}
-          >
+        {importing
+          ? "Importando..."
+          : csvParsed && csvParsed.rows.length > 0
+            ? `Importar ${csvParsed.rows.length} item${csvParsed.rows.length !== 1 ? "s" : ""}`
+            : "Selecione um arquivo CSV para continuar"}
+      </button>
+    );
+  })();
+
+  return (
+    <Modal
+      title={existing ? "Editar item" : "Novo item"}
+      onClose={onClose}
+      wide
+      subheader={tabSubheader}
+      footer={footer}
+    >
+      {(!isCreating || activeTab === "manual") && (
+        <>
+          <Section title="Informações básicas" />
+          <div className="grid grid-cols-2 items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-end gap-2">
+                <div className="flex-1 min-w-0">
+                  <Input
+                    label="Código do item"
+                    placeholder="Ex: 001"
+                    value={form.codItem}
+                    onChange={(e) => set("codItem", e.target.value)}
+                    error={errors.codItem}
+                    autoFocus
+                  />
+                </div>
+                {!existing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = generateRandomCode([
+                        ...existingCodes,
+                        ...generatedCodes,
+                      ]);
+
+                      setGeneratedCodes((prev) => [...prev, code]);
+                      set("codItem", code);
+                    }}
+                    className="h-10 px-3 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-all flex-shrink-0"
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-text-secondary)",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.borderColor =
+                        "var(--color-primary)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.borderColor =
+                        "var(--color-border)")
+                    }
+                    title="Gerar próximo código disponível"
+                  >
+                    Gerar
+                  </button>
+                )}
+              </div>
+            </div>
             <Input
-              label="Preço original (antes da promoção)"
+              label="Quantidade"
               type="number"
-              step="0.01"
-              placeholder="0,00 — exibido riscado para o cliente"
-              value={form.promotionOriginalPrice}
-              onChange={(e) => set("promotionOriginalPrice", e.target.value)}
+              placeholder="0"
+              value={form.quantity}
+              onChange={(e) => set("quantity", e.target.value)}
+              error={errors.quantity}
             />
           </div>
-        )}
-      </div>
+          <Input
+            label="Nome"
+            placeholder="Nome do item"
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            error={errors.name}
+          />
+          <Input
+            label="Descrição"
+            placeholder="Descrição do item"
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+          />
+          <CategoryInput
+            value={form.category}
+            onChange={(v) => {
+              set("category", v);
+              setErrors((p) => ({ ...p, category: undefined }));
+            }}
+            categories={categories}
+            error={errors.category}
+          />
 
-      <Section title="Configurações" />
-      <div className="grid grid-cols-2 gap-2">
-        {/* Visível */}
-        <div
-          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
-          style={{
-            backgroundColor: form.isVisible
-              ? "rgba(34,197,94,0.1)"
-              : "var(--color-bg-elevated)",
-            border: `1px solid ${form.isVisible ? "var(--color-success)" : "var(--color-border)"}`,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => set("isVisible", !form.isVisible)}
-            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+          <Section title="Preço" />
+          <div className="grid grid-cols-2 items-end gap-3">
+            <Input
+              label="Valor (R$)"
+              type="number"
+              step="0.01"
+              placeholder="0,00"
+              value={form.value}
+              onChange={(e) => set("value", e.target.value)}
+              error={errors.value}
+            />
+            <Input
+              label="Valor visível ao cliente (opcional)"
+              type="number"
+              step="0.01"
+              placeholder="0,00 — deixe vazio para usar o valor acima"
+              value={form.visibleValue}
+              onChange={(e) => set("visibleValue", e.target.value)}
+            />
+          </div>
+
+          {/* Promoção */}
+          <div
+            className="rounded-[var(--radius-md)] transition-all"
             style={{
-              color: form.isVisible
-                ? "var(--color-success)"
-                : "var(--color-text-secondary)",
+              border: `1px solid ${form.isPromotion ? "rgba(239,68,68,0.4)" : "var(--color-border)"}`,
+              backgroundColor: form.isPromotion
+                ? "rgba(239,68,68,0.06)"
+                : "var(--color-bg-elevated)",
             }}
           >
-            {form.isVisible ? (
-              <FiEye size={14} className="flex-shrink-0" />
-            ) : (
-              <FiEyeOff size={14} className="flex-shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-3 select-none">
+              <button
+                type="button"
+                onClick={() => set("isPromotion", !form.isPromotion)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+                style={{
+                  color: form.isPromotion
+                    ? "var(--color-error)"
+                    : "var(--color-text-secondary)",
+                }}
+              >
+                <FiTag size={14} className="flex-shrink-0" />
+                <span className="truncate">
+                  {form.isPromotion ? "Em promoção" : "Sem promoção"}
+                </span>
+              </button>
+              <InfoTooltip
+                align="right"
+                text="Marca o item como em promoção. Informe o preço original para que o cliente veja o desconto com o valor riscado."
+              />
+            </div>
+            {form.isPromotion && (
+              <div
+                className="px-3 pt-3 pb-3"
+                style={{ borderTop: "1px solid rgba(239,68,68,0.2)" }}
+              >
+                <Input
+                  label="Preço original (antes da promoção)"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00 — exibido riscado para o cliente"
+                  value={form.promotionOriginalPrice}
+                  onChange={(e) =>
+                    set("promotionOriginalPrice", e.target.value)
+                  }
+                />
+              </div>
             )}
-            <span className="truncate">
-              {form.isVisible ? "Visível" : "Oculto"}
-            </span>
-          </button>
-          <InfoTooltip
-            align="left"
-            text="Controla se este item aparece ou não no cardápio. Itens ocultos não podem ser pedidos pelos clientes."
-          />
-        </div>
+          </div>
 
-        {/* Destaque */}
-        <div
-          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
-          style={{
-            backgroundColor: form.isFeatured
-              ? "rgba(245,158,11,0.12)"
-              : "var(--color-bg-elevated)",
-            border: `1px solid ${form.isFeatured ? "var(--color-warning)" : "var(--color-border)"}`,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => set("isFeatured", !form.isFeatured)}
-            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
-            style={{
-              color: form.isFeatured
-                ? "var(--color-warning)"
-                : "var(--color-text-secondary)",
-            }}
-          >
-            <FiStar size={14} className="flex-shrink-0" />
-            <span className="truncate">
-              {form.isFeatured ? "Destaque" : "Sem destaque"}
-            </span>
-          </button>
-          <InfoTooltip
-            align="right"
-            text="Itens em destaque aparecem no topo da sua própria seção no cardápio, com maior visibilidade."
-          />
-        </div>
+          <Section title="Configurações" />
+          <div className="grid grid-cols-2 gap-2">
+            {/* Visível */}
+            <div
+              className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
+              style={{
+                backgroundColor: form.isVisible
+                  ? "rgba(34,197,94,0.1)"
+                  : "var(--color-bg-elevated)",
+                border: `1px solid ${form.isVisible ? "var(--color-success)" : "var(--color-border)"}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => set("isVisible", !form.isVisible)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+                style={{
+                  color: form.isVisible
+                    ? "var(--color-success)"
+                    : "var(--color-text-secondary)",
+                }}
+              >
+                {form.isVisible ? (
+                  <FiEye size={14} className="flex-shrink-0" />
+                ) : (
+                  <FiEyeOff size={14} className="flex-shrink-0" />
+                )}
+                <span className="truncate">
+                  {form.isVisible ? "Visível" : "Oculto"}
+                </span>
+              </button>
+              <InfoTooltip
+                align="left"
+                text="Controla se este item aparece ou não no cardápio. Itens ocultos não podem ser pedidos pelos clientes."
+              />
+            </div>
 
-        {/* Controle de estoque */}
-        <div
-          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
-          style={{
-            backgroundColor: form.trackStock
-              ? "rgba(0,136,194,0.12)"
-              : "var(--color-bg-elevated)",
-            border: `1px solid ${form.trackStock ? "var(--color-primary)" : "var(--color-border)"}`,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => set("trackStock", !form.trackStock)}
-            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
-            style={{
-              color: form.trackStock
-                ? "var(--color-primary)"
-                : "var(--color-text-secondary)",
-            }}
-          >
-            <FiPackage size={14} className="flex-shrink-0" />
-            <span className="truncate">
-              {form.trackStock ? "Com Ctrl. estoque" : "Sem controle"}
-            </span>
-          </button>
-          <InfoTooltip
-            align="left"
-            text="Essa opção ativa o controle de estoque do item. Cada pedido desconta 1 da quantidade. Ao cancelar, o estoque é restaurado. Ao chegar a 0, o item é ocultado automaticamente."
-          />
-        </div>
+            {/* Destaque */}
+            <div
+              className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
+              style={{
+                backgroundColor: form.isFeatured
+                  ? "rgba(245,158,11,0.12)"
+                  : "var(--color-bg-elevated)",
+                border: `1px solid ${form.isFeatured ? "var(--color-warning)" : "var(--color-border)"}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => set("isFeatured", !form.isFeatured)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+                style={{
+                  color: form.isFeatured
+                    ? "var(--color-warning)"
+                    : "var(--color-text-secondary)",
+                }}
+              >
+                <FiStar size={14} className="flex-shrink-0" />
+                <span className="truncate">
+                  {form.isFeatured ? "Destaque" : "Sem destaque"}
+                </span>
+              </button>
+              <InfoTooltip
+                align="right"
+                text="Itens em destaque aparecem no topo da sua própria seção no cardápio, com maior visibilidade."
+              />
+            </div>
 
-        {/* Impressão 2x */}
-        <div
-          className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
-          style={{
-            backgroundColor: form.printTwice
-              ? "rgba(168,85,247,0.12)"
-              : "var(--color-bg-elevated)",
-            border: `1px solid ${form.printTwice ? "rgba(168,85,247,0.5)" : "var(--color-border)"}`,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => set("printTwice", !form.printTwice)}
-            className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
-            style={{
-              color: form.printTwice
-                ? "rgb(168,85,247)"
-                : "var(--color-text-secondary)",
-            }}
-          >
-            <FiPrinter size={14} className="flex-shrink-0" />
-            <span className="truncate">
-              {form.printTwice ? "Imprime 2x" : "Impressão normal"}
-            </span>
-          </button>
-          <InfoTooltip
-            align="right"
-            text="Quando chega uma comanda que tenha ao menos UM item com essa opção ativa, a comanda é impressa em duas vias automaticamente. Caso tenha apenas itens com essa opção ativa, então ele imprime apenas uma via normalmente."
-          />
-        </div>
-      </div>
+            {/* Controle de estoque */}
+            <div
+              className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
+              style={{
+                backgroundColor: form.trackStock
+                  ? "rgba(0,136,194,0.12)"
+                  : "var(--color-bg-elevated)",
+                border: `1px solid ${form.trackStock ? "var(--color-primary)" : "var(--color-border)"}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => set("trackStock", !form.trackStock)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+                style={{
+                  color: form.trackStock
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
+                }}
+              >
+                <FiPackage size={14} className="flex-shrink-0" />
+                <span className="truncate">
+                  {form.trackStock ? "Com Ctrl. estoque" : "Sem controle"}
+                </span>
+              </button>
+              <InfoTooltip
+                align="left"
+                text="Essa opção ativa o controle de estoque do item. Cada pedido desconta 1 da quantidade. Ao cancelar, o estoque é restaurado. Ao chegar a 0, o item é ocultado automaticamente."
+              />
+            </div>
 
-      <Section title="Foto" />
-      <PhotoUpload current={existing?.photo} onFileSelected={setPhotoFile} />
+            {/* Impressão 2x */}
+            <div
+              className="flex items-center gap-2 h-10 px-3 rounded-[var(--radius-md)] cursor-pointer transition-all select-none"
+              style={{
+                backgroundColor: form.printTwice
+                  ? "rgba(168,85,247,0.12)"
+                  : "var(--color-bg-elevated)",
+                border: `1px solid ${form.printTwice ? "rgba(168,85,247,0.5)" : "var(--color-border)"}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => set("printTwice", !form.printTwice)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm cursor-pointer"
+                style={{
+                  color: form.printTwice
+                    ? "rgb(168,85,247)"
+                    : "var(--color-text-secondary)",
+                }}
+              >
+                <FiPrinter size={14} className="flex-shrink-0" />
+                <span className="truncate">
+                  {form.printTwice ? "Imprime 2x" : "Impressão normal"}
+                </span>
+              </button>
+              <InfoTooltip
+                align="right"
+                text="Quando chega uma comanda que tenha ao menos UM item com essa opção ativa, a comanda é impressa em duas vias automaticamente. Caso tenha apenas itens com essa opção ativa, então ele imprime apenas uma via normalmente."
+              />
+            </div>
+          </div>
 
-      <Section title="Adicionais / Subitens" />
-      <div className="flex flex-col gap-4">
-        {ADDITIONAL_GROUPS.map((g) => (
-          <SubitemPicker
-            key={g.key}
-            label={g.label}
-            allSubitems={allSubitems}
-            selected={form[g.key] as string[]}
-            onChange={(ids) => set(g.key, ids)}
+          <Section title="Foto" />
+          <PhotoUpload
+            current={existing?.photo}
+            onFileSelected={setPhotoFile}
           />
-        ))}
-      </div>
+
+          <Section title="Adicionais / Subitens" />
+          <div className="flex flex-col gap-4">
+            {ADDITIONAL_GROUPS.map((g) => (
+              <SubitemPicker
+                key={g.key}
+                label={g.label}
+                allSubitems={allSubitems}
+                selected={form[g.key] as string[]}
+                onChange={(ids) => set(g.key, ids)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Aba CSV ── */}
+      {isCreating && activeTab === "csv" && (
+        <>
+          {importDone ? (
+            /* Resultado da importação */
+            <div className="flex flex-col items-center gap-4 py-10 text-center">
+              <div
+                className="w-14 h-14 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor:
+                    importDone.imported > 0
+                      ? "rgba(34,197,94,0.12)"
+                      : "rgba(239,68,68,0.12)",
+                }}
+              >
+                {importDone.imported > 0 ? (
+                  <FiCheck
+                    size={26}
+                    style={{ color: "var(--color-success)" }}
+                  />
+                ) : (
+                  <FiAlertCircle
+                    size={26}
+                    style={{ color: "var(--color-error)" }}
+                  />
+                )}
+              </div>
+              <div>
+                <p
+                  className="text-base font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {importDone.imported > 0
+                    ? "Importação concluída!"
+                    : "Nenhum item importado"}
+                </p>
+                <p
+                  className="text-sm mt-1"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  <span
+                    style={{ color: "var(--color-success)", fontWeight: 600 }}
+                  >
+                    {importDone.imported}
+                  </span>{" "}
+                  item{importDone.imported !== 1 ? "s" : ""} criado
+                  {importDone.imported !== 1 ? "s" : ""} com sucesso
+                  {importDone.failed > 0 && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span
+                        style={{ color: "var(--color-error)", fontWeight: 600 }}
+                      >
+                        {importDone.failed}
+                      </span>{" "}
+                      com falha
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          ) : csvFile === null ? (
+            /* Estado inicial: instruções + tabela + dropzone */
+            <>
+              {/* Intro */}
+              <div
+                className="flex items-start gap-3 p-4 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "rgba(0,136,194,0.07)",
+                  border: "1px solid rgba(0,136,194,0.2)",
+                }}
+              >
+                <FiInfo
+                  size={16}
+                  className="shrink-0 mt-0.5"
+                  style={{ color: "var(--color-primary)" }}
+                />
+                <div>
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Importe vários itens de uma só vez
+                  </p>
+                  <p
+                    className="text-xs mt-1 leading-relaxed"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Ideal para configurar o cardápio rapidamente. Monte uma
+                    planilha no Excel ou Google Sheets usando o modelo abaixo e
+                    importe todos os itens com um clique.
+                  </p>
+                </div>
+              </div>
+
+              {/* Passos */}
+              <div>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wider mb-3"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Como funciona
+                </p>
+                <div className="grid grid-cols-4 gap-3">
+                  {(
+                    [
+                      {
+                        n: 1,
+                        title: "Baixe o modelo",
+                        desc: "Planilha pronta com exemplos",
+                      },
+                      {
+                        n: 2,
+                        title: "Preencha os dados",
+                        desc: "No Excel ou Google Sheets",
+                      },
+                      {
+                        n: 3,
+                        title: "Salve como CSV",
+                        desc: "Arquivo → Salvar como → CSV",
+                      },
+                      {
+                        n: 4,
+                        title: "Carregue aqui",
+                        desc: "Arraste ou clique abaixo",
+                      },
+                    ] as const
+                  ).map(({ n, title, desc }) => (
+                    <div
+                      key={n}
+                      className="flex flex-col items-center gap-2 text-center"
+                    >
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{
+                          backgroundColor: "var(--color-primary)",
+                          color: "white",
+                        }}
+                      >
+                        {n}
+                      </div>
+                      <p
+                        className="text-xs font-semibold leading-tight"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        {title}
+                      </p>
+                      <p
+                        className="text-[10px] leading-tight"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        {desc}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dica: como formatar no Excel / Google Sheets */}
+              <div className="rounded">
+                <button
+                  onClick={() => setShowExcelTip((v) => !v)}
+                  className="flex items-center justify-between w-full px-3 py-2.5 text-left cursor-pointer transition-colors"
+                  style={{ backgroundColor: "var(--color-bg-elevated)" }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      "var(--color-bg-surface)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      "var(--color-bg-elevated)")
+                  }
+                >
+                  <span
+                    className="flex items-center gap-2 text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    📊 Como abrir e salvar o CSV corretamente no Excel e Google
+                    Sheets
+                  </span>
+                  <FiChevronDown
+                    size={14}
+                    className="shrink-0 transition-transform"
+                    style={{
+                      color: "var(--color-text-muted)",
+                      transform: showExcelTip
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
+                  />
+                </button>
+
+                {showExcelTip && (
+                  <div
+                    className="flex flex-col gap-4 px-4 py-4"
+                    style={{ borderTop: "1px solid var(--color-border)" }}
+                  >
+                    {/* Aviso */}
+                    <div
+                      className="flex items-start gap-2 p-3 rounded-[var(--radius-sm)]"
+                      style={{
+                        backgroundColor: "rgba(245,158,11,0.08)",
+                        border: "1px solid rgba(245,158,11,0.25)",
+                      }}
+                    >
+                      <FiAlertTriangle
+                        size={13}
+                        className="shrink-0 mt-0.5"
+                        style={{ color: "var(--color-warning)" }}
+                      />
+                      <p
+                        className="text-xs leading-relaxed"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        <strong style={{ color: "var(--color-warning)" }}>
+                          Atenção:
+                        </strong>{" "}
+                        não abra o arquivo dando dois cliques nele. Isso pode
+                        fazer o Excel usar <strong>ponto-e-vírgula (;)</strong>{" "}
+                        como separador em vez de vírgula (,), o que vai causar
+                        erro na importação.
+                      </p>
+                    </div>
+
+                    {/* Google Sheets */}
+                    <div>
+                      <p
+                        className="text-xs font-semibold mb-2"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        Google Sheets{" "}
+                        <span
+                          className="font-normal ml-1 px-1.5 py-0.5 rounded text-[10px]"
+                          style={{
+                            backgroundColor: "rgba(34,197,94,0.1)",
+                            color: "var(--color-success)",
+                          }}
+                        >
+                          Recomendado — mais simples
+                        </span>
+                      </p>
+                      <ol className="flex flex-col gap-1.5">
+                        {[
+                          <>
+                            Acesse <strong>sheets.google.com</strong> e crie uma
+                            planilha em branco
+                          </>,
+                          <>
+                            Arraste o arquivo CSV baixado para dentro da página
+                            — ele abre automaticamente em colunas
+                          </>,
+                          <>Preencha os dados nas colunas</>,
+                          <>
+                            Para salvar:{" "}
+                            <strong>
+                              Arquivo → Fazer download → Valores separados por
+                              vírgula (.csv)
+                            </strong>
+                          </>,
+                        ].map((step, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-2 text-xs"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            <span
+                              className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5"
+                              style={{
+                                backgroundColor: "var(--color-bg-elevated)",
+                                color: "var(--color-text-secondary)",
+                              }}
+                            >
+                              {i + 1}
+                            </span>
+                            <span className="leading-relaxed">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+
+                    {/* Divisor */}
+                    <div
+                      style={{ borderTop: "1px solid var(--color-border)" }}
+                    />
+
+                    {/* Excel */}
+                    <div>
+                      <p
+                        className="text-xs font-semibold mb-2"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        Microsoft Excel
+                      </p>
+                      <ol className="flex flex-col gap-1.5">
+                        {[
+                          <>Abra o Excel e crie uma planilha em branco</>,
+                          <>
+                            Clique na aba <strong>Dados</strong> →{" "}
+                            <strong>De Texto/CSV</strong> → selecione o arquivo
+                            baixado
+                          </>,
+                          <>
+                            Na janela que abrir, confirme que o{" "}
+                            <strong>
+                              Delimitador é {"'"}Vírgula{"'"}
+                            </strong>{" "}
+                            e clique em <strong>Carregar</strong>
+                          </>,
+                          <>Preencha os dados nas colunas</>,
+                          <>
+                            Para salvar: <strong>Arquivo → Salvar como</strong>{" "}
+                            → escolha o tipo{" "}
+                            <strong>
+                              {"'"}CSV UTF-8 (delimitado por vírgulas){"'"}
+                            </strong>
+                          </>,
+                        ].map((step, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-2 text-xs"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            <span
+                              className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5"
+                              style={{
+                                backgroundColor: "var(--color-bg-elevated)",
+                                color: "var(--color-text-secondary)",
+                              }}
+                            >
+                              {i + 1}
+                            </span>
+                            <span className="leading-relaxed">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                      <p
+                        className="text-[11px] mt-3 leading-relaxed"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        💡 Na dúvida sobre o tipo ao salvar, escolha sempre a
+                        opção que menciona{" "}
+                        <strong>
+                          {"'"}vírgula{"'"}
+                        </strong>{" "}
+                        ou{" "}
+                        <strong>
+                          {"'"}comma{"'"}
+                        </strong>{" "}
+                        no nome.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tabela de colunas */}
+              <div>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Estrutura do arquivo — nomes das colunas no cabeçalho
+                </p>
+                <div
+                  className="rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  <div
+                    className="grid gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider"
+                    style={{
+                      gridTemplateColumns: "1fr 1fr 1fr auto",
+                      backgroundColor: "var(--color-bg-elevated)",
+                      color: "var(--color-text-muted)",
+                      borderBottom: "1px solid var(--color-border)",
+                    }}
+                  >
+                    <span>Coluna</span>
+                    <span>Tipo de dado</span>
+                    <span>Exemplo</span>
+                    <span>Req.</span>
+                  </div>
+                  {CSV_COLUMNS.map((col, idx) => (
+                    <div
+                      key={col.name}
+                      className="grid items-center gap-2 px-3 py-2 text-xs"
+                      style={{
+                        gridTemplateColumns: "1fr 1fr 1fr auto",
+                        borderBottom:
+                          idx < CSV_COLUMNS.length - 1
+                            ? "1px solid var(--color-border)"
+                            : "none",
+                        backgroundColor:
+                          idx % 2 === 0 ? "transparent" : "rgba(0,0,0,0.015)",
+                      }}
+                    >
+                      <code
+                        className="px-1.5 py-0.5 rounded text-[11px] font-mono w-fit"
+                        style={{
+                          backgroundColor: "var(--color-bg-elevated)",
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {col.name}
+                      </code>
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        {col.type}
+                      </span>
+                      <span
+                        className="font-mono text-[11px]"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        {col.example || "—"}
+                      </span>
+                      {col.required ? (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold w-fit"
+                          style={{
+                            backgroundColor: "rgba(239,68,68,0.1)",
+                            color: "var(--color-error)",
+                          }}
+                        >
+                          Sim
+                        </span>
+                      ) : (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] w-fit"
+                          style={{
+                            backgroundColor: "var(--color-bg-elevated)",
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          Não
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p
+                  className="text-[11px] mt-2 leading-relaxed"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  💡 A <strong>primeira linha</strong> deve ter exatamente os
+                  nomes de coluna acima. Campos marcados como{" "}
+                  <span
+                    style={{ color: "var(--color-error)", fontWeight: 600 }}
+                  >
+                    Sim
+                  </span>{" "}
+                  não podem ficar vazios.
+                </p>
+                <p
+                  className="text-[11px] mt-1.5 leading-relaxed"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  ℹ️ Foto, promoções, destaque, adicionais e subitens não são
+                  suportados no CSV — configure-os em cada item após a importação.
+                </p>
+              </div>
+
+              {/* Botão baixar modelo */}
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-1.5 px-3 h-10 rounded-[var(--radius-md)] shrink-0"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  <span
+                    className="text-xs whitespace-nowrap"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    Linhas:
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={templateRowCount}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) setTemplateRowCount(Math.max(1, Math.min(500, v)));
+                    }}
+                    className="w-14 text-sm text-center bg-transparent outline-none"
+                    style={{ color: "var(--color-text-primary)" }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => downloadTemplateCsv(templateRowCount, existingCodes)}
+                  className="flex flex-1 items-center justify-center gap-2 py-1 h-10 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-colors"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text-secondary)",
+                    backgroundColor: "transparent",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      "var(--color-bg-elevated)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = "transparent")
+                  }
+                >
+                  <FiDownload size={14} />
+                  Baixar modelo CSV
+                </button>
+              </div>
+
+              {/* Drop zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files[0];
+                  if (f) handleCsvFile(f);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2 py-10 rounded-[var(--radius-md)] cursor-pointer transition-all"
+                style={{
+                  border: `2px dashed ${dragOver ? "var(--color-primary)" : "var(--color-border)"}`,
+                  backgroundColor: dragOver
+                    ? "rgba(0,136,194,0.05)"
+                    : "var(--color-bg-elevated)",
+                }}
+              >
+                <FiUpload
+                  size={22}
+                  style={{
+                    color: dragOver
+                      ? "var(--color-primary)"
+                      : "var(--color-text-muted)",
+                  }}
+                />
+                <p
+                  className="text-sm font-medium"
+                  style={{
+                    color: dragOver
+                      ? "var(--color-primary)"
+                      : "var(--color-text-primary)",
+                  }}
+                >
+                  Arraste o arquivo CSV aqui
+                </p>
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  ou clique para selecionar do computador
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleCsvFile(f);
+                  }}
+                />
+              </div>
+            </>
+          ) : csvParsed === null ? (
+            /* Lendo arquivo */
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
+              <div
+                className="w-6 h-6 rounded-full border-2 animate-spin"
+                style={{
+                  borderColor: "var(--color-primary)",
+                  borderTopColor: "transparent",
+                }}
+              />
+              <p
+                className="text-sm"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Lendo arquivo...
+              </p>
+            </div>
+          ) : csvParsed.errors.length > 0 && csvParsed.rows.length === 0 ? (
+            /* Erros fatais — nenhuma linha válida */
+            <>
+              <div
+                className="flex items-start gap-3 p-4 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "rgba(239,68,68,0.07)",
+                  border: "1px solid rgba(239,68,68,0.25)",
+                }}
+              >
+                <FiAlertCircle
+                  size={16}
+                  className="shrink-0 mt-0.5"
+                  style={{ color: "var(--color-error)" }}
+                />
+                <div>
+                  <p
+                    className="text-sm font-semibold mb-1.5"
+                    style={{ color: "var(--color-error)" }}
+                  >
+                    Arquivo inválido — não foi possível ler os dados
+                  </p>
+                  {csvParsed.errors.map((e, i) => (
+                    <p
+                      key={i}
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      {e.line > 0 ? `Linha ${e.line}: ` : ""}
+                      {e.message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setCsvFile(null);
+                  setCsvParsed(null);
+                }}
+                className="text-xs cursor-pointer transition-opacity hover:opacity-70 underline self-start"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Remover arquivo e tentar novamente
+              </button>
+            </>
+          ) : (
+            /* Preview dos itens válidos */
+            <>
+              {csvParsed.errors.length > 0 ? (
+                <div
+                  className="flex items-start gap-3 p-3 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "rgba(245,158,11,0.07)",
+                    border: "1px solid rgba(245,158,11,0.25)",
+                  }}
+                >
+                  <FiAlertTriangle
+                    size={15}
+                    className="shrink-0 mt-0.5"
+                    style={{ color: "var(--color-warning)" }}
+                  />
+                  <div>
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "var(--color-warning)" }}
+                    >
+                      {csvParsed.errors.length} linha
+                      {csvParsed.errors.length !== 1 ? "s" : ""} com erro —
+                      corrija e carregue novamente
+                    </p>
+                    {csvParsed.errors.map((e, i) => (
+                      <p
+                        key={i}
+                        className="text-xs mt-0.5"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Linha {e.line}: {e.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-3 p-3 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "rgba(34,197,94,0.07)",
+                    border: "1px solid rgba(34,197,94,0.25)",
+                  }}
+                >
+                  <FiCheck
+                    size={15}
+                    className="shrink-0"
+                    style={{ color: "var(--color-success)" }}
+                  />
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: "var(--color-success)" }}
+                  >
+                    {csvParsed.rows.length} item
+                    {csvParsed.rows.length !== 1 ? "s" : ""} encontrado
+                    {csvParsed.rows.length !== 1 ? "s" : ""} — prontos para
+                    importar
+                  </p>
+                </div>
+              )}
+
+              {/* Avisos não-bloqueantes (ex: código já existente) */}
+              {csvParsed.warnings.length > 0 && (
+                <div
+                  className="flex items-start gap-3 p-3 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "rgba(99,102,241,0.07)",
+                    border: "1px solid rgba(99,102,241,0.25)",
+                  }}
+                >
+                  <FiInfo
+                    size={15}
+                    className="shrink-0 mt-0.5"
+                    style={{ color: "var(--color-primary)" }}
+                  />
+                  <div>
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "var(--color-primary)" }}
+                    >
+                      {csvParsed.warnings.length} aviso
+                      {csvParsed.warnings.length !== 1 ? "s" : ""} — a importação prosseguirá normalmente
+                    </p>
+                    {csvParsed.warnings.map((w, i) => (
+                      <p
+                        key={i}
+                        className="text-xs mt-0.5"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Linha {w.line}: {w.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabela de preview */}
+              <div
+                className="rounded-[var(--radius-md)] overflow-hidden"
+                style={{ border: "1px solid var(--color-border)" }}
+              >
+                {/* cabeçalho */}
+                <div
+                  className="grid text-[10px] font-semibold uppercase tracking-wider px-3 py-2"
+                  style={{
+                    gridTemplateColumns: "64px 1fr 1fr 80px 44px 56px 52px",
+                    gap: "8px",
+                    backgroundColor: "var(--color-bg-elevated)",
+                    color: "var(--color-text-muted)",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  <span>Código</span>
+                  <span>Nome</span>
+                  <span>Categoria</span>
+                  <span className="text-right">Preço</span>
+                  <span className="text-right">Qtd.</span>
+                  <span className="text-center">Estoque</span>
+                  <span className="text-center">Visível</span>
+                </div>
+                <div className="max-h-52 overflow-y-auto">
+                  {csvParsed.rows.map((row, i) => (
+                    <div
+                      key={i}
+                      className="grid items-center px-3 py-2 text-xs"
+                      style={{
+                        gridTemplateColumns: "64px 1fr 1fr 80px 44px 56px 52px",
+                        gap: "8px",
+                        borderBottom:
+                          i < csvParsed.rows.length - 1
+                            ? "1px solid var(--color-border)"
+                            : "none",
+                      }}
+                    >
+                      <span
+                        className="truncate font-mono"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        {row.codigo || <span style={{ color: "var(--color-text-muted)", opacity: 0.4 }}>auto</span>}
+                      </span>
+                      <span
+                        className="truncate font-medium"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        {row.nome}
+                      </span>
+                      <span
+                        className="truncate"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        {row.categoria}
+                      </span>
+                      <span className="text-right" style={{ color: "var(--color-text-primary)" }}>
+                        {formatBRL(row.preco)}
+                      </span>
+                      <span className="text-right" style={{ color: "var(--color-text-muted)" }}>
+                        {row.quantidade}
+                      </span>
+                      <span className="flex justify-center">
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                          style={
+                            row.controle_estoque
+                              ? { backgroundColor: "rgba(34,197,94,0.1)", color: "var(--color-success)" }
+                              : { backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-muted)" }
+                          }
+                        >
+                          {row.controle_estoque ? "Sim" : "Não"}
+                        </span>
+                      </span>
+                      <span className="flex justify-center">
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                          style={
+                            row.visivel
+                              ? { backgroundColor: "rgba(34,197,94,0.1)", color: "var(--color-success)" }
+                              : { backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-muted)" }
+                          }
+                        >
+                          {row.visivel ? "Sim" : "Não"}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setCsvFile(null);
+                  setCsvParsed(null);
+                }}
+                className="text-xs cursor-pointer transition-opacity hover:opacity-70 underline self-start"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Remover arquivo
+              </button>
+            </>
+          )}
+        </>
+      )}
     </Modal>
   );
 }
@@ -2539,7 +3755,8 @@ async function uploadPhoto(file: File, folder: string): Promise<string> {
 
 type Tab = "items" | "subitems" | "categories";
 
-function timeAgo(date: Date): string {
+function timeAgo(date: Date | null | undefined): string {
+  if (!date) return "agora mesmo";
   const diff = Date.now() - date.getTime();
   const min = Math.floor(diff / 60_000);
   const hr = Math.floor(diff / 3_600_000);
@@ -2560,6 +3777,89 @@ interface StockAlert {
   resolved: boolean;
   dismissedBy: string[];
   createdAt: Date;
+  updatedAt: Date;
+}
+
+function AlertRow({
+  alert,
+  type,
+  onOpen,
+  onDismiss,
+}: {
+  alert: StockAlert;
+  type: "zero" | "low";
+  onOpen: (alertId: string, itemId: string) => void;
+  onDismiss: (alertId: string) => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-2.5"
+      style={{ borderBottom: "1px solid var(--color-border)" }}
+    >
+      <div
+        className="w-0.5 self-stretch rounded-full shrink-0"
+        style={{
+          backgroundColor:
+            type === "zero" ? "var(--color-error)" : "var(--color-warning)",
+        }}
+      />
+
+      <button
+        onClick={() => onOpen(alert.id, alert.itemId)}
+        className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer transition-opacity hover:opacity-75"
+      >
+        {alert.itemPhoto ? (
+          <img
+            src={alert.itemPhoto}
+            alt={alert.itemName}
+            className="w-8 h-8 rounded-[var(--radius-sm)] object-cover shrink-0"
+          />
+        ) : (
+          <div
+            className="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center shrink-0"
+            style={{ backgroundColor: "var(--color-bg-elevated)" }}
+          >
+            <FiBox size={13} style={{ color: "var(--color-text-muted)" }} />
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <p
+            className="text-xs font-semibold truncate"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            {alert.itemName}
+          </p>
+          <p
+            className="text-[10px] mt-0.5"
+            style={{
+              color:
+                type === "zero" ? "var(--color-error)" : "var(--color-warning)",
+            }}
+          >
+            {type === "zero"
+              ? "Estoque zerado — item ocultado"
+              : `${alert.quantity} unidade${alert.quantity !== 1 ? "s" : ""} restante${alert.quantity !== 1 ? "s" : ""}`}
+          </p>
+          <p
+            className="text-[10px] mt-0.5"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {timeAgo(alert.updatedAt)}
+          </p>
+        </div>
+      </button>
+
+      <button
+        onClick={() => onDismiss(alert.id)}
+        className="shrink-0 p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+        style={{ color: "var(--color-text-muted)" }}
+        title="Dispensar"
+      >
+        <FiX size={13} />
+      </button>
+    </div>
+  );
 }
 
 export default function StockPage() {
@@ -2594,6 +3894,7 @@ export default function StockPage() {
   const [thresholdInput, setThresholdInput] = useState("5");
   const notifRef = useRef<HTMLDivElement>(null);
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  const [savedCategoryOrder, setSavedCategoryOrder] = useState<string[]>([]);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingSubitems, setLoadingSubitems] = useState(true);
@@ -2701,6 +4002,10 @@ export default function StockPage() {
             resolved: false,
             dismissedBy: d.data().dismissedBy ?? [],
             createdAt: d.data().createdAt?.toDate() ?? new Date(),
+            updatedAt:
+              d.data().updatedAt?.toDate() ??
+              d.data().createdAt?.toDate() ??
+              new Date(),
           })),
         );
       },
@@ -2798,7 +4103,11 @@ export default function StockPage() {
       setLoadingCategories(true);
       try {
         const snap = await getDoc(doc(db, "stockConfig", "categoryOrder"));
-        if (snap.exists()) setCategoryOrder(snap.data().categories ?? []);
+        if (snap.exists()) {
+          const cats = snap.data().categories ?? [];
+          setCategoryOrder(cats);
+          setSavedCategoryOrder(cats);
+        }
       } catch {
         /* silent */
       } finally {
@@ -3312,6 +4621,7 @@ export default function StockPage() {
       await setDoc(doc(db, "stockConfig", "categoryOrder"), {
         categories: categoryOrder,
       });
+      setSavedCategoryOrder(categoryOrder);
       success("Ordem salva", "A ordem das categorias foi atualizada.");
       log({
         action: "update_category_order",
@@ -3342,6 +4652,22 @@ export default function StockPage() {
       return a;
     });
   }
+  function moveCategoryToTop(i: number) {
+    if (i === 0) return;
+    setCategoryOrder((prev) => {
+      const a = [...prev];
+      a.unshift(a.splice(i, 1)[0]);
+      return a;
+    });
+  }
+  function moveCategoryToBottom(i: number) {
+    if (i === categoryOrder.length - 1) return;
+    setCategoryOrder((prev) => {
+      const a = [...prev];
+      a.push(a.splice(i, 1)[0]);
+      return a;
+    });
+  }
   function addCategory() {
     const val = newCategoryInput.trim();
     if (!val) return;
@@ -3357,14 +4683,22 @@ export default function StockPage() {
   }
 
   // ── Stock notifications (derived from Firestore alerts) ──
-  const visibleAlerts = stockAlerts.filter(
-    (a) => !a.dismissedBy.includes(appUser?.uid ?? ""),
-  );
+  const visibleAlerts = stockAlerts.filter((a) => {
+    if (a.dismissedBy.includes(appUser?.uid ?? "")) return false;
+    if (a.type === "zero_stock" && !stockNotifSettings.notifyZeroStock)
+      return false;
+    if (a.type === "low_stock" && !stockNotifSettings.notifyLowStock)
+      return false;
+    return true;
+  });
 
   const allNotifications = visibleAlerts.map((a) => ({
     alert: a,
     type: a.type === "zero_stock" ? ("zero" as const) : ("low" as const),
   }));
+
+  const zeroNotifications = allNotifications.filter((n) => n.type === "zero");
+  const lowNotifications = allNotifications.filter((n) => n.type === "low");
 
   async function dismissNotif(alertId: string) {
     if (!appUser) return;
@@ -3378,6 +4712,111 @@ export default function StockPage() {
     setNotifOpen(false);
     setTab("items");
     if (item) setItemModal({ open: true, editing: item });
+  }
+
+  async function handleSaveItemsBatch(
+    rows: ParsedCsvItem[],
+  ): Promise<{ imported: number; failed: number }> {
+    const codeSet = new Set(items.map((i) => i.codItem));
+    let imported = 0;
+    let failed = 0;
+    for (const row of rows) {
+      try {
+        const code = row.codigo.trim() || generateRandomCode(codeSet);
+        codeSet.add(code);
+        await addDoc(collection(db, "items"), {
+          codItem: code,
+          name: row.nome,
+          category: row.categoria,
+          description: row.descricao,
+          value: row.preco,
+          visibleValue: null,
+          quantity: row.quantidade,
+          isVisible: row.visivel,
+          isFeatured: false,
+          isPromotion: false,
+          promotionOriginalPrice: null,
+          trackStock: row.controle_estoque,
+          printTwice: false,
+          additionals: [],
+          additionals_sauce: [],
+          additionals_drink: [],
+          additionals_sweet: [],
+          createdAt: serverTimestamp(),
+        });
+        imported++;
+      } catch {
+        failed++;
+      }
+    }
+    if (imported > 0) {
+      log({
+        action: "Importação CSV",
+        category: "stock",
+        description: `${imported} item(s) criado(s) via importação CSV`,
+        performedBy: {
+          uid: appUser?.uid ?? "",
+          username: appUser?.username ?? "",
+        },
+      });
+    }
+    return { imported, failed };
+  }
+
+  function exportStockCSV() {
+    const headers = [
+      "Código",
+      "Nome",
+      "Categoria",
+      "Descrição",
+      "Preço",
+      "Preço visível",
+      "Em promoção",
+      "Preço original",
+      "Quantidade",
+      "Controle estoque",
+      "Visível",
+      "Destaque",
+      "Imprimir 2x",
+    ];
+
+    function cell(v: string | number | boolean | null | undefined): string {
+      if (v == null) return "";
+      const s = String(v);
+      return s.includes(",") || s.includes('"') || s.includes("\n")
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    }
+
+    const rows = items.map((item) => [
+      cell(item.codItem),
+      cell(item.name),
+      cell(item.category),
+      cell(item.description),
+      cell(formatBRL(item.value)),
+      cell(item.visibleValue != null ? formatBRL(item.visibleValue) : ""),
+      cell(item.isPromotion ? "Sim" : "Não"),
+      cell(
+        item.isPromotion && item.promotionOriginalPrice != null
+          ? formatBRL(item.promotionOriginalPrice)
+          : "",
+      ),
+      cell(item.trackStock ? item.quantity : ""),
+      cell(item.trackStock ? "Sim" : "Não"),
+      cell(item.isVisible ? "Sim" : "Não"),
+      cell(item.isFeatured ? "Sim" : "Não"),
+      cell(item.printTwice ? "Sim" : "Não"),
+    ]);
+
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    // UTF-8 BOM ensures Excel reads Portuguese characters correctly
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `estoque-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function dismissAllNotifs() {
@@ -3422,377 +4861,400 @@ export default function StockPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Stock notifications bell */}
-          <div className="relative" ref={notifRef}>
-            <button
-              onClick={() => {
-                setNotifOpen((v) => !v);
-                setShowNotifSettings(false);
-              }}
-              className="relative flex items-center justify-center w-9 h-9 rounded-[var(--radius-md)] cursor-pointer transition-colors"
-              style={{
-                backgroundColor: notifOpen
-                  ? "var(--color-bg-elevated)"
-                  : "transparent",
-                border: "1px solid var(--color-border)",
-                color:
-                  allNotifications.length > 0
-                    ? "var(--color-warning)"
-                    : "var(--color-text-muted)",
-              }}
-              title="Notificações de estoque"
-            >
-              <FiBell size={16} />
-              {stockNotifSettings.showBadge && allNotifications.length > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 leading-none"
+          {/* Stock notifications bell — only on items tab */}
+          {tab === "items" && (
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => {
+                  setNotifOpen((v) => !v);
+                  setShowNotifSettings(false);
+                }}
+                className="relative flex items-center justify-center w-9 h-9 rounded-[var(--radius-md)] cursor-pointer transition-colors"
+                style={{
+                  backgroundColor: notifOpen
+                    ? "var(--color-bg-elevated)"
+                    : "transparent",
+                  border: "1px solid var(--color-border)",
+                  color:
+                    zeroNotifications.length > 0
+                      ? "var(--color-error)"
+                      : allNotifications.length > 0
+                        ? "var(--color-warning)"
+                        : "var(--color-text-muted)",
+                }}
+                title="Notificações de estoque"
+              >
+                <FiBell size={16} />
+                {stockNotifSettings.showBadge &&
+                  allNotifications.length > 0 && (
+                    <span
+                      className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 leading-none"
+                      style={{
+                        backgroundColor:
+                          zeroNotifications.length > 0
+                            ? "var(--color-error)"
+                            : "var(--color-warning)",
+                        color: "white",
+                      }}
+                    >
+                      {allNotifications.length > 9
+                        ? "9+"
+                        : allNotifications.length}
+                    </span>
+                  )}
+              </button>
+
+              {notifOpen && (
+                <div
+                  className="absolute right-0 top-11 z-50 w-80 rounded-[var(--radius-lg)] overflow-hidden"
                   style={{
-                    backgroundColor: "var(--color-error)",
-                    color: "white",
+                    backgroundColor: "var(--color-bg-surface)",
+                    border: "1px solid var(--color-border)",
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
                   }}
                 >
-                  {allNotifications.length > 9 ? "9+" : allNotifications.length}
-                </span>
-              )}
-            </button>
-
-            {notifOpen && (
-              <div
-                className="absolute right-0 top-11 z-50 w-80 rounded-[var(--radius-lg)] overflow-hidden"
-                style={{
-                  backgroundColor: "var(--color-bg-surface)",
-                  border: "1px solid var(--color-border)",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
-                }}
-              >
-                {/* Header */}
-                <div
-                  className="flex items-center justify-between px-4 py-3 gap-2"
-                  style={{ borderBottom: "1px solid var(--color-border)" }}
-                >
-                  <span
-                    className="text-sm font-semibold flex-1"
-                    style={{ color: "var(--color-text-primary)" }}
+                  {/* Header */}
+                  <div
+                    className="flex items-center justify-between px-4 py-3 gap-2"
+                    style={{ borderBottom: "1px solid var(--color-border)" }}
                   >
-                    {showNotifSettings
-                      ? "Configurações"
-                      : "Notificações de estoque"}
-                  </span>
-                  {!showNotifSettings && allNotifications.length > 0 && (
-                    <button
-                      onClick={dismissAllNotifs}
-                      className="text-xs cursor-pointer transition-opacity hover:opacity-70"
-                      style={{ color: "var(--color-text-muted)" }}
+                    <span
+                      className="text-sm font-semibold flex-1"
+                      style={{ color: "var(--color-text-primary)" }}
                     >
-                      Limpar todas
+                      {showNotifSettings
+                        ? "Configurações"
+                        : "Notificações de estoque"}
+                    </span>
+                    {!showNotifSettings && allNotifications.length > 0 && (
+                      <button
+                        onClick={dismissAllNotifs}
+                        className="text-xs cursor-pointer transition-opacity hover:opacity-70"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Limpar todas
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowNotifSettings((v) => !v)}
+                      className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                      style={{
+                        color: showNotifSettings
+                          ? "var(--color-primary)"
+                          : "var(--color-text-muted)",
+                      }}
+                      title="Configurações"
+                    >
+                      <FiSettings size={14} />
                     </button>
-                  )}
-                  <button
-                    onClick={() => setShowNotifSettings((v) => !v)}
-                    className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
-                    style={{
-                      color: showNotifSettings
-                        ? "var(--color-primary)"
-                        : "var(--color-text-muted)",
-                    }}
-                    title="Configurações"
-                  >
-                    <FiSettings size={14} />
-                  </button>
-                </div>
+                  </div>
 
-                {/* Painel de configurações */}
-                {showNotifSettings ? (
-                  <div className="flex flex-col gap-4 px-4 py-4">
-                    {/* Toggle badge */}
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <span
-                        className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
-                        style={{
-                          backgroundColor: stockNotifSettings.showBadge
-                            ? "var(--color-primary)"
-                            : "var(--color-border)",
-                        }}
-                        onClick={() =>
-                          saveNotifSettings({
-                            showBadge: !stockNotifSettings.showBadge,
-                          })
-                        }
-                      >
+                  {/* Painel de configurações */}
+                  {showNotifSettings ? (
+                    <div className="flex flex-col gap-4 px-4 py-4">
+                      {/* Toggle badge */}
+                      <label className="flex items-start gap-3 cursor-pointer">
                         <span
-                          className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                          className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
                           style={{
-                            transform: stockNotifSettings.showBadge
-                              ? "translateX(18px)"
-                              : "translateX(2px)",
+                            backgroundColor: stockNotifSettings.showBadge
+                              ? "var(--color-primary)"
+                              : "var(--color-border)",
                           }}
-                        />
-                      </span>
-                      <div className="flex-1">
-                        <p
-                          className="text-xs font-semibold"
-                          style={{ color: "var(--color-text-primary)" }}
+                          onClick={() =>
+                            saveNotifSettings({
+                              showBadge: !stockNotifSettings.showBadge,
+                            })
+                          }
                         >
-                          Mostrar badge com contador
-                        </p>
-                        <p
-                          className="text-[10px] mt-0.5"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          Exibe o número de alertas ativos no ícone do sino
-                        </p>
-                      </div>
-                    </label>
-
-                    {/* Toggle estoque zerado */}
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <span
-                        className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
-                        style={{
-                          backgroundColor: stockNotifSettings.notifyZeroStock
-                            ? "var(--color-error)"
-                            : "var(--color-border)",
-                        }}
-                        onClick={() =>
-                          saveNotifSettings({
-                            notifyZeroStock:
-                              !stockNotifSettings.notifyZeroStock,
-                          })
-                        }
-                      >
-                        <span
-                          className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                          style={{
-                            transform: stockNotifSettings.notifyZeroStock
-                              ? "translateX(18px)"
-                              : "translateX(2px)",
-                          }}
-                        />
-                      </span>
-                      <div className="flex-1">
-                        <p
-                          className="text-xs font-semibold"
-                          style={{ color: "var(--color-text-primary)" }}
-                        >
-                          Estoque zerado
-                        </p>
-                        <p
-                          className="text-[10px] mt-0.5"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          Item ficou sem estoque e foi ocultado automaticamente
-                        </p>
-                      </div>
-                    </label>
-
-                    {/* Toggle estoque baixo */}
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <span
-                        className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
-                        style={{
-                          backgroundColor: stockNotifSettings.notifyLowStock
-                            ? "var(--color-warning)"
-                            : "var(--color-border)",
-                        }}
-                        onClick={() =>
-                          saveNotifSettings({
-                            notifyLowStock: !stockNotifSettings.notifyLowStock,
-                          })
-                        }
-                      >
-                        <span
-                          className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                          style={{
-                            transform: stockNotifSettings.notifyLowStock
-                              ? "translateX(18px)"
-                              : "translateX(2px)",
-                          }}
-                        />
-                      </span>
-                      <div className="flex-1">
-                        <p
-                          className="text-xs font-semibold"
-                          style={{ color: "var(--color-text-primary)" }}
-                        >
-                          Estoque baixo
-                        </p>
-                        <p
-                          className="text-[10px] mt-0.5"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          Item com quantidade abaixo do limite configurado
-                        </p>
-                      </div>
-                    </label>
-
-                    {/* Limite de estoque baixo */}
-                    {stockNotifSettings.notifyLowStock && (
-                      <div className="flex flex-col gap-1.5">
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-wide"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          Limite de estoque baixo
+                          <span
+                            className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                            style={{
+                              transform: stockNotifSettings.showBadge
+                                ? "translateX(18px)"
+                                : "translateX(2px)",
+                            }}
+                          />
                         </span>
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={99}
-                            value={thresholdInput}
-                            onChange={(e) => setThresholdInput(e.target.value)}
-                            className="w-20 px-3 py-1.5 text-sm rounded-[var(--radius-md)] outline-none"
-                            style={{
-                              backgroundColor: "var(--color-bg-elevated)",
-                              border: "1px solid var(--color-border)",
-                              color: "var(--color-text-primary)",
-                            }}
-                            onFocus={(e) =>
-                              (e.currentTarget.style.borderColor =
-                                "var(--color-border-focus)")
-                            }
-                            onBlur={(e) =>
-                              (e.currentTarget.style.borderColor =
-                                "var(--color-border)")
-                            }
-                          />
-                          <button
-                            onClick={() => {
-                              const v = parseInt(thresholdInput);
-                              if (!isNaN(v) && v >= 1)
-                                saveNotifSettings({ lowStockThreshold: v });
-                            }}
-                            disabled={savingNotifSettings}
-                            className="flex-1 py-1.5 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
-                            style={{
-                              backgroundColor: "var(--color-primary)",
-                              color: "white",
-                            }}
+                        <div className="flex-1">
+                          <p
+                            className="text-xs font-semibold"
+                            style={{ color: "var(--color-text-primary)" }}
                           >
-                            {savingNotifSettings ? "Salvando..." : "Salvar"}
-                          </button>
-                        </div>
-                        <p
-                          className="text-[10px]"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          Notifica quando quantidade ≤{" "}
-                          {stockNotifSettings.lowStockThreshold}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Lista de notificações */
-                  <div className="max-h-72 overflow-y-auto">
-                    {allNotifications.length === 0 ? (
-                      <div
-                        className="flex flex-col items-center justify-center py-8 gap-2"
-                        style={{ opacity: 0.5 }}
-                      >
-                        <FiBell
-                          size={22}
-                          style={{ color: "var(--color-text-muted)" }}
-                        />
-                        <p
-                          className="text-xs"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          Nenhuma notificação
-                        </p>
-                      </div>
-                    ) : (
-                      allNotifications.map(({ alert, type }) => (
-                        <div
-                          key={alert.id}
-                          className="flex items-center gap-2 px-3 py-2.5"
-                          style={{
-                            borderBottom: "1px solid var(--color-border)",
-                          }}
-                        >
-                          {/* Barra colorida */}
-                          <div
-                            className="w-1 self-stretch rounded-full flex-shrink-0"
-                            style={{
-                              backgroundColor:
-                                type === "zero"
-                                  ? "var(--color-error)"
-                                  : "var(--color-warning)",
-                            }}
-                          />
-
-                          {/* Clicável: foto + texto */}
-                          <button
-                            onClick={() =>
-                              openAlertItem(alert.id, alert.itemId)
-                            }
-                            className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer transition-opacity hover:opacity-75"
-                          >
-                            {alert.itemPhoto ? (
-                              <img
-                                src={alert.itemPhoto}
-                                alt={alert.itemName}
-                                className="w-8 h-8 rounded-[var(--radius-sm)] object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div
-                                className="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"
-                                style={{
-                                  backgroundColor: "var(--color-bg-elevated)",
-                                }}
-                              >
-                                <FiBox
-                                  size={13}
-                                  style={{ color: "var(--color-text-muted)" }}
-                                />
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <p
-                                className="text-xs font-semibold truncate"
-                                style={{ color: "var(--color-text-primary)" }}
-                              >
-                                {alert.itemName}
-                              </p>
-                              <p
-                                className="text-[10px] mt-0.5"
-                                style={{
-                                  color:
-                                    type === "zero"
-                                      ? "var(--color-error)"
-                                      : "var(--color-warning)",
-                                }}
-                              >
-                                {type === "zero"
-                                  ? "Zerado — ocultado automaticamente"
-                                  : `Estoque baixo — ${alert.quantity} restante${alert.quantity !== 1 ? "s" : ""}`}
-                              </p>
-                              <p
-                                className="text-[10px] mt-0.5"
-                                style={{ color: "var(--color-text-muted)" }}
-                              >
-                                {timeAgo(alert.createdAt)}
-                              </p>
-                            </div>
-                          </button>
-
-                          {/* X dispensar */}
-                          <button
-                            onClick={() => dismissNotif(alert.id)}
-                            className="flex-shrink-0 p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                            Mostrar badge com contador
+                          </p>
+                          <p
+                            className="text-[10px] mt-0.5"
                             style={{ color: "var(--color-text-muted)" }}
-                            title="Dispensar"
                           >
-                            <FiX size={13} />
-                          </button>
+                            Exibe o número de alertas ativos no ícone do sino
+                          </p>
                         </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                      </label>
+
+                      {/* Toggle estoque zerado */}
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <span
+                          className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
+                          style={{
+                            backgroundColor: stockNotifSettings.notifyZeroStock
+                              ? "var(--color-error)"
+                              : "var(--color-border)",
+                          }}
+                          onClick={() =>
+                            saveNotifSettings({
+                              notifyZeroStock:
+                                !stockNotifSettings.notifyZeroStock,
+                            })
+                          }
+                        >
+                          <span
+                            className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                            style={{
+                              transform: stockNotifSettings.notifyZeroStock
+                                ? "translateX(18px)"
+                                : "translateX(2px)",
+                            }}
+                          />
+                        </span>
+                        <div className="flex-1">
+                          <p
+                            className="text-xs font-semibold"
+                            style={{ color: "var(--color-text-primary)" }}
+                          >
+                            Estoque zerado
+                          </p>
+                          <p
+                            className="text-[10px] mt-0.5"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Item ficou sem estoque e foi ocultado
+                            automaticamente
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Toggle estoque baixo */}
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <span
+                          className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 mt-0.5 transition-colors"
+                          style={{
+                            backgroundColor: stockNotifSettings.notifyLowStock
+                              ? "var(--color-warning)"
+                              : "var(--color-border)",
+                          }}
+                          onClick={() =>
+                            saveNotifSettings({
+                              notifyLowStock:
+                                !stockNotifSettings.notifyLowStock,
+                            })
+                          }
+                        >
+                          <span
+                            className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                            style={{
+                              transform: stockNotifSettings.notifyLowStock
+                                ? "translateX(18px)"
+                                : "translateX(2px)",
+                            }}
+                          />
+                        </span>
+                        <div className="flex-1">
+                          <p
+                            className="text-xs font-semibold"
+                            style={{ color: "var(--color-text-primary)" }}
+                          >
+                            Estoque baixo
+                          </p>
+                          <p
+                            className="text-[10px] mt-0.5"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Item com quantidade abaixo do limite configurado
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Limite de estoque baixo */}
+                      {stockNotifSettings.notifyLowStock && (
+                        <div className="flex flex-col gap-1.5">
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Limite de estoque baixo
+                          </span>
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              min={1}
+                              max={99}
+                              value={thresholdInput}
+                              onChange={(e) =>
+                                setThresholdInput(e.target.value)
+                              }
+                              className="w-20 px-3 py-1.5 text-sm rounded-[var(--radius-md)] outline-none"
+                              style={{
+                                backgroundColor: "var(--color-bg-elevated)",
+                                border: "1px solid var(--color-border)",
+                                color: "var(--color-text-primary)",
+                              }}
+                              onFocus={(e) =>
+                                (e.currentTarget.style.borderColor =
+                                  "var(--color-border-focus)")
+                              }
+                              onBlur={(e) =>
+                                (e.currentTarget.style.borderColor =
+                                  "var(--color-border)")
+                              }
+                            />
+                            <button
+                              onClick={() => {
+                                const v = parseInt(thresholdInput);
+                                if (!isNaN(v) && v >= 1)
+                                  saveNotifSettings({ lowStockThreshold: v });
+                              }}
+                              disabled={savingNotifSettings}
+                              className="flex-1 py-1.5 text-xs font-medium rounded-[var(--radius-md)] cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50"
+                              style={{
+                                backgroundColor: "var(--color-primary)",
+                                color: "white",
+                              }}
+                            >
+                              {savingNotifSettings ? "Salvando..." : "Salvar"}
+                            </button>
+                          </div>
+                          <p
+                            className="text-[10px]"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Notifica quando quantidade ≤{" "}
+                            {stockNotifSettings.lowStockThreshold}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Lista de notificações */
+                    <div className="max-h-72 overflow-y-auto">
+                      {allNotifications.length === 0 ? (
+                        <div
+                          className="flex flex-col items-center justify-center py-8 gap-2"
+                          style={{ opacity: 0.45 }}
+                        >
+                          <FiCheck
+                            size={22}
+                            style={{ color: "var(--color-text-muted)" }}
+                          />
+                          <p
+                            className="text-xs"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Tudo em ordem
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Seção: Estoque zerado */}
+                          {zeroNotifications.length > 0 && (
+                            <>
+                              <div
+                                className="px-3 py-1.5 flex items-center gap-1.5"
+                                style={{
+                                  backgroundColor: "rgba(239,68,68,0.07)",
+                                  borderBottom: "1px solid var(--color-border)",
+                                }}
+                              >
+                                <FiAlertCircle
+                                  size={11}
+                                  style={{ color: "var(--color-error)" }}
+                                />
+                                <span
+                                  className="text-[10px] font-semibold uppercase tracking-wider"
+                                  style={{ color: "var(--color-error)" }}
+                                >
+                                  Sem estoque ({zeroNotifications.length})
+                                </span>
+                              </div>
+                              {zeroNotifications.map(({ alert }) => (
+                                <AlertRow
+                                  key={alert.id}
+                                  alert={alert}
+                                  type="zero"
+                                  onOpen={openAlertItem}
+                                  onDismiss={dismissNotif}
+                                />
+                              ))}
+                            </>
+                          )}
+
+                          {/* Seção: Estoque baixo */}
+                          {lowNotifications.length > 0 && (
+                            <>
+                              <div
+                                className="px-3 py-1.5 flex items-center gap-1.5"
+                                style={{
+                                  backgroundColor: "rgba(245,158,11,0.07)",
+                                  borderBottom: "1px solid var(--color-border)",
+                                  borderTop:
+                                    zeroNotifications.length > 0
+                                      ? "1px solid var(--color-border)"
+                                      : undefined,
+                                }}
+                              >
+                                <FiAlertTriangle
+                                  size={11}
+                                  style={{ color: "var(--color-warning)" }}
+                                />
+                                <span
+                                  className="text-[10px] font-semibold uppercase tracking-wider"
+                                  style={{ color: "var(--color-warning)" }}
+                                >
+                                  Estoque baixo ({lowNotifications.length})
+                                </span>
+                              </div>
+                              {lowNotifications.map(({ alert }) => (
+                                <AlertRow
+                                  key={alert.id}
+                                  alert={alert}
+                                  type="low"
+                                  onOpen={openAlertItem}
+                                  onDismiss={dismissNotif}
+                                />
+                              ))}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "items" && (
+            <button
+              onClick={exportStockCSV}
+              className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer flex-shrink-0 transition-colors"
+              style={{
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text-secondary)",
+                backgroundColor: "transparent",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-bg-elevated)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+              title="Exportar itens como CSV"
+            >
+              <FiDownload size={15} />
+              <span className="hidden md:block">Exportar CSV</span>
+            </button>
+          )}
 
           {tab === "items" && (
             <button
@@ -4123,15 +5585,33 @@ export default function StockPage() {
                   primeira categoria terá maior prioridade.
                 </p>
                 {canManageCategoryOrder && (
-                  <button
-                    onClick={handleSaveCategoryOrder}
-                    disabled={savingCategories}
-                    className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0 disabled:opacity-50"
-                    style={{ backgroundColor: "var(--color-primary)" }}
-                  >
-                    <FiCheck size={14} />
-                    {savingCategories ? "Salvando..." : "Salvar ordem"}
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {categoryOrder.join(",") !== savedCategoryOrder.join(",") && (
+                      <button
+                        onClick={() => setCategoryOrder([...savedCategoryOrder])}
+                        className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-colors"
+                        style={{
+                          border: "1px solid var(--color-border)",
+                          color: "var(--color-text-secondary)",
+                          backgroundColor: "transparent",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <FiRotateCcw size={14} />
+                        Desfazer
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSaveCategoryOrder}
+                      disabled={savingCategories || categoryOrder.join(",") === savedCategoryOrder.join(",")}
+                      className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer flex-shrink-0 disabled:opacity-40"
+                      style={{ backgroundColor: "var(--color-primary)" }}
+                    >
+                      <FiCheck size={14} />
+                      {savingCategories ? "Salvando..." : "Salvar ordem"}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -4273,24 +5753,49 @@ export default function StockPage() {
                   className="flex flex-col gap-2 rounded-[var(--radius-lg)] overflow-hidden"
                   style={{ border: "1px solid var(--color-border)" }}
                 >
-                  {categoryOrder.map((cat, i) => (
+                  {categoryOrder.map((cat, i) => {
+                    const originalIdx = savedCategoryOrder.indexOf(cat);
+                    const isNew = originalIdx === -1;
+                    const movedUp = !isNew && i < originalIdx;
+                    const movedDown = !isNew && i > originalIdx;
+                    const changed = isNew || movedUp || movedDown;
+                    const delta = isNew ? 0 : Math.abs(originalIdx - i);
+                    return (
                     <div
                       key={cat}
                       className="flex items-center gap-3 px-4 py-3"
                       style={{
-                        backgroundColor: "var(--color-bg-surface)",
-                        borderBottom:
-                          i < categoryOrder.length - 1
-                            ? "1px solid var(--color-border)"
-                            : "none",
+                        backgroundColor: changed ? (movedUp ? "rgba(34,197,94,0.04)" : movedDown ? "rgba(239,68,68,0.04)" : "rgba(59,130,246,0.04)") : "var(--color-bg-surface)",
+                        borderBottom: i < categoryOrder.length - 1 ? "1px solid var(--color-border)" : "none",
+                        borderLeft: changed ? `3px solid ${movedUp ? "var(--color-success)" : movedDown ? "var(--color-error)" : "var(--color-primary)"}` : "3px solid transparent",
+                        transition: "background-color 0.15s, border-color 0.15s",
                       }}
                     >
-                      <span
-                        className="text-xs font-bold w-6 text-center flex-shrink-0"
-                        style={{ color: "var(--color-text-muted)" }}
-                      >
-                        {i + 1}
-                      </span>
+                      <div className="flex flex-col items-center w-8 flex-shrink-0 gap-0.5">
+                        <span
+                          className="text-xs font-bold"
+                          style={{ color: changed ? (movedUp ? "var(--color-success)" : movedDown ? "var(--color-error)" : "var(--color-primary)") : "var(--color-text-muted)" }}
+                        >
+                          {i + 1}
+                        </span>
+                        {movedUp && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold leading-none" style={{ color: "var(--color-success)" }}>
+                            <FiChevronUp size={10} />
+                            {delta}
+                          </span>
+                        )}
+                        {movedDown && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold leading-none" style={{ color: "var(--color-error)" }}>
+                            <FiChevronDown size={10} />
+                            {delta}
+                          </span>
+                        )}
+                        {isNew && (
+                          <span className="text-[9px] font-bold leading-none uppercase tracking-wide" style={{ color: "var(--color-primary)" }}>
+                            novo
+                          </span>
+                        )}
+                      </div>
                       <p
                         className="flex-1 text-sm font-medium"
                         style={{ color: "var(--color-text-primary)" }}
@@ -4299,8 +5804,29 @@ export default function StockPage() {
                       </p>
                       <div className="flex items-center gap-1">
                         <button
+                          onClick={() => moveCategoryToTop(i)}
+                          disabled={i === 0}
+                          title="Mover para o topo"
+                          className="w-7 h-7 rounded flex items-center justify-center cursor-pointer disabled:opacity-30"
+                          style={{ color: "var(--color-text-muted)" }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "var(--color-bg-elevated)")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          <span className="flex flex-col">
+                            <FiChevronUp size={12} style={{ marginBottom: -5 }} />
+                            <FiChevronUp size={12} />
+                          </span>
+                        </button>
+                        <button
                           onClick={() => moveCategoryUp(i)}
                           disabled={i === 0}
+                          title="Mover uma posição acima"
                           className="w-7 h-7 rounded flex items-center justify-center cursor-pointer disabled:opacity-30"
                           style={{ color: "var(--color-text-muted)" }}
                           onMouseEnter={(e) =>
@@ -4317,6 +5843,7 @@ export default function StockPage() {
                         <button
                           onClick={() => moveCategoryDown(i)}
                           disabled={i === categoryOrder.length - 1}
+                          title="Mover uma posição abaixo"
                           className="w-7 h-7 rounded flex items-center justify-center cursor-pointer disabled:opacity-30"
                           style={{ color: "var(--color-text-muted)" }}
                           onMouseEnter={(e) =>
@@ -4329,6 +5856,26 @@ export default function StockPage() {
                           }
                         >
                           <FiChevronDown size={14} />
+                        </button>
+                        <button
+                          onClick={() => moveCategoryToBottom(i)}
+                          disabled={i === categoryOrder.length - 1}
+                          title="Mover para o fim"
+                          className="w-7 h-7 rounded flex items-center justify-center cursor-pointer disabled:opacity-30"
+                          style={{ color: "var(--color-text-muted)" }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "var(--color-bg-elevated)")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          <span className="flex flex-col">
+                            <FiChevronDown size={12} style={{ marginTop: -5 }} />
+                            <FiChevronDown size={12} />
+                          </span>
                         </button>
                         <button
                           onClick={() => removeCategory(i)}
@@ -4350,7 +5897,8 @@ export default function StockPage() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </div>
@@ -4366,6 +5914,7 @@ export default function StockPage() {
           categories={allCategories}
           existingCodes={items.map((i) => i.codItem)}
           onSave={handleSaveItem}
+          onBatchSave={handleSaveItemsBatch}
           onClose={() => setItemModal({ open: false })}
         />
       )}
