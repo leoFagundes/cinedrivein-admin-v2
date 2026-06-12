@@ -75,7 +75,10 @@ export default function VersionBanner() {
 
   function handleUpdate() {
     writeToken();
-    window.location.reload();
+    // Append version param to bust browser cache on the HTML document
+    const url = new URL(window.location.href);
+    url.searchParams.set("v", remoteVersion ?? Date.now().toString());
+    window.location.replace(url.toString());
   }
 
   const isWaiting = tokenTs !== null;

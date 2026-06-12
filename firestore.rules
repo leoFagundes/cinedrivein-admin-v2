@@ -28,6 +28,13 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;
     }
 
+    // Avaliações — cliente envia pelo site, admin gerencia
+    match /feedbacks/{feedbackId} {
+      allow read: if request.auth != null;
+      allow create: if true;
+      allow update, delete: if request.auth != null;
+    }
+
     // Tudo o mais exige autenticação de admin
     match /{document=**} {
       allow read: if true;

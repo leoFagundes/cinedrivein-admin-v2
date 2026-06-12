@@ -4,6 +4,13 @@ ErrorDocument 404 /404.html
 # ── Security headers (necessário para Web Serial API) ─────────────────────────
 <IfModule mod_headers.c>
   Header always set Cross-Origin-Opener-Policy "same-origin"
+
+  # HTML pages must never be served from cache — JS/CSS are fine (hash in filename)
+  <FilesMatch "\.html$">
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+  </FilesMatch>
 </IfModule>
 
 <IfModule mod_rewrite.c>

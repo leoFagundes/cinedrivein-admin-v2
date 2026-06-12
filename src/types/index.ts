@@ -131,6 +131,16 @@ export interface StoreStatus {
   closingTime?: string;
 }
 
+export interface Feedback {
+  id: string;
+  name?: string;
+  rating: number;
+  message: string;
+  favorite?: boolean;
+  seen?: boolean;
+  createdAt: Date;
+}
+
 export interface SiteConfig {
   siteUrl: string;
   isClosed: boolean;

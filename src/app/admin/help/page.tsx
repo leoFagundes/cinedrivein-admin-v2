@@ -863,6 +863,47 @@ const ARTICLES: Article[] = [
       </div>
     ),
   },
+  {
+    id: "avaliacoes-clientes",
+    category: "sistema",
+    title: "Avaliações dos clientes",
+    summary:
+      "Como visualizar, marcar como vistas, destacar e excluir as avaliações enviadas pelo site.",
+    bodyText:
+      "avaliação avaliacoes feedback estrelas comentário sugestão reclamação elogio destacar favoritar excluir cliente nota opinião visto não vista badge",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na página <B>Configurações do Site</B>, a aba{" "}
+          <B>Avaliações</B> exibe os comentários e notas (de 0 a 5 estrelas)
+          enviados pelos clientes na página de feedback do site.
+        </P>
+        <P>
+          As avaliações são listadas com as <B>mais recentes primeiro</B>.
+          Nessa aba você pode:
+        </P>
+        <List
+          items={[
+            "Destacar uma avaliação clicando no ícone de estrela no card — avaliações destacadas sempre aparecem no topo da lista",
+            "Excluir uma avaliação permanentemente clicando no ícone de lixeira",
+            'Marcar uma avaliação como vista clicando em "Marcar como visto" no card',
+          ]}
+        />
+        <P>
+          Avaliações ainda não vistas são destacadas com uma borda colorida no
+          card, e a aba <B>Avaliações</B> exibe um selo com a quantidade de
+          avaliações não vistas.
+        </P>
+        <Note>
+          Apenas usuários com permissão <code>manage_site_settings</code>{" "}
+          podem destacar ou excluir avaliações. Marcar como vista está
+          disponível para qualquer usuário com acesso a esta página. Ações de
+          destaque, exclusão e marcação como vista são registradas na página
+          de <B>Logs</B>.
+        </Note>
+      </div>
+    ),
+  },
 
   // ── SISTEMA ──
   {
@@ -1361,7 +1402,7 @@ const ARTICLES: Article[] = [
     summary:
       "O que fazer quando a faixa amarela de 'Nova versão disponível' aparece no painel.",
     bodyText:
-      "versão atualizar banner faixa amarela nova versão disponível recarregar atualização sistema deploy publicar",
+      "versão atualizar banner faixa amarela nova versão disponível recarregar atualização sistema deploy publicar cache navegador fechar reabrir",
     content: (
       <div className="flex flex-col gap-3">
         <P>
@@ -1384,6 +1425,20 @@ const ARTICLES: Article[] = [
           O delay de 3 minutos existe porque o deploy leva alguns minutos
           para concluir no servidor — recarregar antes pode trazer a versão
           desatualizada.
+        </Note>
+        <P>
+          O botão <B>Atualizar</B> já força o navegador a buscar a página
+          mais recente no servidor, ignorando o cache. Se mesmo assim a
+          faixa voltar a aparecer ao fechar e reabrir o navegador, o
+          problema é o <B>cache do navegador</B> guardando uma cópia antiga
+          da página.
+        </P>
+        <Note>
+          Para limpar o cache: abra as configurações do navegador, procure
+          por <B>"Limpar dados de navegação"</B> (ou{" "}
+          <B>Ctrl + Shift + Delete</B>), selecione{" "}
+          <B>"Imagens e arquivos em cache"</B> e confirme. Depois disso, o
+          painel sempre carregará a versão mais recente automaticamente.
         </Note>
       </div>
     ),

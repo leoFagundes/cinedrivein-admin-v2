@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  getDocs,
+} from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
@@ -24,6 +30,8 @@ import {
   FiSave,
   FiLock,
   FiDollarSign,
+  FiStar,
+  FiSliders,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +39,7 @@ import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
 import Input from "@/components/ui/Input";
+import FeedbackTab from "./FeedbackTab";
 import {
   Film,
   FilmClassification,
@@ -1777,6 +1786,11 @@ export default function SitePage() {
   const [siteUrl, setSiteUrl] = useState("https://cinedrivein.com/");
   const [savingUrl, setSavingUrl] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<"general" | "feedback">(
+    "general",
+  );
+  const [unseenFeedbackCount, setUnseenFeedbackCount] = useState(0);
+
   const [editModal, setEditModal] = useState<{
     session: (typeof SESSIONS)[0];
   } | null>(null);
@@ -1806,6 +1820,20 @@ export default function SitePage() {
       }
     }
     load();
+  }, []);
+
+  // Load unseen feedback count (for the "Avaliações" tab badge)
+  useEffect(() => {
+    async function loadUnseenCount() {
+      try {
+        const snap = await getDocs(collection(db, "feedbacks"));
+        const count = snap.docs.filter((d) => !d.data().seen).length;
+        setUnseenFeedbackCount(count);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    void loadUnseenCount();
   }, []);
 
   // Persist to Firestore
@@ -2254,7 +2282,65 @@ export default function SitePage() {
 
       {!canAccess ? (
         <AccessDenied />
-      ) : loading ? (
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab("general")}
+              className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all"
+              style={{
+                backgroundColor:
+                  activeTab === "general"
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
+                border: `1px solid ${activeTab === "general" ? "var(--color-primary)" : "var(--color-border)"}`,
+                color:
+                  activeTab === "general"
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
+              }}
+            >
+              <FiSliders size={14} />
+              Geral
+            </button>
+            <button
+              onClick={() => setActiveTab("feedback")}
+              className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all"
+              style={{
+                backgroundColor:
+                  activeTab === "feedback"
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
+                border: `1px solid ${activeTab === "feedback" ? "var(--color-primary)" : "var(--color-border)"}`,
+                color:
+                  activeTab === "feedback"
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
+              }}
+            >
+              <FiStar size={14} />
+              Avaliações
+              {unseenFeedbackCount > 0 && (
+                <span
+                  className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none"
+                  style={{
+                    backgroundColor: "var(--color-primary)",
+                    color: "var(--color-bg-surface)",
+                  }}
+                >
+                  {unseenFeedbackCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {activeTab === "feedback" ? (
+            <FeedbackTab
+              canManage={canManageSiteSettings}
+              onUnseenCountChange={setUnseenFeedbackCount}
+            />
+          ) : loading ? (
         <div className="flex justify-center py-20">
           <svg className="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
             <circle
@@ -2352,6 +2438,8 @@ export default function SitePage() {
                 Você não tem permissão para gerenciar configurações extras.
               </p>
             </div>
+          )}
+        </>
           )}
         </>
       )}
