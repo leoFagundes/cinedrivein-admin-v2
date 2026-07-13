@@ -58,6 +58,7 @@ import {
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
+import { useDevMode } from "@/contexts/DevModeContext";
 import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
 import { StockItem, Subitem, AdditionalGroup } from "@/types";
@@ -3157,6 +3158,7 @@ function SubitemCard({
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const { showDocIds } = useDevMode();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -3230,6 +3232,7 @@ function SubitemCard({
                 <FiAlertTriangle size={10} /> Item oculto
               </span>
             )}
+            {showDocIds && <DocIdBadge id={subitem.id} />}
           </div>
           {subitem.description && (
             <p
@@ -3558,6 +3561,25 @@ function VisibilityCascadeModal({
   );
 }
 
+// ─── Dev Mode ID Badge ────────────────────────────────────────────────────────
+
+function DocIdBadge({ id }: { id: string }) {
+  return (
+    <span
+      className="inline-block font-mono text-[9px] px-1 py-0.5 rounded select-all"
+      style={{
+        backgroundColor: "rgba(234,179,8,0.1)",
+        color: "rgb(234,179,8)",
+        border: "1px solid rgba(234,179,8,0.25)",
+        letterSpacing: "0.02em",
+      }}
+      title={`Firestore ID: ${id}`}
+    >
+      {id}
+    </span>
+  );
+}
+
 // ─── Item Card ────────────────────────────────────────────────────────────────
 
 function ActionBtn({
@@ -3623,6 +3645,7 @@ function ItemCard({
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const { showDocIds } = useDevMode();
   const stockColor =
     item.quantity <= 0
       ? "var(--color-error)"
@@ -3782,6 +3805,7 @@ function ItemCard({
         >
           #{item.codItem}
         </p>
+        {showDocIds && <DocIdBadge id={item.id} />}
 
         <p
           className="text-sm font-semibold leading-snug line-clamp-2"
@@ -4057,6 +4081,7 @@ function AlertRow({
 export default function StockPage() {
   const { appUser } = useAuth();
   const { success, error, info } = useToast();
+  const devMode = useDevMode();
   const canAccess = can(appUser, "view_stock");
   const canCreateItem = can(appUser, "create_item");
   const canCreateSubitem = can(appUser, "create_subitem");
@@ -5748,7 +5773,11 @@ export default function StockPage() {
                       }
                       onToggleFeatured={() => handleToggleItemFeatured(item)}
                       onEdit={() => setItemModal({ open: true, editing: item })}
-                      onDelete={() => setDeleteItem(item)}
+                      onDelete={() =>
+                        devMode.skipConfirmations
+                          ? handleDeleteItem(item)
+                          : setDeleteItem(item)
+                      }
                       canEdit={canEditItem}
                       canDelete={canDeleteItem}
                     />
@@ -5827,7 +5856,11 @@ export default function StockPage() {
                         handleToggleSubitemVisibility(s)
                       }
                       onEdit={() => setSubitemModal({ open: true, editing: s })}
-                      onDelete={() => setDeleteSubitem(s)}
+                      onDelete={() =>
+                        devMode.skipConfirmations
+                          ? handleDeleteSubitem(s)
+                          : setDeleteSubitem(s)
+                      }
                       canEdit={canEditSubitem}
                       canDelete={canDeleteSubitem}
                     />

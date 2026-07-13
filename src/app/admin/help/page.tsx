@@ -12,7 +12,17 @@ import {
   FiSettings,
   FiHelpCircle,
   FiBox,
+  FiZap,
+  FiSlash,
+  FiTerminal,
+  FiBellOff,
+  FiShield,
+  FiHash,
+  FiSkipForward,
+  FiUsers,
 } from "react-icons/fi";
+import { useAuth } from "@/contexts/AuthContext";
+import { useDevMode } from "@/contexts/DevModeContext";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1771,7 +1781,47 @@ function ArticleCard({
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
+const DEV_FLAGS = [
+  {
+    icon: <FiSlash size={13} />,
+    label: "Desativar logs",
+    description: "Ignora todas as chamadas de log (nada é gravado no Firestore).",
+  },
+  {
+    icon: <FiTerminal size={13} />,
+    label: "Logs no console",
+    description: "Redireciona logs para console.log em vez do Firestore.",
+  },
+  {
+    icon: <FiBellOff size={13} />,
+    label: "Desativar toasts",
+    description: "Suprime notificações de sucesso/info/warning (erros continuam).",
+  },
+  {
+    icon: <FiShield size={13} />,
+    label: "Bypass de permissões",
+    description: "Ignora checagens de can() — simula acesso total independente da role.",
+  },
+  {
+    icon: <FiHash size={13} />,
+    label: "Mostrar IDs do Firestore",
+    description: "Exibe os IDs dos documentos nos cards de itens, pedidos e usuários.",
+  },
+  {
+    icon: <FiSkipForward size={13} />,
+    label: "Pular confirmações",
+    description: "Executa ações destrutivas (excluir, cancelar, fechar expediente) sem modal.",
+  },
+  {
+    icon: <FiUsers size={13} />,
+    label: "Simular perfil",
+    description: "Substitui suas permissões pelas de um perfil cadastrado, ignorando isOwner.",
+  },
+];
+
 export default function HelpPage() {
+  const { appUser } = useAuth();
+  const devMode = useDevMode();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category>("todos");
 
@@ -1867,6 +1917,116 @@ export default function HelpPage() {
         {filtered.length}{" "}
         {filtered.length === 1 ? "artigo encontrado" : "artigos encontrados"}
       </p>
+
+      {/* Dev Mode — apenas para Owner sem simulação de perfil ativa */}
+      {appUser?.isOwner && !devMode.simulateRole && (
+        <div
+          className="rounded-[var(--radius-xl)] overflow-hidden"
+          style={{
+            border: "1px solid rgba(234,179,8,0.35)",
+            backgroundColor: "var(--color-bg-surface)",
+          }}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-5 py-4"
+            style={{
+              borderBottom: "1px solid rgba(234,179,8,0.2)",
+              background: "linear-gradient(135deg, rgba(234,179,8,0.07) 0%, rgba(234,179,8,0.03) 100%)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <FiZap size={15} style={{ color: "rgb(234,179,8)" }} />
+              <h2
+                className="text-sm font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                Dev Mode
+              </h2>
+              <span
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                style={{
+                  backgroundColor: "rgba(234,179,8,0.12)",
+                  color: "rgb(234,179,8)",
+                  border: "1px solid rgba(234,179,8,0.3)",
+                }}
+              >
+                Ctrl+Shift+D
+              </span>
+            </div>
+            <button
+              onClick={() =>
+                window.dispatchEvent(
+                  new KeyboardEvent("keydown", {
+                    key: "D",
+                    ctrlKey: true,
+                    shiftKey: true,
+                    bubbles: true,
+                  }),
+                )
+              }
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md cursor-pointer transition-all"
+              style={{
+                backgroundColor: "rgba(234,179,8,0.1)",
+                border: "1px solid rgba(234,179,8,0.35)",
+                color: "rgb(234,179,8)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor = "rgba(234,179,8,0.18)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "rgba(234,179,8,0.1)")
+              }
+            >
+              <FiZap size={11} />
+              Abrir painel
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="px-5 py-4 flex flex-col gap-4">
+            <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+              Conjunto de ferramentas para desenvolvimento e testes. As flags persistem
+              no <span className="font-mono text-xs">localStorage</span> do navegador
+              e não afetam outros usuários. Visível apenas para o Owner.
+            </p>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {DEV_FLAGS.map(({ icon, label, description }) => (
+                <div
+                  key={label}
+                  className="flex items-start gap-2.5 p-3 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <span
+                    className="mt-0.5 shrink-0"
+                    style={{ color: "rgb(234,179,8)" }}
+                  >
+                    {icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p
+                      className="text-xs font-semibold"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="text-xs mt-0.5"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      {description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Articles */}
       {filtered.length === 0 ? (

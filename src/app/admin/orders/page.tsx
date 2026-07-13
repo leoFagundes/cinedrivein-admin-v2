@@ -42,6 +42,7 @@ import {
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDevMode } from "@/contexts/DevModeContext";
 import { can } from "@/lib/access";
 import { decreaseStock, increaseStock } from "@/lib/stock";
 import { useOrders, parseOrder } from "@/contexts/OrdersContext";
@@ -294,6 +295,7 @@ function OrderCard({
   hasUnread: boolean;
   isPrinted: boolean;
 }) {
+  const { showDocIds } = useDevMode();
   const [elapsedMin, setElapsedMin] = useState(0);
   const createdAtMs = order.createdAt.getTime();
 
@@ -336,6 +338,19 @@ function OrderCard({
             >
               #{order.orderNumber}
             </span>
+            {showDocIds && (
+              <span
+                className="font-mono text-[9px] px-1 py-0.5 rounded select-all shrink-0"
+                style={{
+                  backgroundColor: "rgba(234,179,8,0.1)",
+                  color: "rgb(234,179,8)",
+                  border: "1px solid rgba(234,179,8,0.25)",
+                }}
+                title={`Firestore ID: ${order.id}`}
+              >
+                {order.id}
+              </span>
+            )}
             <span
               className="text-sm font-semibold flex-shrink-0"
               style={{ color: "var(--color-text-primary)" }}
@@ -702,6 +717,7 @@ function FinishedCard({
   onChat?: () => void;
   canDelete: boolean;
 }) {
+  const { showDocIds, skipConfirmations } = useDevMode();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReactivate, setConfirmReactivate] = useState(false);
   const [justPrinted, setJustPrinted] = useState(false);
@@ -772,6 +788,19 @@ function FinishedCard({
             >
               #{order.orderNumber}
             </span>
+            {showDocIds && (
+              <span
+                className="font-mono text-[9px] px-1 py-0.5 rounded select-all shrink-0"
+                style={{
+                  backgroundColor: "rgba(234,179,8,0.1)",
+                  color: "rgb(234,179,8)",
+                  border: "1px solid rgba(234,179,8,0.25)",
+                }}
+                title={`Firestore ID: ${order.id}`}
+              >
+                {order.id}
+              </span>
+            )}
             <span
               className="text-sm font-semibold flex-shrink-0"
               style={{ color: "var(--color-text-primary)" }}
@@ -944,7 +973,11 @@ function FinishedCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setConfirmReactivate(true);
+                if (skipConfirmations) {
+                  onReactivate();
+                } else {
+                  setConfirmReactivate(true);
+                }
               }}
               className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
               style={{ color: "var(--color-primary)" }}
@@ -956,7 +989,11 @@ function FinishedCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setConfirmDelete(true);
+                  if (skipConfirmations) {
+                    onDelete();
+                  } else {
+                    setConfirmDelete(true);
+                  }
                 }}
                 className="p-1.5 rounded cursor-pointer transition-opacity hover:opacity-70"
                 style={{ color: "var(--color-text-muted)" }}
@@ -1797,6 +1834,7 @@ function OrdersPageInner() {
   } = useOrders();
   const { appUser } = useAuth();
   const { success, error: toastError } = useToast();
+  const devMode = useDevMode();
 
   const canViewOrders = can(appUser, "view_orders");
   const canCancelOrders = can(appUser, "cancel_orders");
@@ -1936,29 +1974,30 @@ function OrdersPageInner() {
     setExpandedIds(new Set());
   }
 
-  async function handleCancel() {
-    if (!cancelTarget || !appUser) return;
+  async function handleCancel(order?: Order) {
+    const target = order ?? cancelTarget;
+    if (!target || !appUser) return;
     setLoadingAction(true);
     try {
-      await updateDoc(doc(db, "orders", cancelTarget.id), {
+      await updateDoc(doc(db, "orders", target.id), {
         status: "canceled",
         finishedAt: serverTimestamp(),
       });
-      await increaseStock(cancelTarget.items);
+      await increaseStock(target.items);
       log({
         action: "Pedido cancelado",
         category: "orders",
-        description: `Pedido #${cancelTarget.orderNumber} (Vaga ${cancelTarget.spot}) foi cancelado`,
+        description: `Pedido #${target.orderNumber} (Vaga ${target.spot}) foi cancelado`,
         performedBy: { uid: appUser.uid, username: appUser.username },
         target: {
           type: "order",
-          id: cancelTarget.id,
-          name: `#${cancelTarget.orderNumber}`,
+          id: target.id,
+          name: `#${target.orderNumber}`,
         },
       });
       success(
         "Pedido cancelado",
-        `Pedido #${cancelTarget.orderNumber} foi cancelado.`,
+        `Pedido #${target.orderNumber} foi cancelado.`,
       );
       setCancelTarget(null);
       setTab("finished");
@@ -2540,7 +2579,11 @@ function OrdersPageInner() {
               {canCancelOrders && (
                 <div className="flex justify-end">
                   <button
-                    onClick={() => setConfirmBulkCancelActive(true)}
+                    onClick={() =>
+                      devMode.skipConfirmations
+                        ? handleBulkCancelActive()
+                        : setConfirmBulkCancelActive(true)
+                    }
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-70"
                     style={{
                       backgroundColor: "rgba(239,68,68,0.1)",
@@ -2560,7 +2603,12 @@ function OrdersPageInner() {
                     order={order}
                     isPrinted={printedIds.has(order.id)}
                     onCancel={
-                      canCancelOrders ? () => setCancelTarget(order) : undefined
+                      canCancelOrders
+                        ? () =>
+                            devMode.skipConfirmations
+                              ? handleCancel(order)
+                              : setCancelTarget(order)
+                        : undefined
                     }
                     onFinalize={
                       canFinishOrders
@@ -2713,7 +2761,11 @@ function OrdersPageInner() {
                 </div>
                 {hasCanceled && canDeleteOrders && (
                   <button
-                    onClick={() => setConfirmBulkDelete(true)}
+                    onClick={() =>
+                      devMode.skipConfirmations
+                        ? handleBulkDeleteCanceled()
+                        : setConfirmBulkDelete(true)
+                    }
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-70"
                     style={{
                       backgroundColor: "rgba(239,68,68,0.1)",
@@ -2786,7 +2838,7 @@ function OrdersPageInner() {
       {cancelTarget && (
         <CancelModal
           order={cancelTarget}
-          onConfirm={handleCancel}
+          onConfirm={() => handleCancel()}
           onClose={() => setCancelTarget(null)}
           loading={loadingAction}
         />

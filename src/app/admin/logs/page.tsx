@@ -36,6 +36,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
+import { useDevMode } from "@/contexts/DevModeContext";
 import { Log, LogCategory } from "@/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -478,6 +479,7 @@ const CATEGORY_FILTERS: { key: CategoryFilter; label: string }[] = [
 export default function LogsPage() {
   const { appUser } = useAuth();
   const { success, error } = useToast();
+  const devMode = useDevMode();
   const canView = can(appUser, "view_logs");
   const canDelete = can(appUser, "delete_logs");
 
@@ -726,7 +728,7 @@ export default function LogsPage() {
           {canDelete && (
             <>
               <button
-                onClick={() => setDeleteOldConfirm(true)}
+                onClick={() => devMode.skipConfirmations ? handleDeleteOldLogs() : setDeleteOldConfirm(true)}
                 className="flex items-center gap-2 h-9 px-3 rounded-md text-sm cursor-pointer transition-all"
                 style={{
                   backgroundColor: "rgba(245,158,11,0.08)",
@@ -745,7 +747,7 @@ export default function LogsPage() {
               </button>
               {logs.length > 0 && (
                 <button
-                  onClick={() => setClearConfirm(true)}
+                  onClick={() => devMode.skipConfirmations ? handleClearAll() : setClearConfirm(true)}
                   className="flex items-center gap-2 h-9 px-3 rounded-md text-sm cursor-pointer transition-all"
                   style={{
                     backgroundColor: "rgba(239,68,68,0.08)",
@@ -1023,7 +1025,7 @@ export default function LogsPage() {
                     key={l.id}
                     log={l}
                     canDelete={canDelete}
-                    onDelete={(id) => setDeleteTarget(id)}
+                    onDelete={(id) => devMode.skipConfirmations ? handleDeleteLog(id) : setDeleteTarget(id)}
                   />
                 ))}
 

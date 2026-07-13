@@ -1,6 +1,7 @@
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { LogCategory, LogChange } from "@/types";
+import { getDevMode } from "./devMode";
 
 export interface LogEntry {
   action: string;
@@ -16,6 +17,16 @@ export interface LogEntry {
  * Fire-and-forget: não deve bloquear a ação principal.
  */
 export function log(entry: LogEntry): void {
+  const { disableLogs, logToConsole } = getDevMode();
+  if (disableLogs) return;
+  if (logToConsole) {
+    console.log(
+      `[log] ${entry.category} › ${entry.action}`,
+      entry.description,
+      entry,
+    );
+    return;
+  }
   const raw = { ...entry, createdAt: serverTimestamp() };
   const data = Object.fromEntries(
     Object.entries(raw).filter(([, v]) => v !== undefined),

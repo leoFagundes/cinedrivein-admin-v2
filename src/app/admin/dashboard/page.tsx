@@ -57,6 +57,7 @@ import { generatePdfReport } from "@/lib/pdf-report";
 import { db, rtdb } from "@/lib/firebase";
 import { ref, onValue } from "firebase/database";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDevMode } from "@/contexts/DevModeContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
@@ -351,6 +352,7 @@ export default function DashboardPage() {
   const { appUser, loading: authLoading } = useAuth();
   const { activeOrders } = useOrders();
   const { success, error: toastError, info } = useToast();
+  const devMode = useDevMode();
   const { isConnected, print, ticketConfig } = usePrinter();
 
   // ── Store control ──
@@ -1858,7 +1860,11 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <button
-                  onClick={() => setShowCloseModal(true)}
+                  onClick={() =>
+                    devMode.skipConfirmations
+                      ? handleCloseDay()
+                      : setShowCloseModal(true)
+                  }
                   className="flex items-center justify-center gap-2 py-2.5 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-opacity hover:opacity-80"
                   style={{
                     backgroundColor: "var(--color-warning)",

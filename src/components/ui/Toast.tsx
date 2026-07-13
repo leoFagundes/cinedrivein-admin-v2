@@ -7,6 +7,7 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { getDevMode } from "@/lib/devMode";
 import {
   FiCheckCircle,
   FiAlertCircle,
@@ -76,6 +77,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback(
     (type: ToastType, title: string, message?: string) => {
+      if (getDevMode().disableToasts && type !== "error") return;
       const id = ++nextId;
       setToasts((prev) => [...prev, { id, type, title, message }]);
       setTimeout(() => dismiss(id), DURATION);

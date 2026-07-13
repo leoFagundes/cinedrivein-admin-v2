@@ -27,6 +27,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
+import { useDevMode } from "@/contexts/DevModeContext";
 import { Feedback } from "@/types";
 
 function timeAgo(date: Date): string {
@@ -326,6 +327,7 @@ export default function FeedbackTab({
 }) {
   const { appUser } = useAuth();
   const { success, error } = useToast();
+  const devMode = useDevMode();
   const actor = appUser
     ? { uid: appUser.uid, username: appUser.username }
     : { uid: "?", username: "?" };
@@ -420,21 +422,22 @@ export default function FeedbackTab({
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
+  async function handleDelete(fb?: Feedback) {
+    const target = fb ?? deleteTarget;
+    if (!target) return;
     setDeleteLoading(true);
     try {
-      await deleteDoc(doc(db, "feedbacks", deleteTarget.id));
-      setFeedbacks((prev) => prev.filter((f) => f.id !== deleteTarget.id));
+      await deleteDoc(doc(db, "feedbacks", target.id));
+      setFeedbacks((prev) => prev.filter((f) => f.id !== target.id));
       success("Avaliação excluída", "O comentário foi removido.");
 
-      const authorName = deleteTarget.name?.trim() || "Anônimo";
+      const authorName = target.name?.trim() || "Anônimo";
       log({
         action: "delete_feedback",
         category: "site",
         description: `Excluiu a avaliação de "${authorName}"`,
         performedBy: actor,
-        target: { type: "feedback", id: deleteTarget.id, name: authorName },
+        target: { type: "feedback", id: target.id, name: authorName },
       });
 
       setDeleteTarget(null);
@@ -516,7 +519,7 @@ export default function FeedbackTab({
               feedback={f}
               canManage={canManage}
               onToggleFavorite={handleToggleFavorite}
-              onDelete={(fb) => setDeleteTarget(fb)}
+              onDelete={(fb) => devMode.skipConfirmations ? handleDelete(fb) : setDeleteTarget(fb)}
               onMarkAsSeen={handleMarkAsSeen}
             />
           ))}
@@ -527,7 +530,7 @@ export default function FeedbackTab({
         <ConfirmModal
           title="Excluir avaliação"
           description="Tem certeza que deseja excluir esta avaliação? Esta ação não pode ser desfeita."
-          onConfirm={handleDelete}
+          onConfirm={() => handleDelete()}
           onClose={() => setDeleteTarget(null)}
           loading={deleteLoading}
         />

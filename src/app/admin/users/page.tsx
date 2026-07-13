@@ -24,6 +24,7 @@ import {
 import { db, getSecondaryAuth } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
+import { useDevMode } from "@/contexts/DevModeContext";
 import { can, canAny } from "@/lib/access";
 import { AppUser, Permission, PermissionProfile, UserStatus } from "@/types";
 import {
@@ -949,6 +950,7 @@ function UserCard({
   onAssign,
   onEdit,
   onDelete,
+  onDeleteDirect,
   lastLogin,
 }: {
   user: AppUser;
@@ -960,8 +962,10 @@ function UserCard({
   onAssign: (user: AppUser) => void;
   onEdit: (user: AppUser) => void;
   onDelete: (user: AppUser) => void;
+  onDeleteDirect: (user: AppUser) => void;
   lastLogin?: Date;
 }) {
+  const { showDocIds, skipConfirmations } = useDevMode();
   return (
     <div
       className="p-4 rounded-[var(--radius-lg)] flex flex-col gap-3"
@@ -1007,6 +1011,19 @@ function UserCard({
             >
               {user.email}
             </p>
+            {showDocIds && (
+              <span
+                className="inline-block font-mono text-[9px] px-1 py-0.5 rounded select-all mt-0.5"
+                style={{
+                  backgroundColor: "rgba(234,179,8,0.1)",
+                  color: "rgb(234,179,8)",
+                  border: "1px solid rgba(234,179,8,0.25)",
+                }}
+                title={`Firestore UID: ${user.uid}`}
+              >
+                {user.uid}
+              </span>
+            )}
           </div>
         </div>
         <StatusBadge status={user.status} />
@@ -1096,7 +1113,9 @@ function UserCard({
               )}
               {canDelete && (
                 <button
-                  onClick={() => onDelete(user)}
+                  onClick={() =>
+                    skipConfirmations ? onDeleteDirect(user) : onDelete(user)
+                  }
                   title="Excluir"
                   className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
                   style={{
@@ -1277,6 +1296,7 @@ type Filter = "all" | UserStatus;
 export default function UsersPage() {
   const { appUser } = useAuth();
   const { success, error, warning } = useToast();
+  const devMode = useDevMode();
 
   const canAccessPage = can(appUser, "view_users");
   const canApproveUsers = can(appUser, "approve_users");
@@ -1897,6 +1917,7 @@ export default function UsersPage() {
                         onAssign={setAssignTarget}
                         onEdit={setEditTarget}
                         onDelete={setDeleteTarget}
+                        onDeleteDirect={handleDelete}
                         lastLogin={lastLogins[user.username]}
                       />
                     ))}
@@ -1977,6 +1998,20 @@ export default function UsersPage() {
                                     >
                                       <FiShield size={10} />
                                       {user.profileName ?? "Sem perfil"}
+                                    </span>
+                                  )}
+                                  {devMode.showDocIds && (
+                                    <span
+                                      className="inline-block font-mono text-[9px] px-1 py-0.5 rounded select-all mt-0.5"
+                                      style={{
+                                        backgroundColor: "rgba(234,179,8,0.1)",
+                                        color: "rgb(234,179,8)",
+                                        border:
+                                          "1px solid rgba(234,179,8,0.25)",
+                                      }}
+                                      title={`Firestore UID: ${user.uid}`}
+                                    >
+                                      {user.uid}
                                     </span>
                                   )}
                                 </div>
@@ -2122,7 +2157,11 @@ export default function UsersPage() {
                                       )}
                                       {canDeleteUsers && (
                                         <button
-                                          onClick={() => setDeleteTarget(user)}
+                                          onClick={() =>
+                                            devMode.skipConfirmations
+                                              ? handleDelete(user)
+                                              : setDeleteTarget(user)
+                                          }
                                           title="Excluir"
                                           className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
                                           style={{
