@@ -307,6 +307,7 @@ function LoginForm() {
                 onSubmit={handleLogin}
                 className="flex flex-col gap-4"
                 noValidate
+                autoComplete="off"
               >
                 <div className="relative">
                   <Input
@@ -354,53 +355,58 @@ function LoginForm() {
                     error={loginErrors.identifier}
                     autoComplete="off"
                   />
-                  {showSuggestions && emailSuggestions.length > 0 && (
-                    <div
-                      className="absolute left-0 right-0 top-full mt-1 rounded-[var(--radius-md)] overflow-hidden z-20"
-                      style={{
-                        backgroundColor: "var(--color-bg-surface)",
-                        border: "1px solid var(--color-border)",
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-                      }}
-                    >
-                      {emailSuggestions.map((email) => (
-                        <button
-                          key={email}
-                          type="button"
-                          onMouseDown={() => {
-                            if (suggestionBlurTimer.current)
-                              clearTimeout(suggestionBlurTimer.current);
-                            setIdentifier(email);
-                            setShowSuggestions(false);
-                            if (loginErrors.identifier)
-                              setLoginErrors((p) => ({
-                                ...p,
-                                identifier: undefined,
-                              }));
-                          }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left cursor-pointer transition-colors"
-                          style={{ color: "var(--color-text-secondary)" }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              "var(--color-bg-elevated)")
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              "transparent")
-                          }
-                        >
-                          <FiMail
-                            size={13}
-                            style={{
-                              color: "var(--color-text-muted)",
-                              flexShrink: 0,
+                  {showSuggestions &&
+                    emailSuggestions.length > 0 &&
+                    !(
+                      emailSuggestions.length === 1 &&
+                      emailSuggestions[0] === identifier
+                    ) && (
+                      <div
+                        className="absolute left-0 right-0 top-full mt-1 rounded-[var(--radius-md)] overflow-hidden z-20"
+                        style={{
+                          backgroundColor: "var(--color-bg-surface)",
+                          border: "1px solid var(--color-border)",
+                          boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                        }}
+                      >
+                        {emailSuggestions.map((email) => (
+                          <button
+                            key={email}
+                            type="button"
+                            onMouseDown={() => {
+                              if (suggestionBlurTimer.current)
+                                clearTimeout(suggestionBlurTimer.current);
+                              setIdentifier(email);
+                              setShowSuggestions(false);
+                              if (loginErrors.identifier)
+                                setLoginErrors((p) => ({
+                                  ...p,
+                                  identifier: undefined,
+                                }));
                             }}
-                          />
-                          {email}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left cursor-pointer transition-colors"
+                            style={{ color: "var(--color-text-secondary)" }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "var(--color-bg-elevated)")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "transparent")
+                            }
+                          >
+                            <FiMail
+                              size={13}
+                              style={{
+                                color: "var(--color-text-muted)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            {email}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                 </div>
 
                 <div className="flex flex-col gap-1.5">

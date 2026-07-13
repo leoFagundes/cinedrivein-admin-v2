@@ -10,7 +10,12 @@
       "Bash(Test-Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-web-v2\\\\scripts\")",
       "Bash(npx tsc *)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cinedrivein-admin-v2\\\\src\\\\app\\\\admin\\\\estoque\" -Recurse -Force | Select-Object FullName, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"Dir\"}else{\"File\"}}} | Sort-Object FullName)",
-      "PowerShell(ls \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cinedrivein-admin-v2\\\\src\\\\app\\\\admin\\\\\" | foreach { Write-Host \"$\\($_.Name\\) - $\\($_.PSIsContainer\\)\" })"
+      "PowerShell(ls \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cinedrivein-admin-v2\\\\src\\\\app\\\\admin\\\\\" | foreach { Write-Host \"$\\($_.Name\\) - $\\($_.PSIsContainer\\)\" })",
+      "Bash(curl -sI \"https://admin.cinedrivein.com/\")",
+      "Bash(curl -s \"https://admin.cinedrivein.com/\")",
+      "Bash(curl -s \"https://admin.cinedrivein.com/\" -o /tmp/live_index.html)",
+      "Read(//tmp/**)",
+      "Bash(curl -s \"https://admin.cinedrivein.com/_next/static/chunks/17xohp_z_jxqi.js\" -o /tmp/live_chunk.js)"
     ]
   }
 }

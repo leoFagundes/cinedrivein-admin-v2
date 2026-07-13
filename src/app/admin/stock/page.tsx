@@ -3141,6 +3141,7 @@ function ItemModal({
 function SubitemCard({
   subitem,
   usedByItems,
+  linkedItemHidden,
   onToggleVisibility,
   onEdit,
   onDelete,
@@ -3149,6 +3150,7 @@ function SubitemCard({
 }: {
   subitem: Subitem;
   usedByItems: StockItem[];
+  linkedItemHidden?: boolean;
   onToggleVisibility: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -3213,6 +3215,19 @@ function SubitemCard({
                 title={`Vinculado ao estoque`}
               >
                 <FiPackage size={10} /> Vínculo de estoque
+              </span>
+            )}
+            {linkedItemHidden && subitem.isVisible && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs flex-shrink-0"
+                style={{
+                  backgroundColor: "rgba(245,158,11,0.12)",
+                  color: "var(--color-warning)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                }}
+                title="O item vinculado está oculto, mas este subitem ainda está visível"
+              >
+                <FiAlertTriangle size={10} /> Item oculto
               </span>
             )}
           </div>
@@ -3363,6 +3378,183 @@ function SubitemCard({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Visibility Cascade Modal ─────────────────────────────────────────────────
+
+function VisibilityCascadeModal({
+  item,
+  nextVisible,
+  linkedSubitems,
+  selectedIds,
+  saving,
+  allItems,
+  onToggleSubitem,
+  onConfirm,
+  onSkip,
+  onClose,
+}: {
+  item: StockItem;
+  nextVisible: boolean;
+  linkedSubitems: Subitem[];
+  selectedIds: Set<string>;
+  saving: boolean;
+  allItems: StockItem[];
+  onToggleSubitem: (id: string) => void;
+  onConfirm: () => void;
+  onSkip: () => void;
+  onClose: () => void;
+}) {
+  const action = nextVisible ? "exibir" : "ocultar";
+  const actionPast = nextVisible ? "exibido" : "ocultado";
+  const allSelected = linkedSubitems.every((s) => selectedIds.has(s.id));
+
+  return (
+    <Modal
+      title={nextVisible ? "Exibir item" : "Ocultar item"}
+      onClose={onClose}
+    >
+      {/* Descrição */}
+      <div
+        className="flex items-start gap-3 p-3 rounded-[var(--radius-md)]"
+        style={{
+          backgroundColor: nextVisible
+            ? "rgba(34,197,94,0.08)"
+            : "rgba(245,158,11,0.08)",
+          border: `1px solid ${nextVisible ? "rgba(34,197,94,0.2)" : "rgba(245,158,11,0.25)"}`,
+        }}
+      >
+        <FiAlertTriangle
+          size={16}
+          className="flex-shrink-0 mt-0.5"
+          style={{
+            color: nextVisible
+              ? "var(--color-success)"
+              : "var(--color-warning)",
+          }}
+        />
+        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+          O item <strong>{`"${item.name}"`}</strong> será {actionPast}.{" "}
+          {linkedSubitems.length === 1
+            ? "Há 1 subitem vinculado"
+            : `Há ${linkedSubitems.length} subitens vinculados`}{" "}
+          que {linkedSubitems.length === 1 ? "está" : "estão"} com visibilidade
+          diferente. Deseja {action}
+          {linkedSubitems.length === 1 ? "-lo" : "-los"} junto?
+        </p>
+      </div>
+
+      {/* Lista de subitens */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between mb-1">
+          <p
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Subitens vinculados
+          </p>
+          <button
+            onClick={() =>
+              linkedSubitems.forEach((s) => {
+                const shouldSelect = !allSelected;
+                if (shouldSelect !== selectedIds.has(s.id))
+                  onToggleSubitem(s.id);
+              })
+            }
+            className="text-xs cursor-pointer"
+            style={{ color: "var(--color-primary)" }}
+          >
+            {allSelected ? "Desmarcar todos" : "Selecionar todos"}
+          </button>
+        </div>
+        {linkedSubitems.map((s) => {
+          const usedIn = allItems.filter((i) =>
+            [
+              ...i.additionals,
+              ...i.additionals_sauce,
+              ...i.additionals_drink,
+              ...i.additionals_sweet,
+            ].includes(s.id),
+          );
+          const checked = selectedIds.has(s.id);
+          return (
+            <div
+              key={s.id}
+              onClick={() => onToggleSubitem(s.id)}
+              className="flex items-start gap-3 p-3 rounded-[var(--radius-md)] cursor-pointer transition-all"
+              style={{
+                backgroundColor: checked
+                  ? "var(--color-bg-elevated)"
+                  : "var(--color-bg-surface)",
+                border: `1px solid ${checked ? "var(--color-primary)" : "var(--color-border)"}`,
+              }}
+            >
+              {/* Checkbox */}
+              <div
+                className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{
+                  backgroundColor: checked
+                    ? "var(--color-primary)"
+                    : "transparent",
+                  border: `1.5px solid ${checked ? "var(--color-primary)" : "var(--color-text-muted)"}`,
+                }}
+              >
+                {checked && <FiCheck size={10} color="white" />}
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-sm font-medium"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {s.name}
+                </p>
+                {usedIn.length > 0 && (
+                  <p
+                    className="text-xs mt-0.5 truncate"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Usado em: {usedIn.map((i) => i.name).join(", ")}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Botões */}
+      <div className="flex gap-3 pt-1">
+        <button
+          onClick={onSkip}
+          disabled={saving}
+          className="flex-1 h-10 rounded-[var(--radius-md)] text-sm cursor-pointer disabled:opacity-50"
+          style={{
+            backgroundColor: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-secondary)",
+          }}
+        >
+          Só o item
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={saving || selectedIds.size === 0}
+          className="flex-1 h-10 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer disabled:opacity-50"
+          style={{
+            backgroundColor: nextVisible
+              ? "var(--color-success)"
+              : "var(--color-warning)",
+            color: "white",
+          }}
+        >
+          {saving
+            ? "Salvando..."
+            : `${nextVisible ? "Exibir" : "Ocultar"} selecionados`}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3928,6 +4120,13 @@ export default function StockPage() {
   const [deleteItem, setDeleteItem] = useState<StockItem | null>(null);
   const [deleteSubitem, setDeleteSubitem] = useState<Subitem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [visibilityCascadeModal, setVisibilityCascadeModal] = useState<{
+    item: StockItem;
+    nextVisible: boolean;
+    linkedSubitems: Subitem[];
+    selectedIds: Set<string>;
+    saving: boolean;
+  } | null>(null);
   const [savingCategories, setSavingCategories] = useState(false);
 
   // ── Close notif dropdown on outside click ──
@@ -4369,6 +4568,20 @@ export default function StockPage() {
 
   async function handleToggleItemVisibility(item: StockItem) {
     const next = !item.isVisible;
+    // Find linked subitems whose visibility would benefit from syncing
+    const linked = subitems.filter(
+      (s) => s.linkedItemId === item.id && s.isVisible !== next,
+    );
+    if (linked.length > 0) {
+      setVisibilityCascadeModal({
+        item,
+        nextVisible: next,
+        linkedSubitems: linked,
+        selectedIds: new Set(linked.map((s) => s.id)),
+        saving: false,
+      });
+      return;
+    }
     try {
       await updateDoc(doc(db, "items", item.id), { isVisible: next });
       info(
@@ -4385,6 +4598,52 @@ export default function StockPage() {
       });
     } catch {
       error("Erro", "Tente novamente.");
+    }
+  }
+
+  async function handleConfirmVisibilityCascade(applyToSubitems: boolean) {
+    if (!visibilityCascadeModal) return;
+    const { item, nextVisible, linkedSubitems, selectedIds } =
+      visibilityCascadeModal;
+    setVisibilityCascadeModal((prev) => prev && { ...prev, saving: true });
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "items", item.id), { isVisible: nextVisible });
+      if (applyToSubitems) {
+        linkedSubitems
+          .filter((s) => selectedIds.has(s.id))
+          .forEach((s) =>
+            batch.update(doc(db, "subitems", s.id), { isVisible: nextVisible }),
+          );
+      }
+      await batch.commit();
+      if (applyToSubitems) {
+        const ids = new Set([...selectedIds]);
+        setSubitems((prev) =>
+          prev.map((s) =>
+            ids.has(s.id) ? { ...s, isVisible: nextVisible } : s,
+          ),
+        );
+      }
+      const subCount = applyToSubitems ? selectedIds.size : 0;
+      info(
+        nextVisible ? "Item visível" : "Item oculto",
+        `"${item.name}" foi ${nextVisible ? "exibido" : "ocultado"}${subCount > 0 ? ` junto com ${subCount} subitem(ns)` : ""}.`,
+      );
+      log({
+        action: "toggle_item_visibility",
+        category: "stock",
+        description: `${nextVisible ? "Exibiu" : "Ocultou"} o item "${item.name}"${subCount > 0 ? ` e ${subCount} subitem(ns) vinculado(s)` : ""}`,
+        performedBy: actor,
+        target: { type: "item", id: item.id, name: item.name },
+        changes: [
+          { field: "visível", from: String(!nextVisible), to: String(nextVisible) },
+        ],
+      });
+      setVisibilityCascadeModal(null);
+    } catch {
+      error("Erro", "Tente novamente.");
+      setVisibilityCascadeModal((prev) => prev && { ...prev, saving: false });
     }
   }
 
@@ -5559,6 +5818,11 @@ export default function StockPage() {
                           ...item.additionals_sweet,
                         ].includes(s.id),
                       )}
+                      linkedItemHidden={
+                        !!s.linkedItemId &&
+                        items.find((i) => i.id === s.linkedItemId)
+                          ?.isVisible === false
+                      }
                       onToggleVisibility={() =>
                         handleToggleSubitemVisibility(s)
                       }
@@ -5948,6 +6212,27 @@ export default function StockPage() {
         <DownloadConfirm
           onConfirm={() => setDownloadModal(false)}
           onClose={() => setDownloadModal(false)}
+        />
+      )}
+      {visibilityCascadeModal && (
+        <VisibilityCascadeModal
+          item={visibilityCascadeModal.item}
+          nextVisible={visibilityCascadeModal.nextVisible}
+          linkedSubitems={visibilityCascadeModal.linkedSubitems}
+          selectedIds={visibilityCascadeModal.selectedIds}
+          saving={visibilityCascadeModal.saving}
+          allItems={items}
+          onToggleSubitem={(id) =>
+            setVisibilityCascadeModal((prev) => {
+              if (!prev) return prev;
+              const next = new Set(prev.selectedIds);
+              next.has(id) ? next.delete(id) : next.add(id);
+              return { ...prev, selectedIds: next };
+            })
+          }
+          onConfirm={() => handleConfirmVisibilityCascade(true)}
+          onSkip={() => handleConfirmVisibilityCascade(false)}
+          onClose={() => setVisibilityCascadeModal(null)}
         />
       )}
     </div>
