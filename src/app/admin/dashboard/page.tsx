@@ -794,7 +794,7 @@ export default function DashboardPage() {
           (acc, o) => ({
             total: acc.total + (o.total || 0),
             subtotal: acc.subtotal + (o.subtotal || 0),
-            serviceFee: acc.serviceFee + (o.serviceFee || 0),
+            serviceFee: acc.serviceFee + (o.serviceFeePaid ? o.serviceFee : 0),
             money: acc.money + (o.payment?.money || 0),
             pix: acc.pix + (o.payment?.pix || 0),
             credit: acc.credit + (o.payment?.credit || 0),
@@ -1041,7 +1041,7 @@ export default function DashboardPage() {
             credit: acc.credit + (o.payment?.credit || 0),
             debit: acc.debit + (o.payment?.debit || 0),
             subtotal: acc.subtotal + o.subtotal,
-            serviceFee: acc.serviceFee + o.serviceFee,
+            serviceFee: acc.serviceFee + (o.serviceFeePaid ? o.serviceFee : 0),
             discount: acc.discount + (o.discount || 0),
             total: acc.total + o.total,
           }),
