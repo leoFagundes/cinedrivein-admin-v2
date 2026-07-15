@@ -34,6 +34,7 @@ export const PERMISSION_META: Record<Permission, { label: string; description: s
   // Logs
   view_logs:            { label: "Visualizar LOGS",                  description: "Acessar o histórico de ações do sistema" },
   delete_logs:          { label: "Excluir logs",                     description: "Remover registros de auditoria" },
+  restore_log:          { label: "Restaurar dados via log",          description: "Recuperar o estado anterior de qualquer dado a partir de um registro de log" },
   // Site
   view_site:            { label: "Visualizar configurações do site", description: "Acessar a página de configurações do site" },
   manage_movies:        { label: "Gerenciar filmes",                 description: "Editar a programação de filmes" },
@@ -70,7 +71,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     label: "Logs",
     viewPerm: "view_logs",
-    permissions: ["view_logs", "delete_logs"],
+    permissions: ["view_logs", "delete_logs", "restore_log"],
   },
   {
     label: "Configuracoes do Site",

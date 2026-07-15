@@ -8,6 +8,9 @@ import {
   limit,
   where,
   getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
   deleteDoc,
   doc,
   writeBatch,
@@ -31,13 +34,18 @@ import {
   FiAlertTriangle,
   FiCalendar,
   FiUser,
+  FiRotateCcw,
+  FiCheckCircle,
+  FiXCircle,
+  FiAlertCircle,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
 import { useDevMode } from "@/contexts/DevModeContext";
-import { Log, LogCategory } from "@/types";
+import { Log, LogCategory, SiteConfig, PriceRule, EventType } from "@/types";
+import { log as writeLog } from "@/lib/logger";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -319,10 +327,14 @@ function LogRow({
   log,
   canDelete,
   onDelete,
+  canRestore,
+  onRestore,
 }: {
   log: Log;
   canDelete: boolean;
   onDelete: (id: string) => void;
+  canRestore: boolean;
+  onRestore: (log: Log) => void;
 }) {
   const cat = CATEGORY_META[log.category];
   const hasChanges = log.changes && log.changes.length > 0;
@@ -352,7 +364,7 @@ function LogRow({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Description + delete */}
+          {/* Description + actions */}
           <div className="flex items-start justify-between gap-3">
             <p
               className="text-sm font-medium leading-snug"
@@ -360,25 +372,44 @@ function LogRow({
             >
               {log.description}
             </p>
-            {canDelete && (
-              <button
-                onClick={() => onDelete(log.id)}
-                title="Excluir log"
-                className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
-                style={{ color: "var(--color-text-muted)" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor =
-                    "rgba(239,68,68,0.1)";
-                  e.currentTarget.style.color = "var(--color-error)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                  e.currentTarget.style.color = "var(--color-text-muted)";
-                }}
-              >
-                <FiTrash2 size={13} />
-              </button>
-            )}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {canRestore && ((log.changes?.length ?? 0) > 0 || !!log.snapshot) && (
+                <button
+                  onClick={() => onRestore(log)}
+                  title="Restaurar estado anterior"
+                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                  style={{ color: "var(--color-text-muted)" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(0,136,194,0.1)";
+                    e.currentTarget.style.color = "var(--color-primary)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--color-text-muted)";
+                  }}
+                >
+                  <FiRotateCcw size={13} />
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(log.id)}
+                  title="Excluir log"
+                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                  style={{ color: "var(--color-text-muted)" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.1)";
+                    e.currentTarget.style.color = "var(--color-error)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--color-text-muted)";
+                  }}
+                >
+                  <FiTrash2 size={13} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Meta row: category · actor · time */}
@@ -462,6 +493,359 @@ function endOfDay(dateStr: string): Date {
   return new Date(y, m - 1, d, 23, 59, 59, 999);
 }
 
+// ─── Restore logic ────────────────────────────────────────────────────────────
+
+type RestoreStatus = "ok" | "partial" | "impossible";
+
+interface RestoreFirestoreTarget {
+  collection: string;
+  docId: string;
+  fields: Record<string, unknown>;
+  mode: "update" | "create";
+}
+
+interface RestoreItem {
+  field: string;
+  from: string | null;
+  to: string | null;
+  status: RestoreStatus;
+  reason: string;
+  target: RestoreFirestoreTarget | null;
+}
+
+type LogChange = NonNullable<Log["changes"]>[number];
+
+// Parse "R$ 25,90" → 25.90
+function parseBRL(s: string | null): number | null {
+  if (!s) return null;
+  const n = parseFloat(s.replace(/[R$\s.]/g, "").replace(",", "."));
+  return isNaN(n) ? null : n;
+}
+
+function impossible(c: LogChange, reason: string): RestoreItem {
+  return { ...c, status: "impossible", reason, target: null };
+}
+
+// ── Stock item fields ──────────────────────────────────────────────────────────
+function analyzeStockItemChange(c: LogChange, docId: string): RestoreItem {
+  const ok = (reason: string, fields: Record<string, unknown>): RestoreItem =>
+    ({ ...c, status: "ok", reason, target: { collection: "items", docId, fields, mode: "update" as const } });
+
+  switch (c.field) {
+    case "Quantidade": {
+      const v = c.from !== null ? parseInt(c.from, 10) : NaN;
+      if (isNaN(v)) return impossible(c, "Valor anterior não disponível");
+      return ok(`Será restaurado para: ${c.from}`, { quantity: v });
+    }
+    case "Nome":
+      return c.from !== null ? ok(`Será restaurado para: "${c.from}"`, { name: c.from }) : impossible(c, "Valor anterior não disponível");
+    case "Código":
+      return c.from !== null ? ok(`Será restaurado para: "${c.from}"`, { codItem: c.from }) : impossible(c, "Valor anterior não disponível");
+    case "Tipo":
+      return c.from !== null ? ok(`Será restaurado para: "${c.from}"`, { category: c.from }) : impossible(c, "Valor anterior não disponível");
+    case "Descrição":
+      return ok(`Será restaurado para: "${c.from ?? ""}"`, { description: c.from ?? "" });
+    case "Valor": {
+      const v = parseBRL(c.from);
+      return v !== null ? ok(`Será restaurado para: ${c.from}`, { value: v }) : impossible(c, "Valor anterior não pôde ser interpretado");
+    }
+    case "Valor cliente": {
+      if (c.from === null) return ok("Campo será limpo", { visibleValue: null });
+      const v = parseBRL(c.from);
+      return v !== null ? ok(`Será restaurado para: ${c.from}`, { visibleValue: v }) : impossible(c, "Valor anterior não pôde ser interpretado");
+    }
+    case "Preço original (promoção)": {
+      if (c.from === null) return ok("Campo será limpo", { promotionOriginalPrice: null });
+      const v = parseBRL(c.from);
+      return v !== null ? ok(`Será restaurado para: ${c.from}`, { promotionOriginalPrice: v }) : impossible(c, "Valor anterior não pôde ser interpretado");
+    }
+    case "Visível":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { isVisible: c.from === "Sim" });
+    case "visível": // quick toggle (lowercase, "true"/"false")
+      return ok(`Será restaurado para: ${c.from === "true" ? "visível" : "oculto"}`, { isVisible: c.from === "true" });
+    case "Destaque":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { isFeatured: c.from === "Sim" });
+    case "Controle de estoque":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { trackStock: c.from === "Sim" });
+    case "Impressão 2x":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { printTwice: c.from === "Sim" });
+    case "Promoção":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { isPromotion: c.from === "Sim" });
+    case "Foto":
+      return impossible(c, "A URL da foto anterior não foi armazenada no log");
+    default:
+      if (c.field.startsWith("Adicionais"))
+        return impossible(c, "A lista de adicionais anterior não foi armazenada no log");
+      return impossible(c, "Campo não suportado para restauração");
+  }
+}
+
+// ── Subitem fields ─────────────────────────────────────────────────────────────
+function analyzeSubitemChange(c: LogChange, docId: string): RestoreItem {
+  const ok = (reason: string, fields: Record<string, unknown>): RestoreItem =>
+    ({ ...c, status: "ok", reason, target: { collection: "subitems", docId, fields, mode: "update" as const } });
+
+  switch (c.field) {
+    case "Nome":
+      return c.from !== null ? ok(`Será restaurado para: "${c.from}"`, { name: c.from }) : impossible(c, "Valor anterior não disponível");
+    case "Descrição":
+      return ok(`Será restaurado para: "${c.from ?? ""}"`, { description: c.from ?? "" });
+    case "Visível":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { isVisible: c.from === "Sim" });
+    case "visível":
+      return ok(`Será restaurado para: ${c.from === "true" ? "visível" : "oculto"}`, { isVisible: c.from === "true" });
+    case "Foto":
+      return impossible(c, "A URL da foto anterior não foi armazenada no log");
+    case "Item vinculado":
+      return impossible(c, "O ID do item vinculado anterior não foi armazenado no log");
+    default:
+      return impossible(c, "Campo não suportado para restauração");
+  }
+}
+
+// ── Site config fields ─────────────────────────────────────────────────────────
+const RESTORE_EVENTS: { value: EventType; label: string }[] = [
+  { value: "", label: "Nenhum" },
+  { value: "christmas", label: "Natal" },
+  { value: "halloween", label: "Halloween" },
+  { value: "easter", label: "Páscoa" },
+];
+
+function analyzeSiteChange(c: LogChange): RestoreItem {
+  const ok = (reason: string, fields: Record<string, unknown>): RestoreItem =>
+    ({ ...c, status: "ok", reason, target: { collection: "siteConfig", docId: "main", fields, mode: "update" as const } });
+
+  switch (c.field) {
+    case "Cinema fechado":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { isClosed: c.from === "Sim" });
+    case "Tema sazonal": {
+      const ev = RESTORE_EVENTS.find((e) => e.label === (c.from ?? "Nenhum"));
+      return ok(`Será restaurado para: ${c.from ?? "Nenhum"}`, { isEvent: ev?.value ?? "" });
+    }
+    case "Pop-up":
+      return ok(`Será restaurado para: ${c.from ?? "Não"}`, { popUpEnabled: c.from === "Sim" });
+    case "Título pop-up":
+      return ok(`Será restaurado para: "${c.from ?? ""}"`, { popUpTitle: c.from ?? "" });
+    case "URL":
+      return c.from !== null ? ok(`Será restaurado para: "${c.from}"`, { siteUrl: c.from }) : impossible(c, "URL anterior não disponível");
+    case "Imagem pop-up":
+      return impossible(c, "A URL da imagem anterior não foi armazenada no log");
+    case "Descrições pop-up":
+      return impossible(c, "O conteúdo das descrições não foi armazenado no log");
+    case "Preços": {
+      if (!c.from) return ok("Tabela de preços será limpa", { prices: [] });
+      const rules = c.from.split(" | ").map((part) => {
+        const m = part.match(/^(.+): M([\d.]+)\/I([\d.]+)$/);
+        if (!m) return null;
+        return { label: m[1], meia: Number(m[2]), inteira: Number(m[3]), days: [] } as PriceRule;
+      });
+      if (rules.some((r) => r === null))
+        return impossible(c, "Formato dos preços não pôde ser interpretado");
+      return { ...c, status: "partial", reason: "Valores e rótulos serão restaurados, mas os dias da semana serão redefinidos", target: { collection: "siteConfig", docId: "main", fields: { prices: rules as PriceRule[] }, mode: "update" as const } };
+    }
+    default:
+      return impossible(c, "Campo não suportado para restauração");
+  }
+}
+
+// ── Dispatcher ─────────────────────────────────────────────────────────────────
+function analyzeRestoreItems(log: Log): RestoreItem[] {
+  // Deletion with snapshot — re-create the deleted object
+  if (log.snapshot && log.target) {
+    if (log.action === "delete_film") {
+      const sessionKey = log.target.id;
+      return [{
+        field: log.target.name || "Filme",
+        from: log.target.name || "Filme",
+        to: null,
+        status: "ok",
+        reason: `O filme "${log.target.name}" será restaurado na sessão correspondente`,
+        target: { collection: "siteConfig", docId: "main", fields: { [sessionKey]: log.snapshot }, mode: "update" },
+      }];
+    }
+    if (log.action === "delete_item") {
+      return [{
+        field: log.target.name,
+        from: log.target.name,
+        to: null,
+        status: "ok",
+        reason: `O item "${log.target.name}" será recriado no estoque com todos os seus dados`,
+        target: { collection: "items", docId: log.target.id, fields: log.snapshot, mode: "create" },
+      }];
+    }
+    if (log.action === "delete_subitem") {
+      return [{
+        field: log.target.name,
+        from: log.target.name,
+        to: null,
+        status: "partial",
+        reason: `O subitem "${log.target.name}" será recriado, mas os vínculos com itens não serão restaurados automaticamente`,
+        target: { collection: "subitems", docId: log.target.id, fields: log.snapshot, mode: "create" },
+      }];
+    }
+  }
+
+  const changes = log.changes ?? [];
+  if (changes.length === 0) return [];
+
+  if (log.category === "site")
+    return changes.map(analyzeSiteChange);
+
+  if (log.category === "stock" && log.target?.type === "item")
+    return changes.map((c) => analyzeStockItemChange(c, log.target!.id));
+
+  if (log.category === "stock" && log.target?.type === "subitem")
+    return changes.map((c) => analyzeSubitemChange(c, log.target!.id));
+
+  return changes.map((c) => impossible(c, "Tipo de log não suportado para restauração automática"));
+}
+
+// ─── Restore modal ────────────────────────────────────────────────────────────
+
+function RestoreModal({
+  log,
+  onConfirm,
+  onClose,
+  loading,
+}: {
+  log: Log;
+  onConfirm: () => void;
+  onClose: () => void;
+  loading: boolean;
+}) {
+  const items = analyzeRestoreItems(log);
+  const hasRestorable = items.some((i) => i.status !== "impossible");
+
+  const statusIcon = (status: RestoreStatus) => {
+    if (status === "ok") return <FiCheckCircle size={14} style={{ color: "var(--color-success)", flexShrink: 0 }} />;
+    if (status === "partial") return <FiAlertCircle size={14} style={{ color: "var(--color-warning, #f59e0b)", flexShrink: 0 }} />;
+    return <FiXCircle size={14} style={{ color: "var(--color-error)", flexShrink: 0 }} />;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0" style={{ backgroundColor: "rgba(0,0,0,0.65)" }} />
+      <div
+        className="relative w-full max-w-lg rounded-[var(--radius-xl)] flex flex-col max-h-[90vh]"
+        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--color-border)" }}
+        >
+          <div className="flex items-center gap-2">
+            <FiRotateCcw size={16} style={{ color: "var(--color-primary)" }} />
+            <h2 className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              Restaurar configurações
+            </h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded cursor-pointer hover:opacity-60" style={{ color: "var(--color-text-muted)" }}>
+            <FiX size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-4">
+          {/* Log metadata */}
+          <div
+            className="flex flex-col gap-1 px-4 py-3 rounded-[var(--radius-md)] text-xs"
+            style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+          >
+            <span style={{ color: "var(--color-text-muted)" }}>
+              Log de <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>@{log.performedBy.username}</span>
+              {" · "}
+              {log.createdAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <span style={{ color: "var(--color-text-muted)" }}>{log.description}</span>
+          </div>
+
+          {/* Field analysis */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+              Campos alterados
+            </p>
+            {items.map((item, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-1.5 px-4 py-3 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: item.status === "ok"
+                    ? "rgba(34,197,94,0.06)"
+                    : item.status === "partial"
+                    ? "rgba(245,158,11,0.06)"
+                    : "rgba(239,68,68,0.06)",
+                  border: `1px solid ${item.status === "ok" ? "rgba(34,197,94,0.2)" : item.status === "partial" ? "rgba(245,158,11,0.2)" : "rgba(239,68,68,0.2)"}`,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  {statusIcon(item.status)}
+                  <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+                    {item.field}
+                  </span>
+                  <span className="text-xs ml-auto flex-shrink-0" style={{ color: "var(--color-text-muted)" }}>
+                    {item.status === "ok" ? "Restaurável" : item.status === "partial" ? "Parcial" : "Não restaurável"}
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{item.reason}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Warning if nothing restorable */}
+          {!hasRestorable && (
+            <div
+              className="flex items-start gap-3 px-4 py-3 rounded-[var(--radius-md)]"
+              style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+            >
+              <FiAlertTriangle size={16} className="flex-shrink-0 mt-0.5" style={{ color: "var(--color-error)" }} />
+              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                Nenhum campo deste log pode ser restaurado automaticamente.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex gap-3 px-5 py-4 flex-shrink-0"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          <button
+            onClick={onClose}
+            className="flex-1 h-10 rounded-[var(--radius-md)] text-sm cursor-pointer"
+            style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!hasRestorable || loading}
+            className="flex-1 h-10 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ backgroundColor: "var(--color-primary)" }}
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin" width={14} height={14} viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Restaurando...
+              </>
+            ) : (
+              <>
+                <FiRotateCcw size={14} />
+                Restaurar
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type CategoryFilter = "all" | LogCategory;
@@ -482,6 +866,7 @@ export default function LogsPage() {
   const devMode = useDevMode();
   const canView = can(appUser, "view_logs");
   const canDelete = can(appUser, "delete_logs");
+  const canRestore = can(appUser, "restore_log");
 
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
@@ -498,6 +883,8 @@ export default function LogsPage() {
   const [adminUsers, setAdminUsers] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<Log | null>(null);
+  const [restoreLoading, setRestoreLoading] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
   const [fromDate, setFromDate] = useState("");
@@ -515,6 +902,7 @@ export default function LogsPage() {
       performedBy: data.performedBy,
       target: data.target,
       changes: data.changes,
+      snapshot: data.snapshot,
       createdAt: data.createdAt?.toDate() ?? new Date(),
     };
   }
@@ -691,6 +1079,52 @@ export default function LogsPage() {
       error("Erro", "Não foi possível excluir os logs antigos.");
     } finally {
       setDeleteOldLoading(false);
+    }
+  }
+
+  async function handleRestore() {
+    if (!restoreTarget || !appUser) return;
+    setRestoreLoading(true);
+    try {
+      const items = analyzeRestoreItems(restoreTarget);
+      const restorable = items.filter((i) => i.status !== "impossible" && i.target !== null);
+      if (restorable.length === 0) {
+        error("Nada a restaurar", "Nenhum campo pode ser recuperado deste log.");
+        return;
+      }
+
+      // Group patches by collection:docId so we make one write per document
+      const groups = new Map<string, { collection: string; docId: string; fields: Record<string, unknown>; mode: "update" | "create" }>();
+      for (const item of restorable) {
+        const key = `${item.target!.collection}:${item.target!.docId}`;
+        if (!groups.has(key)) groups.set(key, { collection: item.target!.collection, docId: item.target!.docId, fields: {}, mode: item.target!.mode });
+        Object.assign(groups.get(key)!.fields, item.target!.fields);
+      }
+
+      for (const { collection: col, docId, fields, mode } of groups.values()) {
+        if (mode === "create") {
+          await setDoc(doc(db, col, docId), fields);
+        } else {
+          await updateDoc(doc(db, col, docId), fields);
+        }
+      }
+
+      writeLog({
+        action: "restore_log",
+        category: restoreTarget.category,
+        description: `Restaurou dados a partir de log de @${restoreTarget.performedBy.username}`,
+        performedBy: { uid: appUser.uid, username: appUser.username },
+        ...(restoreTarget.target && { target: restoreTarget.target }),
+        changes: restorable.map((i) => ({ field: i.field, from: i.to, to: i.from })),
+      });
+
+      success("Restaurado", `${restorable.length} campo${restorable.length !== 1 ? "s" : ""} restaurado${restorable.length !== 1 ? "s" : ""} com sucesso.`);
+      setRestoreTarget(null);
+    } catch (err) {
+      console.error(err);
+      error("Erro ao restaurar", "Tente novamente.");
+    } finally {
+      setRestoreLoading(false);
     }
   }
 
@@ -940,7 +1374,7 @@ export default function LogsPage() {
               backgroundColor: "var(--color-bg-surface)",
             }}
           >
-            {loading ? (
+            {loading || fetchAllLoading ? (
               <div className="flex justify-center items-center py-20">
                 <svg
                   className="animate-spin w-6 h-6"
@@ -1026,6 +1460,8 @@ export default function LogsPage() {
                     log={l}
                     canDelete={canDelete}
                     onDelete={(id) => devMode.skipConfirmations ? handleDeleteLog(id) : setDeleteTarget(id)}
+                    canRestore={canRestore}
+                    onRestore={(logEntry) => setRestoreTarget(logEntry)}
                   />
                 ))}
 
@@ -1084,6 +1520,14 @@ export default function LogsPage() {
       )}
 
       {/* Modals */}
+      {restoreTarget && (
+        <RestoreModal
+          log={restoreTarget}
+          onConfirm={handleRestore}
+          onClose={() => setRestoreTarget(null)}
+          loading={restoreLoading}
+        />
+      )}
       {deleteTarget && (
         <ConfirmModal
           title="Excluir log"

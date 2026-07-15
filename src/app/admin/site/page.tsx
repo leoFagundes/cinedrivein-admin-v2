@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  getDocs,
-} from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
@@ -33,8 +27,12 @@ import {
   FiStar,
   FiSliders,
   FiBarChart2,
+  FiInfo,
+  FiUsers,
+  FiMaximize2,
 } from "react-icons/fi";
-import { db, storage } from "@/lib/firebase";
+import { db, storage, rtdb } from "@/lib/firebase";
+import { ref as rtdbRef, onValue } from "firebase/database";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
@@ -954,6 +952,30 @@ function SessionCard({
   );
 }
 
+// ─── Info Tooltip ─────────────────────────────────────────────────────────────
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span
+      className="relative group cursor-help inline-flex"
+      style={{ color: "var(--color-text-muted)" }}
+    >
+      <FiInfo size={13} />
+      <span
+        className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 px-2.5 py-2 rounded-lg text-[11px] leading-snug font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 whitespace-normal"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text-primary)",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 // ─── Popup Image Gallery ──────────────────────────────────────────────────────
 
 function PopupImageGallery({
@@ -968,92 +990,154 @@ function PopupImageGallery({
   onDelete: (url: string) => void;
 }) {
   const [hoveredUrl, setHoveredUrl] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [isTouch] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches,
+  );
 
   if (history.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2">
-      <p
-        className="text-xs font-medium"
-        style={{ color: "var(--color-text-muted)" }}
-      >
-        Imagens anteriores — clique para reutilizar
-      </p>
-      <div className="flex flex-wrap gap-3">
-        {history.map((url) => {
-          const isActive = url === selected;
-          const isHovered = hoveredUrl === url;
+    <>
+      <div className="flex flex-col gap-2">
+        <p
+          className="text-xs font-medium"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          Imagens anteriores — clique para reutilizar
+        </p>
+        <div className="flex flex-wrap gap-6">
+          {history.map((url) => {
+            const isActive = url === selected;
+            const isHovered = hoveredUrl === url;
+            const showButtons = isTouch || isHovered;
 
-          return (
-            <div
-              key={url}
-              className="relative flex-shrink-0"
-              style={{ width: 60, height: 60 }}
-              onMouseEnter={() => setHoveredUrl(url)}
-              onMouseLeave={() => setHoveredUrl(null)}
-            >
-              {/* Thumbnail */}
-              <button
-                type="button"
-                onClick={() => onSelect(url)}
-                title="Usar esta imagem"
-                className="w-full h-full rounded-[var(--radius-md)] overflow-hidden cursor-pointer transition-all"
-                style={{
-                  border: isActive
-                    ? "2.5px solid var(--color-primary)"
-                    : isHovered
-                      ? "2.5px solid var(--color-border-focus)"
-                      : "2px solid var(--color-border)",
-                  padding: 0,
-                  opacity: isHovered && !isActive ? 0.85 : 1,
-                  transform: isActive ? "scale(1.05)" : "scale(1)",
-                  transition: "all 0.15s ease",
-                }}
+            return (
+              <div
+                key={url}
+                className="relative flex-shrink-0"
+                style={{ width: 60, height: 60 }}
+                onMouseEnter={() => setHoveredUrl(url)}
+                onMouseLeave={() => setHoveredUrl(null)}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="w-full h-full object-cover" />
-              </button>
-
-              {/* Active checkmark — bottom-right */}
-              {isActive && (
-                <div
-                  className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-sm"
+                {/* Thumbnail */}
+                <button
+                  type="button"
+                  onClick={() => onSelect(url)}
+                  title="Usar esta imagem"
+                  className="w-full h-full rounded-[var(--radius-md)] overflow-hidden cursor-pointer transition-all"
                   style={{
-                    backgroundColor: "var(--color-primary)",
-                    color: "white",
-                    border: "2px solid var(--color-bg-surface)",
+                    border: isActive
+                      ? "2.5px solid var(--color-primary)"
+                      : isHovered
+                        ? "2.5px solid var(--color-border-focus)"
+                        : "2px solid var(--color-border)",
+                    padding: 0,
+                    opacity: isHovered && !isActive ? 0.85 : 1,
+                    transform: isActive ? "scale(1.05)" : "scale(1)",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  <FiCheck size={10} strokeWidth={3} />
-                </div>
-              )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </button>
 
-              {/* Delete button — top-left, shown on hover */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(url);
-                }}
-                title="Remover da galeria"
-                className="absolute -top-2.5 -left-2.5 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer shadow-md transition-all"
-                style={{
-                  backgroundColor: "var(--color-error)",
-                  color: "white",
-                  border: "2px solid var(--color-bg-surface)",
-                  opacity: isHovered ? 1 : 0,
-                  pointerEvents: isHovered ? "auto" : "none",
-                  transform: isHovered ? "scale(1)" : "scale(0.5)",
-                  transition: "opacity 0.15s ease, transform 0.15s ease",
-                }}
-              >
-                <FiX size={12} strokeWidth={3} />
-              </button>
-            </div>
-          );
-        })}
+                {/* Active checkmark — bottom-right */}
+                {isActive && (
+                  <div
+                    className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-sm"
+                    style={{
+                      backgroundColor: "var(--color-primary)",
+                      color: "white",
+                      border: "2px solid var(--color-bg-surface)",
+                    }}
+                  >
+                    <FiCheck size={10} strokeWidth={3} />
+                  </div>
+                )}
+
+                {/* Delete button — top-left */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(url);
+                  }}
+                  title="Remover da galeria"
+                  className="absolute -top-2.5 -left-2.5 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer shadow-md sm:transition-all"
+                  style={{
+                    backgroundColor: "var(--color-error)",
+                    color: "white",
+                    border: "2px solid var(--color-bg-surface)",
+                    opacity: showButtons ? 1 : 0,
+                    pointerEvents: showButtons ? "auto" : "none",
+                    transform: showButtons ? "scale(1)" : "scale(0.5)",
+                  }}
+                >
+                  <FiX size={12} strokeWidth={3} />
+                </button>
+
+                {/* Expand button — top-right */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLightboxUrl(url);
+                  }}
+                  title="Ver imagem"
+                  className="absolute -top-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer shadow-md sm:transition-all"
+                  style={{
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-secondary)",
+                    border: "2px solid var(--color-border)",
+                    opacity: showButtons ? 1 : 0,
+                    pointerEvents: showButtons ? "auto" : "none",
+                    transform: showButtons ? "scale(1)" : "scale(0.5)",
+                  }}
+                >
+                  <FiMaximize2 size={10} strokeWidth={2.5} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div
+            className="relative max-w-lg w-full rounded-[var(--radius-xl)] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightboxUrl}
+              alt=""
+              className="w-full h-auto max-h-[80dvh] object-contain"
+              style={{ backgroundColor: "var(--color-bg-surface)" }}
+            />
+            <button
+              onClick={() => setLightboxUrl(null)}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+              style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "white" }}
+            >
+              <FiX size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1088,6 +1172,16 @@ function ExtraSettings({
   const [popupExpanded, setPopupExpanded] = useState(false);
   const [prices, setPrices] = useState<PriceRule[]>(config.prices ?? []);
   const [pricesExpanded, setPricesExpanded] = useState(false);
+
+  const hasUnsavedChanges =
+    isClosed !== (config.isClosed ?? false) ||
+    isEvent !== (config.isEvent ?? "") ||
+    popUpEnabled !== (config.popUpEnabled ?? false) ||
+    popUpTitle !== (config.popUpTitle ?? "") ||
+    popUpDescs !== (config.popUpDescriptions ?? []).join("\n") ||
+    popUpFile !== null ||
+    (popUpFile === null && popUpImage !== (config.popUpImage ?? "")) ||
+    JSON.stringify(prices) !== JSON.stringify(config.prices ?? []);
 
   // Local copy of image history — syncs from config when Firestore updates
   const [imageHistory, setImageHistory] = useState<string[]>(
@@ -1230,15 +1324,27 @@ function ExtraSettings({
         >
           Configurações extras
         </h2>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center justify-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer disabled:opacity-50 w-full sm:w-auto"
-          style={{ backgroundColor: "var(--color-primary)" }}
-        >
-          <FiCheck size={14} />
-          {saving ? "Salvando..." : "Salvar"}
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {hasUnsavedChanges && (
+            <span
+              className="flex items-center gap-1.5 text-xs font-medium flex-1 sm:flex-none"
+              style={{ color: "var(--color-warning, #f59e0b)" }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+              <span className="sm:hidden">Não salvo</span>
+              <span className="hidden sm:inline">Alterações não salvas</span>
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center justify-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium text-white cursor-pointer disabled:opacity-50 flex-shrink-0 w-full sm:w-auto"
+            style={{ backgroundColor: "var(--color-primary)" }}
+          >
+            <FiCheck size={14} />
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
       </div>
 
       {/* Seasonal hint */}
@@ -1285,12 +1391,15 @@ function ExtraSettings({
 
       {/* Cinema closed toggle */}
       <div className="flex flex-col gap-2">
-        <p
-          className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          Status do cinema
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Status do cinema
+          </p>
+          <InfoTooltip text="Quando marcado como fechado, um aviso aparece automaticamente acima dos filmes no site principal informando que o cinema está fechado hoje." />
+        </div>
         <button
           onClick={() => setIsClosed((v) => !v)}
           className="flex items-center gap-3 h-12 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all w-full sm:w-fit"
@@ -1318,12 +1427,15 @@ function ExtraSettings({
 
       {/* Event toggles */}
       <div className="flex flex-col gap-2">
-        <p
-          className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          Tema sazonal
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Tema sazonal
+          </p>
+          <InfoTooltip text="Ativa efeitos visuais temáticos no site principal: flocos de neve (Natal), abóboras e morcegos (Halloween) e ovos coloridos (Páscoa). Selecione 'Nenhum' para desativar." />
+        </div>
         <div className="flex flex-wrap gap-2">
           {EVENTS.map((ev) => (
             <button
@@ -1437,6 +1549,12 @@ function ExtraSettings({
               backgroundColor: "var(--color-bg-surface)",
             }}
           >
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              Cada regra define um grupo de dias com seus valores de meia e
+              inteira. No site, os preços aparecem agrupados por tipo — primeiro
+              todos os valores de meia-entrada, depois todos os de inteira — com
+              o rótulo de cada regra entre parênteses.
+            </p>
             {prices.map((p, i) => (
               <div
                 key={i}
@@ -1464,9 +1582,7 @@ function ExtraSettings({
                   <input
                     value={p.label}
                     onChange={(e) => {
-                      const copy = [...prices];
-                      copy[i].label = e.target.value;
-                      setPrices(copy);
+                      setPrices(prices.map((p2, idx) => idx === i ? { ...p2, label: e.target.value } : p2));
                     }}
                     placeholder="Ex: Segunda e Terça"
                     className="flex-1 bg-transparent text-sm outline-none"
@@ -1521,9 +1637,7 @@ function ExtraSettings({
                         step={0.5}
                         value={p.meia}
                         onChange={(e) => {
-                          const copy = [...prices];
-                          copy[i].meia = Number(e.target.value);
-                          setPrices(copy);
+                          setPrices(prices.map((p2, idx) => idx === i ? { ...p2, meia: Number(e.target.value) } : p2));
                         }}
                         className="bg-transparent text-xl font-bold outline-none w-20"
                         style={{ color: "var(--color-text-primary)" }}
@@ -1556,9 +1670,7 @@ function ExtraSettings({
                         step={0.5}
                         value={p.inteira}
                         onChange={(e) => {
-                          const copy = [...prices];
-                          copy[i].inteira = Number(e.target.value);
-                          setPrices(copy);
+                          setPrices(prices.map((p2, idx) => idx === i ? { ...p2, inteira: Number(e.target.value) } : p2));
                         }}
                         className="bg-transparent text-xl font-bold outline-none w-20"
                         style={{ color: "var(--color-text-primary)" }}
@@ -1615,6 +1727,128 @@ function ExtraSettings({
                 >
                   Clique em &quot;Nova regra&quot; para adicionar.
                 </p>
+              </div>
+            )}
+
+            {/* Preview */}
+            {prices.some((p) => p.label || p.meia > 0 || p.inteira > 0) && (
+              <div
+                className="rounded-[var(--radius-lg)] overflow-hidden"
+                style={{ border: "1px solid var(--color-border)" }}
+              >
+                <div
+                  className="flex items-center gap-2 px-4 py-2.5"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  <FiGlobe
+                    size={11}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Pré-visualização — como aparece no site
+                  </p>
+                </div>
+                <div
+                  className="grid grid-cols-2 divide-x p-4 gap-4"
+                  style={{ borderColor: "var(--color-border)" }}
+                >
+                  <div className="flex flex-col gap-2">
+                    <p
+                      className="text-xs font-bold"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      Meia{" "}
+                      <span className="font-normal text-[10px]">
+                        (por pessoa)
+                      </span>
+                    </p>
+                    {prices
+                      .filter((p) => p.meia > 0)
+                      .map((p, i) => (
+                        <div
+                          key={i}
+                          className="flex items-baseline gap-1 flex-wrap"
+                        >
+                          <span
+                            className="text-base font-bold"
+                            style={{ color: "var(--color-primary)" }}
+                          >
+                            {p.meia.toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </span>
+                          {p.label && (
+                            <span
+                              className="text-[10px]"
+                              style={{ color: "var(--color-text-muted)" }}
+                            >
+                              ({p.label})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    {prices.every((p) => p.meia === 0) && (
+                      <span
+                        className="text-[10px] italic"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Sem valor definido
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 pl-4">
+                    <p
+                      className="text-xs font-bold"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      Inteira{" "}
+                      <span className="font-normal text-[10px]">
+                        (por pessoa)
+                      </span>
+                    </p>
+                    {prices
+                      .filter((p) => p.inteira > 0)
+                      .map((p, i) => (
+                        <div
+                          key={i}
+                          className="flex items-baseline gap-1 flex-wrap"
+                        >
+                          <span
+                            className="text-base font-bold"
+                            style={{ color: "var(--color-primary)" }}
+                          >
+                            {p.inteira.toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </span>
+                          {p.label && (
+                            <span
+                              className="text-[10px]"
+                              style={{ color: "var(--color-text-muted)" }}
+                            >
+                              ({p.label})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    {prices.every((p) => p.inteira === 0) && (
+                      <span
+                        className="text-[10px] italic"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Sem valor definido
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1788,10 +2022,11 @@ export default function SitePage() {
   const [siteUrl, setSiteUrl] = useState("https://cinedrivein.com/");
   const [savingUrl, setSavingUrl] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"general" | "feedback" | "statistics">(
-    "general",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "general" | "feedback" | "statistics"
+  >("general");
   const [unseenFeedbackCount, setUnseenFeedbackCount] = useState(0);
+  const [activeUsers, setActiveUsers] = useState(0);
 
   const [editModal, setEditModal] = useState<{
     session: (typeof SESSIONS)[0];
@@ -1822,6 +2057,14 @@ export default function SitePage() {
       }
     }
     load();
+  }, []);
+
+  // Real-time counter of visitors on the main site (RTDB sitePresence)
+  useEffect(() => {
+    const presenceRef = rtdbRef(rtdb, "sitePresence");
+    return onValue(presenceRef, (snap) => {
+      setActiveUsers(snap.exists() ? Object.keys(snap.val()).length : 0);
+    });
   }, []);
 
   // Load unseen feedback count (for the "Avaliações" tab badge)
@@ -2016,6 +2259,7 @@ export default function SitePage() {
     sessionLabel: string,
   ) {
     setDeleteLoading(true);
+    const film = config[sessionKey];
     try {
       await persistConfig({ [sessionKey]: null });
       success("Sessão removida", `${sessionLabel} foi limpa.`);
@@ -2024,6 +2268,8 @@ export default function SitePage() {
         category: "site",
         description: `Removeu o filme da ${sessionLabel}`,
         performedBy: actor,
+        target: { type: "film", id: sessionKey, name: film?.title ?? sessionLabel },
+        ...(film && { snapshot: Object.fromEntries(Object.entries(film).filter(([, v]) => v !== undefined)) }),
       });
       setDeleteModal(null);
     } catch (err) {
@@ -2280,6 +2526,35 @@ export default function SitePage() {
             </a>
           </div>
         </div>
+
+        {/* Live users counter */}
+        <div className="flex items-center gap-2 px-1">
+          <span
+            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+            style={{
+              backgroundColor:
+                activeUsers > 0
+                  ? "var(--color-success)"
+                  : "var(--color-border)",
+            }}
+          />
+          <span
+            className="text-xs"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {activeUsers > 0 ? (
+              <>
+                <strong style={{ color: "var(--color-text-primary)" }}>
+                  {activeUsers}
+                </strong>{" "}
+                {activeUsers === 1 ? "pessoa navegando" : "pessoas navegando"}{" "}
+                no site agora
+              </>
+            ) : (
+              "Nenhum visitante ativo no momento"
+            )}
+          </span>
+        </div>
       </div>
 
       {!canAccess ? (
@@ -2363,105 +2638,109 @@ export default function SitePage() {
           ) : activeTab === "statistics" ? (
             <StatisticsTab canManage={canManageSiteSettings} />
           ) : loading ? (
-        <div className="flex justify-center py-20">
-          <svg className="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
-            <circle
-              className="opacity-20"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="var(--color-primary)"
-              strokeWidth="3"
-            />
-            <path
-              className="opacity-80"
-              fill="var(--color-primary)"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-        </div>
-      ) : (
-        <>
-          {/* Sessions */}
-          {canManageMovies ? (
-            <div className="flex flex-col gap-4">
-              <div>
-                <h2
-                  className="text-base font-semibold"
-                  style={{ color: "var(--color-text-primary)" }}
+            <div className="flex justify-center py-20">
+              <svg
+                className="animate-spin w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-20"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="var(--color-primary)"
+                  strokeWidth="3"
+                />
+                <path
+                  className="opacity-80"
+                  fill="var(--color-primary)"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            </div>
+          ) : (
+            <>
+              {/* Sessions */}
+              {canManageMovies ? (
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h2
+                      className="text-base font-semibold"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      Sessões em cartaz
+                    </h2>
+                    <p
+                      className="text-sm mt-0.5"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Clique em uma sessão vazia para adicionar um filme ou
+                      passe o mouse para editar.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                    {SESSIONS.map((session) => (
+                      <SessionCard
+                        key={session.key}
+                        session={session}
+                        film={config[session.key]}
+                        onEdit={() => setEditModal({ session })}
+                        onCopy={() => setCopyModal({ session })}
+                        onDelete={() => setDeleteModal({ session })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
                 >
-                  Sessões em cartaz
-                </h2>
-                <p
-                  className="text-sm mt-0.5"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  Clique em uma sessão vazia para adicionar um filme ou passe o
-                  mouse para editar.
-                </p>
-              </div>
-              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-                {SESSIONS.map((session) => (
-                  <SessionCard
-                    key={session.key}
-                    session={session}
-                    film={config[session.key]}
-                    onEdit={() => setEditModal({ session })}
-                    onCopy={() => setCopyModal({ session })}
-                    onDelete={() => setDeleteModal({ session })}
+                  <FiLock
+                    size={16}
+                    style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
                   />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div
-              className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border)",
-              }}
-            >
-              <FiLock
-                size={16}
-                style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
-              />
-              <p
-                className="text-sm"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                Você não tem permissão para gerenciar filmes.
-              </p>
-            </div>
-          )}
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Você não tem permissão para gerenciar filmes.
+                  </p>
+                </div>
+              )}
 
-          {/* Extra settings */}
-          {canManageSiteSettings ? (
-            <ExtraSettings
-              config={config}
-              onSave={handleSaveExtra}
-              saving={savingExtra}
-            />
-          ) : (
-            <div
-              className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border)",
-              }}
-            >
-              <FiLock
-                size={16}
-                style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
-              />
-              <p
-                className="text-sm"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                Você não tem permissão para gerenciar configurações extras.
-              </p>
-            </div>
-          )}
-        </>
+              {/* Extra settings */}
+              {canManageSiteSettings ? (
+                <ExtraSettings
+                  config={config}
+                  onSave={handleSaveExtra}
+                  saving={savingExtra}
+                />
+              ) : (
+                <div
+                  className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <FiLock
+                    size={16}
+                    style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+                  />
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Você não tem permissão para gerenciar configurações extras.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

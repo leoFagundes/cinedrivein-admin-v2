@@ -10,6 +10,7 @@ export interface LogEntry {
   performedBy: { uid: string; username: string };
   target?: { type: string; id: string; name: string };
   changes?: LogChange[];
+  snapshot?: Record<string, unknown>;
 }
 
 /**

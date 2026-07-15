@@ -22,7 +22,6 @@ import {
   FiUsers,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
-import { useDevMode } from "@/contexts/DevModeContext";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -33,7 +32,8 @@ type Category =
   | "impressora"
   | "chat"
   | "estoque"
-  | "sistema";
+  | "sistema"
+  | "dev";
 
 interface Article {
   id: string;
@@ -42,7 +42,54 @@ interface Article {
   summary: string;
   content: React.ReactNode;
   bodyText?: string;
+  ownerOnly?: boolean;
 }
+
+// ── Dev flags ─────────────────────────────────────────────────────────────────
+
+const DEV_FLAGS = [
+  {
+    icon: <FiSlash size={13} />,
+    label: "Desativar logs",
+    description:
+      "Ignora todas as chamadas de log (nada é gravado no Firestore).",
+  },
+  {
+    icon: <FiTerminal size={13} />,
+    label: "Logs no console",
+    description: "Redireciona logs para console.log em vez do Firestore.",
+  },
+  {
+    icon: <FiBellOff size={13} />,
+    label: "Desativar toasts",
+    description:
+      "Suprime notificações de sucesso/info/warning (erros continuam).",
+  },
+  {
+    icon: <FiShield size={13} />,
+    label: "Bypass de permissões",
+    description:
+      "Ignora checagens de can() — simula acesso total independente da role.",
+  },
+  {
+    icon: <FiHash size={13} />,
+    label: "Mostrar IDs do Firestore",
+    description:
+      "Exibe os IDs dos documentos nos cards de itens, pedidos e usuários.",
+  },
+  {
+    icon: <FiSkipForward size={13} />,
+    label: "Pular confirmações",
+    description:
+      "Executa ações destrutivas (excluir, cancelar, fechar expediente) sem modal.",
+  },
+  {
+    icon: <FiUsers size={13} />,
+    label: "Simular perfil",
+    description:
+      "Substitui suas permissões pelas de um perfil cadastrado, ignorando isOwner.",
+  },
+];
 
 // ── Article content ────────────────────────────────────────────────────────────
 
@@ -769,7 +816,8 @@ const ARTICLES: Article[] = [
     id: "vincular-subitens",
     category: "estoque",
     title: "Vincular um subitem a um item do estoque",
-    summary: "Como fazer um adicional consumir automaticamente o estoque de um item.",
+    summary:
+      "Como fazer um adicional consumir automaticamente o estoque de um item.",
     content: (
       <div className="flex flex-col gap-3">
         <P>
@@ -810,6 +858,7 @@ const ARTICLES: Article[] = [
     category: "sistema",
     title: "Logs do sistema",
     summary: "Como acompanhar todas as ações realizadas no painel.",
+    bodyText: "logs histórico auditoria ações registros restaurar recuperar",
     content: (
       <div className="flex flex-col gap-3">
         <P>
@@ -830,9 +879,15 @@ const ARTICLES: Article[] = [
           Use os filtros disponíveis para buscar por <B>categoria</B>,{" "}
           <B>usuário</B> ou <B>período</B>.
         </P>
+        <P>
+          Logs que registram alterações ou exclusões exibem um botão de{" "}
+          <B>restauração</B> ao passar o mouse — consulte o artigo{" "}
+          <B>Restaurar dados via log</B> para mais detalhes.
+        </P>
         <Note>
-          Os logs são somente leitura — não podem ser editados. Servem como
-          histórico de auditoria do sistema.
+          Logs não podem ser editados manualmente — servem como histórico de
+          auditoria. Apenas usuários com permissão <code>delete_logs</code>{" "}
+          podem excluí-los.
         </Note>
       </div>
     ),
@@ -884,13 +939,13 @@ const ARTICLES: Article[] = [
     content: (
       <div className="flex flex-col gap-3">
         <P>
-          Na página <B>Configurações do Site</B>, a aba{" "}
-          <B>Avaliações</B> exibe os comentários e notas (de 0 a 5 estrelas)
-          enviados pelos clientes na página de feedback do site.
+          Na página <B>Configurações do Site</B>, a aba <B>Avaliações</B> exibe
+          os comentários e notas (de 0 a 5 estrelas) enviados pelos clientes na
+          página de feedback do site.
         </P>
         <P>
-          As avaliações são listadas com as <B>mais recentes primeiro</B>.
-          Nessa aba você pode:
+          As avaliações são listadas com as <B>mais recentes primeiro</B>. Nessa
+          aba você pode:
         </P>
         <List
           items={[
@@ -905,11 +960,10 @@ const ARTICLES: Article[] = [
           avaliações não vistas.
         </P>
         <Note>
-          Apenas usuários com permissão <code>manage_site_settings</code>{" "}
-          podem destacar ou excluir avaliações. Marcar como vista está
-          disponível para qualquer usuário com acesso a esta página. Ações de
-          destaque, exclusão e marcação como vista são registradas na página
-          de <B>Logs</B>.
+          Apenas usuários com permissão <code>manage_site_settings</code> podem
+          destacar ou excluir avaliações. Marcar como vista está disponível para
+          qualquer usuário com acesso a esta página. Ações de destaque, exclusão
+          e marcação como vista são registradas na página de <B>Logs</B>.
         </Note>
       </div>
     ),
@@ -940,6 +994,7 @@ const ARTICLES: Article[] = [
             "view_users / manage_users",
             "manage_chat_templates / chat_orders",
             "manage_store / view_site",
+            "view_logs / delete_logs / restore_log",
           ]}
         />
         <P>
@@ -1017,8 +1072,7 @@ const ARTICLES: Article[] = [
       <div className="flex flex-col gap-3">
         <P>
           Na página de <B>Pedidos</B>, há um botão de som no canto inferior
-          direito da tela. Clique nele para ativar ou desativar o alerta
-          sonoro.
+          direito da tela. Clique nele para ativar ou desativar o alerta sonoro.
         </P>
         <P>
           Com o som ativo, sempre que um novo pedido chegar ao painel, um{" "}
@@ -1065,9 +1119,9 @@ const ARTICLES: Article[] = [
           <B>Excluir todos os cancelados</B>
         </P>
         <P>
-          Na aba <B>Finalizados</B>, clique no botão{" "}
-          <B>Excluir cancelados</B>. Isso remove permanentemente todos os
-          pedidos com status Cancelado da fila atual.
+          Na aba <B>Finalizados</B>, clique no botão <B>Excluir cancelados</B>.
+          Isso remove permanentemente todos os pedidos com status Cancelado da
+          fila atual.
         </P>
         <Warn>
           A exclusão em massa é irreversível. Pedidos excluídos não aparecem
@@ -1086,26 +1140,25 @@ const ARTICLES: Article[] = [
     content: (
       <div className="flex flex-col gap-3">
         <P>
-          Na aba <B>Finalizados</B>, cada card tem um ícone de{" "}
-          <B>🗑 lixeira</B>. Clique nele para excluir o pedido
-          permanentemente.
+          Na aba <B>Finalizados</B>, cada card tem um ícone de <B>🗑 lixeira</B>
+          . Clique nele para excluir o pedido permanentemente.
         </P>
         <P>
           Uma confirmação rápida aparece no próprio card. Confirme para
           concluir.
         </P>
         <P>
-          A exclusão remove o pedido <B>e todo o histórico de chat</B>{" "}
-          associado a ele.
+          A exclusão remove o pedido <B>e todo o histórico de chat</B> associado
+          a ele.
         </P>
         <Warn>
           Pedidos excluídos não podem ser recuperados e não aparecem nos
-          relatórios. Use apenas para pedidos que não precisam mais constar
-          no histórico.
+          relatórios. Use apenas para pedidos que não precisam mais constar no
+          histórico.
         </Warn>
         <Note>
-          Apenas usuários com permissão <code>delete_orders</code> veem o
-          botão de exclusão.
+          Apenas usuários com permissão <code>delete_orders</code> veem o botão
+          de exclusão.
         </Note>
       </div>
     ),
@@ -1128,17 +1181,17 @@ const ARTICLES: Article[] = [
           destaque.
         </P>
         <P>
-          Itens marcados como destaque ficam em <B>evidência no cardápio do
-          cliente</B>, sendo exibidos antes dos demais itens da mesma
-          categoria.
+          Itens marcados como destaque ficam em{" "}
+          <B>evidência no cardápio do cliente</B>, sendo exibidos antes dos
+          demais itens da mesma categoria.
         </P>
         <P>
           Use o destaque para promover itens sazonais, promoções ou os mais
           pedidos da casa.
         </P>
         <Note>
-          O destaque não altera preço nem disponibilidade — é apenas uma
-          forma de dar mais visibilidade no cardápio.
+          O destaque não altera preço nem disponibilidade — é apenas uma forma
+          de dar mais visibilidade no cardápio.
         </Note>
       </div>
     ),
@@ -1173,8 +1226,7 @@ const ARTICLES: Article[] = [
         />
         <Note>
           Diferente do controle de estoque (que zera automaticamente quando
-          acaba), ocultar é manual — o item permanece oculto até você
-          reativar.
+          acaba), ocultar é manual — o item permanece oculto até você reativar.
         </Note>
       </div>
     ),
@@ -1190,9 +1242,8 @@ const ARTICLES: Article[] = [
     content: (
       <div className="flex flex-col gap-3">
         <P>
-          Ao <B>editar um item</B> no Estoque, há uma seção{" "}
-          <B>Em promoção</B> abaixo do campo de preço. Clique no toggle para
-          ativar.
+          Ao <B>editar um item</B> no Estoque, há uma seção <B>Em promoção</B>{" "}
+          abaixo do campo de preço. Clique no toggle para ativar.
         </P>
         <P>Com a promoção ativa, um campo adicional aparece:</P>
         <List
@@ -1202,18 +1253,18 @@ const ARTICLES: Article[] = [
         />
         <P>
           Na <B>listagem do Estoque</B>, o item ganha um badge vermelho{" "}
-          <B>Promoção</B> e exibe o preço original riscado abaixo do preço
-          atual em vermelho.
+          <B>Promoção</B> e exibe o preço original riscado abaixo do preço atual
+          em vermelho.
         </P>
         <P>
           No <B>cardápio do cliente</B>, itens em promoção aparecem no{" "}
           <B>topo da categoria</B> — acima dos itens em destaque — com borda
-          vermelha, etiqueta <B>🏷️ Promoção</B> e preço original riscado
-          em cinza acima do preço atual em vermelho.
+          vermelha, etiqueta <B>🏷️ Promoção</B> e preço original riscado em
+          cinza acima do preço atual em vermelho.
         </P>
         <P>
-          Para filtrar apenas os itens em promoção na página de Estoque, use
-          o seletor <B>Visibilidade</B> e escolha <B>Em promoção</B>.
+          Para filtrar apenas os itens em promoção na página de Estoque, use o
+          seletor <B>Visibilidade</B> e escolha <B>Em promoção</B>.
         </P>
         <Note>
           Se o campo de preço original não for preenchido, o badge vermelho
@@ -1233,17 +1284,16 @@ const ARTICLES: Article[] = [
     content: (
       <div className="flex flex-col gap-3">
         <P>
-          Na página de <B>Estoque</B>, role até a seção{" "}
-          <B>Ordem do cardápio</B>. Ela lista todas as categorias existentes
-          em cards arrastáveis.
+          Na página de <B>Estoque</B>, role até a seção <B>Ordem do cardápio</B>
+          . Ela lista todas as categorias existentes em cards arrastáveis.
         </P>
         <P>
-          Arraste os cards para reposicionar as categorias na ordem desejada
-          e clique em <B>Salvar ordem</B> para confirmar.
+          Arraste os cards para reposicionar as categorias na ordem desejada e
+          clique em <B>Salvar ordem</B> para confirmar.
         </P>
         <P>
-          A nova sequência é refletida imediatamente no cardápio do cliente
-          após salvar.
+          A nova sequência é refletida imediatamente no cardápio do cliente após
+          salvar.
         </P>
         <Note>
           A ordenação afeta apenas a sequência das categorias no menu — não
@@ -1258,8 +1308,7 @@ const ARTICLES: Article[] = [
     id: "auto-impressao",
     category: "impressora",
     title: "Auto-impressão de novas comandas",
-    summary:
-      "Como funciona a impressão automática ao receber um novo pedido.",
+    summary: "Como funciona a impressão automática ao receber um novo pedido.",
     bodyText:
       "auto impressão automática nova comanda pedido chega imprime automaticamente conectada badge não impresso",
     content: (
@@ -1270,9 +1319,9 @@ const ARTICLES: Article[] = [
           precisar clicar no ícone de impressão de cada card.
         </P>
         <P>
-          Se um pedido chegar com a impressora <B>desconectada</B>, o card
-          exibe o badge <B>Não impresso</B> em amarelo. Reconecte a
-          impressora e imprima manualmente pelo ícone no card.
+          Se um pedido chegar com a impressora <B>desconectada</B>, o card exibe
+          o badge <B>Não impresso</B> em amarelo. Reconecte a impressora e
+          imprima manualmente pelo ícone no card.
         </P>
         <P>
           O badge <B>Não impresso</B> desaparece assim que a comanda for
@@ -1300,15 +1349,14 @@ const ARTICLES: Article[] = [
       <div className="flex flex-col gap-3">
         <P>
           Na página <B>Configurações do Site</B> {"›"}{" "}
-          <B>Configurações extras</B>, há dois controles de aparência do
-          site:
+          <B>Configurações extras</B>, há dois controles de aparência do site:
         </P>
         <P>
           <B>Status do cinema</B>
         </P>
         <P>
-          Diferente do controle da lanchonete no Dashboard (que abre/fecha
-          para pedidos), este toggle exibe um aviso de{" "}
+          Diferente do controle da lanchonete no Dashboard (que abre/fecha para
+          pedidos), este toggle exibe um aviso de{" "}
           <B>&quot;Cinema fechado&quot;</B> no site do cliente.
         </P>
         <P>
@@ -1318,9 +1366,7 @@ const ARTICLES: Article[] = [
         <P>
           <B>Tema sazonal</B>
         </P>
-        <P>
-          Selecione um tema para ativar uma decoração especial no site:
-        </P>
+        <P>Selecione um tema para ativar uma decoração especial no site:</P>
         <List
           items={[
             "Natal 🎄 — decoração natalina",
@@ -1330,8 +1376,7 @@ const ARTICLES: Article[] = [
           ]}
         />
         <Note>
-          Lembre-se de clicar em <B>Salvar</B> após alterar o status ou o
-          tema.
+          Lembre-se de clicar em <B>Salvar</B> após alterar o status ou o tema.
         </Note>
       </div>
     ),
@@ -1363,8 +1408,8 @@ const ARTICLES: Article[] = [
           ]}
         />
         <P>
-          Para <B>desativar temporariamente</B> sem perder o conteúdo,
-          basta comutar o toggle para <B>Inativo</B> e salvar.
+          Para <B>desativar temporariamente</B> sem perder o conteúdo, basta
+          comutar o toggle para <B>Inativo</B> e salvar.
         </P>
         <Note>
           Imagens enviadas ficam salvas na galeria. Reutilize-as clicando nas
@@ -1395,8 +1440,8 @@ const ARTICLES: Article[] = [
         />
         <P>
           Após fazer as alterações, clique em <B>Salvar alterações</B>. Cada
-          campo é salvo individualmente — você pode alterar só a foto sem
-          mexer na senha, por exemplo.
+          campo é salvo individualmente — você pode alterar só a foto sem mexer
+          na senha, por exemplo.
         </P>
         <Note>
           Alterações no username são refletidas nos logs futuros. Logs
@@ -1422,33 +1467,32 @@ const ARTICLES: Article[] = [
         </P>
         <P>
           Clique em <B>Atualizar</B>. O sistema aguarda cerca de{" "}
-          <B>3 minutos</B> para o deploy ser concluído no servidor — um
-          spinner indica que está aguardando. Quando o tempo passa, o botão
-          muda para <B>Recarregar</B>.
+          <B>3 minutos</B> para o deploy ser concluído no servidor — um spinner
+          indica que está aguardando. Quando o tempo passa, o botão muda para{" "}
+          <B>Recarregar</B>.
         </P>
         <P>
-          Clique em <B>Recarregar</B> para carregar a nova versão. Caso
-          prefira continuar trabalhando antes, clique no <B>✕</B> para
-          fechar a faixa e recarregar manualmente depois.
+          Clique em <B>Recarregar</B> para carregar a nova versão. Caso prefira
+          continuar trabalhando antes, clique no <B>✕</B> para fechar a faixa e
+          recarregar manualmente depois.
         </P>
         <Note>
-          O delay de 3 minutos existe porque o deploy leva alguns minutos
-          para concluir no servidor — recarregar antes pode trazer a versão
+          O delay de 3 minutos existe porque o deploy leva alguns minutos para
+          concluir no servidor — recarregar antes pode trazer a versão
           desatualizada.
         </Note>
         <P>
-          O botão <B>Atualizar</B> já força o navegador a buscar a página
-          mais recente no servidor, ignorando o cache. Se mesmo assim a
-          faixa voltar a aparecer ao fechar e reabrir o navegador, o
-          problema é o <B>cache do navegador</B> guardando uma cópia antiga
-          da página.
+          O botão <B>Atualizar</B> já força o navegador a buscar a página mais
+          recente no servidor, ignorando o cache. Se mesmo assim a faixa voltar
+          a aparecer ao fechar e reabrir o navegador, o problema é o{" "}
+          <B>cache do navegador</B> guardando uma cópia antiga da página.
         </P>
         <Note>
-          Para limpar o cache: abra as configurações do navegador, procure
-          por <B>"Limpar dados de navegação"</B> (ou{" "}
-          <B>Ctrl + Shift + Delete</B>), selecione{" "}
-          <B>"Imagens e arquivos em cache"</B> e confirme. Depois disso, o
-          painel sempre carregará a versão mais recente automaticamente.
+          Para limpar o cache: abra as configurações do navegador, procure por{" "}
+          <B>"Limpar dados de navegação"</B> (ou <B>Ctrl + Shift + Delete</B>),
+          selecione <B>"Imagens e arquivos em cache"</B> e confirme. Depois
+          disso, o painel sempre carregará a versão mais recente
+          automaticamente.
         </Note>
       </div>
     ),
@@ -1464,8 +1508,8 @@ const ARTICLES: Article[] = [
     content: (
       <div className="flex flex-col gap-3">
         <P>
-          Na <B>barra lateral</B>, no rodapé ao lado do seu perfil, clique
-          em <B>Trancar</B> (ícone de cadeado).
+          Na <B>barra lateral</B>, no rodapé ao lado do seu perfil, clique em{" "}
+          <B>Trancar</B> (ícone de cadeado).
         </P>
         <P>
           A tela é coberta imediatamente por uma sobreposição com desfoque,
@@ -1487,9 +1531,418 @@ const ARTICLES: Article[] = [
           desbloquear.
         </P>
         <Note>
-          O bloqueio é salvo na sessão do navegador. Se fechar e reabrir a
-          aba, a tela continuará bloqueada até a senha ser inserida.
+          O bloqueio é salvo na sessão do navegador. Se fechar e reabrir a aba,
+          a tela continuará bloqueada até a senha ser inserida.
         </Note>
+      </div>
+    ),
+  },
+  {
+    id: "restauracao-logs",
+    category: "sistema",
+    title: "Restaurar dados via log",
+    summary:
+      "Como recuperar o estado anterior de um dado ou recriar itens excluídos a partir de um registro de log.",
+    bodyText:
+      "restaurar recuperar log desfazer histórico reverter dados excluído deletado item filme subitem quantidade preço estoque",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Na página <B>Logs</B>, registros que contêm alterações ou exclusões
+          exibem um ícone de <B>restauração</B> ao passar o mouse. Clique nele
+          para abrir o painel de análise antes de confirmar qualquer ação.
+        </P>
+        <P>O painel mostra cada campo afetado com um dos três estados:</P>
+        <List
+          items={[
+            "Verde — restaurável: o valor anterior será gravado diretamente no banco",
+            "Amarelo — parcial: o dado pode ser recuperado com ressalvas (ex.: subitem recriado, mas vínculos com itens do estoque são perdidos)",
+            "Vermelho — impossível: o dado não pode ser recuperado automaticamente (ex.: imagens)",
+          ]}
+        />
+        <P>O que pode ser restaurado:</P>
+        <List
+          items={[
+            "Filmes excluídos — recriados na configuração do site com todos os campos salvos",
+            "Itens de estoque excluídos — recriados na coleção de itens",
+            "Subitens excluídos — recriados (parcial: referências em itens não são restauradas)",
+            "Campos alterados: quantidade, preço, nome, visibilidade, destaque, promoção e outros",
+            "Configurações do site: fechamento, tema sazonal, pop-up ativo, título e URL do pop-up",
+          ]}
+        />
+        <P>
+          O que <B>não</B> pode ser restaurado automaticamente:
+        </P>
+        <List
+          items={[
+            "Imagens — o arquivo foi substituído; a URL salva pode não corresponder ao conteúdo anterior",
+            "Textos longos de pop-up (descrições) — não são armazenados no log",
+            "Referências de adicionais em subitens — arrays de vínculo não são rastreados",
+          ]}
+        />
+        <Note>
+          A restauração exige a permissão <code>restore_log</code>. Sem ela, o
+          botão não aparece na listagem de logs.
+        </Note>
+        <Warn>
+          A restauração escreve diretamente no banco de dados e não pode ser
+          desfeita pelo painel. Para exclusões, um novo documento é criado; para
+          alterações de campo, o valor anterior é sobrescrito. A operação gera
+          um log automático para fins de auditoria.
+        </Warn>
+      </div>
+    ),
+  },
+  {
+    id: "estatisticas-site",
+    category: "sistema",
+    title: "Estatísticas do site",
+    summary:
+      "Como interpretar cada métrica coletada sobre o comportamento dos visitantes no site público.",
+    bodyText:
+      "estatísticas analytics visitantes acessos cliques filmes páginas dispositivo mobile desktop sessão gráfico exportar csv período comparação",
+    content: (
+      <div className="flex flex-col gap-3">
+        <P>
+          Acesse em <B>Site → aba Estatísticas</B>. Os dados são coletados
+          automaticamente a cada visita ao site público.
+        </P>
+        <P>
+          <B>Seletor de período</B>
+        </P>
+        <List
+          items={[
+            "Hoje — dados do dia atual",
+            "7 dias — últimos 7 dias",
+            "14 dias — últimas duas semanas",
+            "30 dias — último mês",
+          ]}
+        />
+        <P>
+          <B>Cartões de resumo (KPIs)</B>
+        </P>
+        <List
+          items={[
+            "Visitas — total de acessos únicos no período; cada sessão de navegador conta uma vez (trocar de aba e voltar não gera nova visita)",
+            "Cliques em filmes — total de cliques em cards de filmes na grade de programação",
+            "Filmes únicos — quantidade de filmes distintos que receberam ao menos um clique",
+            "Sessões únicas — quantidade de sessões de cinema (horários) distintos que receberam cliques",
+            "Cliques em páginas — total de cliques em seções do menu do site (Cardápio, Vendas Online etc.)",
+            "Dispositivos — proporção de acessos por tipo (mobile × desktop)",
+          ]}
+        />
+        <P>
+          <B>Gráficos</B>
+        </P>
+        <List
+          items={[
+            "Visitas diárias — gráfico de área com a evolução de acessos dia a dia",
+            "Dispositivos — pizza com a divisão mobile × desktop",
+            "Cliques por filme — barras com os filmes mais clicados em ordem decrescente",
+            "Cliques por sessão — barras com os horários/sessões de cinema mais acessados",
+            "Cliques por página — barras com as seções do menu mais visitadas: Cardápio, Vendas Online, História, Mapa, Como Funciona, Anunciante, Avaliação",
+            "Acessos por dia da semana — barras mostrando em quais dias da semana o tráfego é maior",
+          ]}
+        />
+        <P>
+          <B>Comparação com período anterior</B>
+        </P>
+        <P>
+          Ative o toggle <B>Comparar com período anterior</B> para exibir, ao
+          lado de cada KPI, o valor do período equivalente imediatamente
+          anterior — útil para identificar tendências de crescimento ou queda.
+        </P>
+        <P>
+          <B>Exportar dados</B>
+        </P>
+        <P>
+          Clique em <B>Exportar CSV</B> para baixar todos os dados do período
+          selecionado em formato de planilha, podendo ser aberto no Excel ou
+          Google Sheets para análises adicionais.
+        </P>
+        <Note>
+          Os dados são coletados de forma anônima — nenhuma informação pessoal
+          do visitante é armazenada. A contagem de visitas usa sessionStorage
+          para evitar duplicatas dentro da mesma sessão de navegador.
+        </Note>
+      </div>
+    ),
+  },
+  {
+    id: "repositorios",
+    category: "dev",
+    title: "Repositórios",
+    summary:
+      "Links para os repositórios GitHub dos três sistemas do Cine Drive-In.",
+    bodyText: "repositório github código fonte site admin web versão",
+    content: (
+      <div className="flex flex-col gap-4">
+        <P>Os três sistemas estão hospedados no GitHub:</P>
+        <div className="flex flex-col gap-2">
+          {[
+            {
+              label: "Site público",
+              repo: "cine-drivein-site",
+              url: "https://github.com/leoFagundes/cine-drivein-site",
+              desc: "Site estático voltado ao público: programação de filmes, mapa e informações do cinema.",
+            },
+            {
+              label: "Painel Admin",
+              repo: "cinedrivein-admin-v2",
+              url: "https://github.com/leoFagundes/cinedrivein-admin-v2",
+              desc: "Painel de gerenciamento interno: pedidos, estoque, usuários, configurações e logs.",
+            },
+            {
+              label: "App Web do cliente v2",
+              repo: "cine-drivein-web-v2",
+              url: "https://github.com/leoFagundes/cine-drivein-web-v2",
+              desc: "Aplicação web usada pelos clientes para fazer pedidos durante as sessões.",
+            },
+          ].map(({ label, repo, url, desc }) => (
+            <a
+              key={repo}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col gap-1 p-3 rounded-[var(--radius-md)] transition-colors"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+                textDecoration: "none",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.borderColor = "rgba(234,179,8,0.5)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.borderColor = "var(--color-border)")
+              }
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: "rgb(234,179,8)" }}
+                >
+                  {label}
+                </span>
+                <span
+                  className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: "rgba(234,179,8,0.1)",
+                    color: "rgb(234,179,8)",
+                    border: "1px solid rgba(234,179,8,0.25)",
+                  }}
+                >
+                  {repo}
+                </span>
+              </div>
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {desc}
+              </span>
+              <span
+                className="text-[11px] font-mono mt-0.5"
+                style={{ color: "var(--color-text-muted)", opacity: 0.6 }}
+              >
+                {url}
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "tecnologias",
+    category: "dev",
+    title: "Tecnologias utilizadas",
+    summary: "Stack técnica dos três sistemas do Cine Drive-In.",
+    bodyText:
+      "tecnologias stack next react typescript tailwind firebase firestore rtdb framer motion recharts jspdf mapbox google maps qz tray serial",
+    content: (
+      <div className="flex flex-col gap-4">
+        {[
+          {
+            label: "Site público",
+            color: "#0088c2",
+            techs: [
+              {
+                name: "Next.js 14",
+                desc: "Framework React com export estático",
+              },
+              { name: "React 18 + TypeScript", desc: "UI e tipagem estática" },
+              { name: "Tailwind CSS 3", desc: "Estilização utilitária" },
+              {
+                name: "Firebase Firestore + RTDB",
+                desc: "Banco de dados e tempo real",
+              },
+              { name: "Framer Motion", desc: "Animações de interface" },
+              { name: "Mapbox GL + Google Maps", desc: "Mapas interativos" },
+              { name: "React Icons", desc: "Biblioteca de ícones SVG" },
+              { name: "react-snowfall", desc: "Efeito sazonal de neve" },
+            ],
+          },
+          {
+            label: "Painel Admin",
+            color: "#a855f7",
+            techs: [
+              {
+                name: "Next.js 16",
+                desc: "Framework React com export estático",
+              },
+              { name: "React 19 + TypeScript", desc: "UI e tipagem estática" },
+              { name: "Tailwind CSS 4", desc: "Estilização utilitária" },
+              {
+                name: "Firebase Firestore + RTDB + Auth + Storage",
+                desc: "Banco de dados, autenticação e arquivos",
+              },
+              { name: "Recharts", desc: "Gráficos para a aba de estatísticas" },
+              {
+                name: "jsPDF + AutoTable",
+                desc: "Exportação de relatórios em PDF",
+              },
+              { name: "QZ Tray", desc: "Comunicação com impressoras térmicas" },
+              {
+                name: "Web Serial API",
+                desc: "Interface serial nativa do navegador",
+              },
+              { name: "React Icons", desc: "Biblioteca de ícones SVG" },
+            ],
+          },
+          {
+            label: "App Web do cliente",
+            color: "#22c55e",
+            techs: [
+              {
+                name: "Next.js 16",
+                desc: "Framework React com export estático",
+              },
+              { name: "React 19 + TypeScript", desc: "UI e tipagem estática" },
+              { name: "Tailwind CSS 4", desc: "Estilização utilitária" },
+              {
+                name: "Firebase Firestore + RTDB",
+                desc: "Banco de dados e sincronização em tempo real",
+              },
+              {
+                name: "Firebase Cloud Functions",
+                desc: "Lógica de backend serverless",
+              },
+              { name: "React Icons", desc: "Biblioteca de ícones SVG" },
+            ],
+          },
+        ].map(({ label, color, techs }) => (
+          <div key={label}>
+            <p className="text-xs font-semibold mb-2" style={{ color }}>
+              {label}
+            </p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {techs.map(({ name, desc }) => (
+                <div
+                  key={name}
+                  className="flex flex-col px-3 py-2 rounded-[var(--radius-md)]"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <span
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {name}
+                  </span>
+                  <span
+                    className="text-[11px] mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    {desc}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: "dev-mode",
+    category: "dev",
+    ownerOnly: true,
+    title: "Dev Mode",
+    summary:
+      "Ferramentas de desenvolvimento e testes para o Owner. Ative com Ctrl+Shift+D.",
+    bodyText:
+      "dev mode desenvolvimento testes flags logs console toasts permissões firestore ids confirmações perfil simular bypass",
+    content: (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          Conjunto de ferramentas para desenvolvimento e testes. As flags
+          persistem no <span className="font-mono text-xs">localStorage</span>{" "}
+          do navegador e não afetam outros usuários. Visível apenas para o
+          Owner.
+        </p>
+        <button
+          onClick={() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "D",
+                ctrlKey: true,
+                shiftKey: true,
+                bubbles: true,
+              }),
+            )
+          }
+          className="self-start flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md cursor-pointer transition-all"
+          style={{
+            backgroundColor: "rgba(234,179,8,0.1)",
+            border: "1px solid rgba(234,179,8,0.35)",
+            color: "rgb(234,179,8)",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = "rgba(234,179,8,0.18)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "rgba(234,179,8,0.1)")
+          }
+        >
+          <FiZap size={11} />
+          Abrir painel Dev Mode
+        </button>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {DEV_FLAGS.map(({ icon, label, description }) => (
+            <div
+              key={label}
+              className="flex items-start gap-2.5 p-3 rounded-[var(--radius-md)]"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <span
+                className="mt-0.5 shrink-0"
+                style={{ color: "rgb(234,179,8)" }}
+              >
+                {icon}
+              </span>
+              <div className="min-w-0">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {label}
+                </p>
+                <p
+                  className="text-xs mt-0.5"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  {description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     ),
   },
@@ -1667,17 +2120,17 @@ const CATEGORIES: {
     icon: <FiSettings size={14} />,
     color: "#f59e0b",
   },
+  {
+    key: "dev",
+    label: "Dev",
+    icon: <FiZap size={14} />,
+    color: "rgb(234,179,8)",
+  },
 ];
 
 // ── Article card ───────────────────────────────────────────────────────────────
 
-function ArticleCard({
-  article,
-  query,
-}: {
-  article: Article;
-  query: string;
-}) {
+function ArticleCard({ article, query }: { article: Article; query: string }) {
   const [open, setOpen] = useState(false);
   const cat = CATEGORIES.find((c) => c.key === article.category)!;
 
@@ -1712,12 +2165,10 @@ function ArticleCard({
         }}
         onMouseEnter={(e) => {
           if (!isOpen)
-            e.currentTarget.style.backgroundColor =
-              "var(--color-bg-elevated)";
+            e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
         }}
         onMouseLeave={(e) => {
-          if (!isOpen)
-            e.currentTarget.style.backgroundColor = "transparent";
+          if (!isOpen) e.currentTarget.style.backgroundColor = "transparent";
         }}
       >
         <div className="flex-1 min-w-0">
@@ -1781,53 +2232,17 @@ function ArticleCard({
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-const DEV_FLAGS = [
-  {
-    icon: <FiSlash size={13} />,
-    label: "Desativar logs",
-    description: "Ignora todas as chamadas de log (nada é gravado no Firestore).",
-  },
-  {
-    icon: <FiTerminal size={13} />,
-    label: "Logs no console",
-    description: "Redireciona logs para console.log em vez do Firestore.",
-  },
-  {
-    icon: <FiBellOff size={13} />,
-    label: "Desativar toasts",
-    description: "Suprime notificações de sucesso/info/warning (erros continuam).",
-  },
-  {
-    icon: <FiShield size={13} />,
-    label: "Bypass de permissões",
-    description: "Ignora checagens de can() — simula acesso total independente da role.",
-  },
-  {
-    icon: <FiHash size={13} />,
-    label: "Mostrar IDs do Firestore",
-    description: "Exibe os IDs dos documentos nos cards de itens, pedidos e usuários.",
-  },
-  {
-    icon: <FiSkipForward size={13} />,
-    label: "Pular confirmações",
-    description: "Executa ações destrutivas (excluir, cancelar, fechar expediente) sem modal.",
-  },
-  {
-    icon: <FiUsers size={13} />,
-    label: "Simular perfil",
-    description: "Substitui suas permissões pelas de um perfil cadastrado, ignorando isOwner.",
-  },
-];
-
 export default function HelpPage() {
   const { appUser } = useAuth();
-  const devMode = useDevMode();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category>("todos");
+
+  const isOwner = appUser?.isOwner ?? false;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return ARTICLES.filter((a) => {
+      if (a.ownerOnly && !isOwner) return false;
       if (activeCategory !== "todos" && a.category !== activeCategory)
         return false;
       if (!q) return true;
@@ -1838,7 +2253,7 @@ export default function HelpPage() {
         (a.bodyText?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [search, activeCategory]);
+  }, [search, activeCategory, isOwner]);
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 w-full max-w-3xl mx-auto">
@@ -1917,116 +2332,6 @@ export default function HelpPage() {
         {filtered.length}{" "}
         {filtered.length === 1 ? "artigo encontrado" : "artigos encontrados"}
       </p>
-
-      {/* Dev Mode — apenas para Owner sem simulação de perfil ativa */}
-      {appUser?.isOwner && !devMode.simulateRole && (
-        <div
-          className="rounded-[var(--radius-xl)] overflow-hidden"
-          style={{
-            border: "1px solid rgba(234,179,8,0.35)",
-            backgroundColor: "var(--color-bg-surface)",
-          }}
-        >
-          {/* Header */}
-          <div
-            className="flex items-center justify-between px-5 py-4"
-            style={{
-              borderBottom: "1px solid rgba(234,179,8,0.2)",
-              background: "linear-gradient(135deg, rgba(234,179,8,0.07) 0%, rgba(234,179,8,0.03) 100%)",
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <FiZap size={15} style={{ color: "rgb(234,179,8)" }} />
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: "var(--color-text-primary)" }}
-              >
-                Dev Mode
-              </h2>
-              <span
-                className="text-[10px] font-mono px-1.5 py-0.5 rounded"
-                style={{
-                  backgroundColor: "rgba(234,179,8,0.12)",
-                  color: "rgb(234,179,8)",
-                  border: "1px solid rgba(234,179,8,0.3)",
-                }}
-              >
-                Ctrl+Shift+D
-              </span>
-            </div>
-            <button
-              onClick={() =>
-                window.dispatchEvent(
-                  new KeyboardEvent("keydown", {
-                    key: "D",
-                    ctrlKey: true,
-                    shiftKey: true,
-                    bubbles: true,
-                  }),
-                )
-              }
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md cursor-pointer transition-all"
-              style={{
-                backgroundColor: "rgba(234,179,8,0.1)",
-                border: "1px solid rgba(234,179,8,0.35)",
-                color: "rgb(234,179,8)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = "rgba(234,179,8,0.18)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "rgba(234,179,8,0.1)")
-              }
-            >
-              <FiZap size={11} />
-              Abrir painel
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="px-5 py-4 flex flex-col gap-4">
-            <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-              Conjunto de ferramentas para desenvolvimento e testes. As flags persistem
-              no <span className="font-mono text-xs">localStorage</span> do navegador
-              e não afetam outros usuários. Visível apenas para o Owner.
-            </p>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {DEV_FLAGS.map(({ icon, label, description }) => (
-                <div
-                  key={label}
-                  className="flex items-start gap-2.5 p-3 rounded-[var(--radius-md)]"
-                  style={{
-                    backgroundColor: "var(--color-bg-elevated)",
-                    border: "1px solid var(--color-border)",
-                  }}
-                >
-                  <span
-                    className="mt-0.5 shrink-0"
-                    style={{ color: "rgb(234,179,8)" }}
-                  >
-                    {icon}
-                  </span>
-                  <div className="min-w-0">
-                    <p
-                      className="text-xs font-semibold"
-                      style={{ color: "var(--color-text-primary)" }}
-                    >
-                      {label}
-                    </p>
-                    <p
-                      className="text-xs mt-0.5"
-                      style={{ color: "var(--color-text-muted)" }}
-                    >
-                      {description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Articles */}
       {filtered.length === 0 ? (

@@ -4695,12 +4695,15 @@ export default function StockPage() {
       if (item.photo) await deletePhotoFromStorage(item.photo);
       await deleteDoc(doc(db, "items", item.id));
       success("Item excluído", `"${item.name}" foi removido.`);
+      const { id: _id, ...rawItem } = item;
+      const itemSnapshot = Object.fromEntries(Object.entries(rawItem).filter(([, v]) => v !== undefined));
       log({
         action: "delete_item",
         category: "stock",
         description: `Excluiu o item "${item.name}"`,
         performedBy: actor,
         target: { type: "item", id: item.id, name: item.name },
+        snapshot: itemSnapshot,
       });
       setDeleteItem(null);
     } catch {
@@ -4883,12 +4886,15 @@ export default function StockPage() {
         "Subitem excluído",
         `"${subitem.name}" foi removido de todos os itens.`,
       );
+      const { id: _sid, ...rawSubitem } = subitem;
+      const subitemSnapshot = Object.fromEntries(Object.entries(rawSubitem).filter(([, v]) => v !== undefined));
       log({
         action: "delete_subitem",
         category: "stock",
         description: `Excluiu o subitem "${subitem.name}" (removido de todos os itens vinculados)`,
         performedBy: actor,
         target: { type: "subitem", id: subitem.id, name: subitem.name },
+        snapshot: subitemSnapshot,
       });
       setDeleteSubitem(null);
     } catch {

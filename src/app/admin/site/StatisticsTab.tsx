@@ -171,6 +171,18 @@ function pctDelta(current: number, prev: number): number | null {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative group cursor-help inline-flex" style={{ color: "var(--color-text-muted)" }}>
+      <FiInfo size={13} />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-2.5 py-2 rounded-lg text-[11px] leading-snug font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 whitespace-normal"
+        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+        {text}
+      </span>
+    </span>
+  );
+}
+
 function Spinner() {
   return (
     <div className="flex justify-center py-20">
@@ -527,13 +539,7 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
         <span className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
           Comparar com período anterior
         </span>
-        <span
-          title="Mostra a variação percentual dos KPIs em relação ao mesmo intervalo imediatamente anterior. Ex: selecionando 7 dias, compara com os 7 dias anteriores a esse período."
-          className="cursor-help"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          <FiInfo size={13} />
-        </span>
+        <InfoTooltip text="Mostra a variação percentual dos KPIs em relação ao mesmo intervalo imediatamente anterior. Ex: selecionando 7 dias, compara com os 7 dias anteriores a esse período." />
       </div>
 
       {loading ? (

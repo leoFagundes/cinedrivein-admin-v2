@@ -34,6 +34,7 @@ export type Permission =
   // Logs
   | "view_logs"
   | "delete_logs"
+  | "restore_log"
   // Configurações do Site
   | "view_site"
   | "manage_movies"
@@ -82,6 +83,7 @@ export interface Log {
   performedBy: { uid: string; username: string };
   target?: { type: string; id: string; name: string };
   changes?: LogChange[];
+  snapshot?: Record<string, unknown>;
   createdAt: Date;
 }
 

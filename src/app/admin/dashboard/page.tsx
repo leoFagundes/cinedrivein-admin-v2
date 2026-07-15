@@ -293,7 +293,9 @@ function ChartCard({
               <input
                 type="date"
                 value={range.from}
-                onChange={(e) => onRangeChange({ ...range, from: e.target.value })}
+                onChange={(e) =>
+                  onRangeChange({ ...range, from: e.target.value })
+                }
                 className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
                 style={{
                   backgroundColor: range.from
@@ -314,7 +316,9 @@ function ChartCard({
               <input
                 type="date"
                 value={range.to}
-                onChange={(e) => onRangeChange({ ...range, to: e.target.value })}
+                onChange={(e) =>
+                  onRangeChange({ ...range, to: e.target.value })
+                }
                 className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
                 style={{
                   backgroundColor: range.to
@@ -396,16 +400,24 @@ export default function DashboardPage() {
   const [ordersRange, setOrdersRange] = useState({ from: "", to: "" });
   const [topItemsRange, setTopItemsRange] = useState({ from: "", to: "" });
   const [topItemsLimit, setTopItemsLimit] = useState<number>(8);
-  const [topItemsView, setTopItemsView] = useState<"items" | "subitems">("items");
+  const [topItemsView, setTopItemsView] = useState<"items" | "subitems">(
+    "items",
+  );
   const [paymentRange, setPaymentRange] = useState({ from: "", to: "" });
-  const [revenueMode, setRevenueMode] = useState<"ambos" | "total" | "subtotal">("ambos");
+  const [revenueMode, setRevenueMode] = useState<
+    "ambos" | "total" | "subtotal"
+  >("ambos");
   const [paymentMode, setPaymentMode] = useState<"pie" | "bar">("pie");
 
   // Weekday comparison mode
-  const [revenueCompare, setRevenueCompare] = useState<"period" | "weekday">("period");
+  const [revenueCompare, setRevenueCompare] = useState<"period" | "weekday">(
+    "period",
+  );
   const [revenueWeekday, setRevenueWeekday] = useState(6);
   const [revenueWeekCount, setRevenueWeekCount] = useState(7);
-  const [ordersCompare, setOrdersCompare] = useState<"period" | "weekday">("period");
+  const [ordersCompare, setOrdersCompare] = useState<"period" | "weekday">(
+    "period",
+  );
   const [ordersWeekday, setOrdersWeekday] = useState(6);
   const [ordersWeekCount, setOrdersWeekCount] = useState(7);
 
@@ -1347,7 +1359,9 @@ export default function DashboardPage() {
   }));
   const revenueAvg =
     revenueData.length > 0
-      ? +(revenueData.reduce((a, d) => a + d.Total, 0) / revenueData.length).toFixed(2)
+      ? +(
+          revenueData.reduce((a, d) => a + d.Total, 0) / revenueData.length
+        ).toFixed(2)
       : null;
 
   const ordersStats =
@@ -1364,12 +1378,19 @@ export default function DashboardPage() {
     };
   });
   const ordersTotals = ordersStats.reduce(
-    (acc, s) => ({ finished: acc.finished + s.finishedOrders, canceled: acc.canceled + s.canceledOrders }),
+    (acc, s) => ({
+      finished: acc.finished + s.finishedOrders,
+      canceled: acc.canceled + s.canceledOrders,
+    }),
     { finished: 0, canceled: 0 },
   );
   const ordersCancelRate =
     ordersTotals.finished + ordersTotals.canceled > 0
-      ? ((ordersTotals.canceled / (ordersTotals.finished + ordersTotals.canceled)) * 100).toFixed(1)
+      ? (
+          (ordersTotals.canceled /
+            (ordersTotals.finished + ordersTotals.canceled)) *
+          100
+        ).toFixed(1)
       : null;
 
   const topItemsStats = filterStats(topItemsRange);
@@ -1408,7 +1429,8 @@ export default function DashboardPage() {
     .slice(0, topItemsLimit)
     .map(([name, value]) => ({ name, value }));
 
-  const activeTopData = topItemsView === "items" ? topItemsData : additionalsData;
+  const activeTopData =
+    topItemsView === "items" ? topItemsData : additionalsData;
 
   const paymentStats = filterStats(paymentRange);
   const paymentData = paymentStats.reduce(
@@ -1707,8 +1729,8 @@ export default function DashboardPage() {
               {/* Time inputs */}
               <div className="flex flex-col gap-3">
                 <p
-                  className="text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: "var(--color-text-muted)" }}
+                  className="font-medium"
+                  style={{ color: "var(--color-text-primary)" }}
                 >
                   Horário de funcionamento
                 </p>
@@ -2537,7 +2559,11 @@ export default function DashboardPage() {
                 onRangeChange={setRevenueRange}
                 onClearClick={
                   canDeleteChartData
-                    ? () => setClearModal({ label: "Faturamento por dia", range: revenueRange })
+                    ? () =>
+                        setClearModal({
+                          label: "Faturamento por dia",
+                          range: revenueRange,
+                        })
                     : undefined
                 }
                 count={revenueStats.length}
@@ -2552,9 +2578,16 @@ export default function DashboardPage() {
                         onClick={() => setRevenueCompare(m)}
                         className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                         style={{
-                          backgroundColor: revenueCompare === m ? "var(--color-primary)" : "transparent",
-                          color: revenueCompare === m ? "white" : "var(--color-text-muted)",
-                          borderRight: i === 0 ? "1px solid var(--color-border)" : "none",
+                          backgroundColor:
+                            revenueCompare === m
+                              ? "var(--color-primary)"
+                              : "transparent",
+                          color:
+                            revenueCompare === m
+                              ? "white"
+                              : "var(--color-text-muted)",
+                          borderRight:
+                            i === 0 ? "1px solid var(--color-border)" : "none",
                         }}
                       >
                         {m === "period" ? "Período" : "Semana"}
@@ -2575,9 +2608,18 @@ export default function DashboardPage() {
                             onClick={() => setRevenueWeekday(idx)}
                             className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                             style={{
-                              backgroundColor: revenueWeekday === idx ? "var(--color-primary)" : "transparent",
-                              color: revenueWeekday === idx ? "white" : "var(--color-text-muted)",
-                              borderRight: idx < 6 ? "1px solid var(--color-border)" : "none",
+                              backgroundColor:
+                                revenueWeekday === idx
+                                  ? "var(--color-primary)"
+                                  : "transparent",
+                              color:
+                                revenueWeekday === idx
+                                  ? "white"
+                                  : "var(--color-text-muted)",
+                              borderRight:
+                                idx < 6
+                                  ? "1px solid var(--color-border)"
+                                  : "none",
                             }}
                           >
                             {label}
@@ -2594,9 +2636,18 @@ export default function DashboardPage() {
                             onClick={() => setRevenueWeekCount(n)}
                             className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                             style={{
-                              backgroundColor: revenueWeekCount === n ? "var(--color-primary)" : "transparent",
-                              color: revenueWeekCount === n ? "white" : "var(--color-text-muted)",
-                              borderRight: i < WEEKCOUNT_OPTIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+                              backgroundColor:
+                                revenueWeekCount === n
+                                  ? "var(--color-primary)"
+                                  : "transparent",
+                              color:
+                                revenueWeekCount === n
+                                  ? "white"
+                                  : "var(--color-text-muted)",
+                              borderRight:
+                                i < WEEKCOUNT_OPTIONS.length - 1
+                                  ? "1px solid var(--color-border)"
+                                  : "none",
                             }}
                           >
                             {n}x
@@ -2607,41 +2658,104 @@ export default function DashboardPage() {
                   ) : undefined
                 }
                 extra={
-                  <div className="flex rounded-[var(--radius-sm)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  <div
+                    className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
                     {(["total", "subtotal", "ambos"] as const).map((m, i) => (
                       <button
                         key={m}
                         onClick={() => setRevenueMode(m)}
                         className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all capitalize"
                         style={{
-                          backgroundColor: revenueMode === m ? "var(--color-primary)" : "transparent",
-                          color: revenueMode === m ? "white" : "var(--color-text-muted)",
-                          borderRight: i < 2 ? "1px solid var(--color-border)" : "none",
+                          backgroundColor:
+                            revenueMode === m
+                              ? "var(--color-primary)"
+                              : "transparent",
+                          color:
+                            revenueMode === m
+                              ? "white"
+                              : "var(--color-text-muted)",
+                          borderRight:
+                            i < 2 ? "1px solid var(--color-border)" : "none",
                         }}
                       >
-                        {m === "ambos" ? "Ambos" : m === "total" ? "Total" : "Subtotal"}
+                        {m === "ambos"
+                          ? "Ambos"
+                          : m === "total"
+                            ? "Total"
+                            : "Subtotal"}
                       </button>
                     ))}
                   </div>
                 }
               >
                 <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={revenueData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <AreaChart
+                    data={revenueData}
+                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                  >
                     <defs>
-                      <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+                      <linearGradient
+                        id="gradTotal"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={CHART_COLORS.primary}
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={CHART_COLORS.primary}
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                    <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
-                    <YAxis stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} tickFormatter={(v) => `R$${v}`} width={55} />
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v) => fmtCurrency(Number(v ?? 0))} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={CHART_COLORS.border}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                    />
+                    <YAxis
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      tickFormatter={(v) => `R$${v}`}
+                      width={55}
+                    />
+                    <Tooltip
+                      {...TOOLTIP_STYLE}
+                      formatter={(v) => fmtCurrency(Number(v ?? 0))}
+                    />
                     {(revenueMode === "total" || revenueMode === "ambos") && (
-                      <Area type="monotone" dataKey="Total" stroke={CHART_COLORS.primary} fill="url(#gradTotal)" strokeWidth={2} dot={false} />
+                      <Area
+                        type="monotone"
+                        dataKey="Total"
+                        stroke={CHART_COLORS.primary}
+                        fill="url(#gradTotal)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
                     )}
-                    {(revenueMode === "subtotal" || revenueMode === "ambos") && (
-                      <Area type="monotone" dataKey="Subtotal" stroke={CHART_COLORS.teal} fill="none" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                    {(revenueMode === "subtotal" ||
+                      revenueMode === "ambos") && (
+                      <Area
+                        type="monotone"
+                        dataKey="Subtotal"
+                        stroke={CHART_COLORS.teal}
+                        fill="none"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 3"
+                        dot={false}
+                      />
                     )}
                     {revenueAvg !== null && (
                       <ReferenceLine
@@ -2649,10 +2763,17 @@ export default function DashboardPage() {
                         stroke={CHART_COLORS.warning}
                         strokeDasharray="5 3"
                         strokeWidth={1.5}
-                        label={{ value: `Média ${fmtCurrency(revenueAvg)}`, fill: CHART_COLORS.warning, fontSize: 10, position: "insideTopRight" }}
+                        label={{
+                          value: `Média ${fmtCurrency(revenueAvg)}`,
+                          fill: CHART_COLORS.warning,
+                          fontSize: 10,
+                          position: "insideTopRight",
+                        }}
                       />
                     )}
-                    <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
+                    <Legend
+                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -2664,7 +2785,8 @@ export default function DashboardPage() {
                 onRangeChange={setOrdersRange}
                 onClearClick={
                   canDeleteChartData
-                    ? () => setClearModal({ label: "Pedidos", range: ordersRange })
+                    ? () =>
+                        setClearModal({ label: "Pedidos", range: ordersRange })
                     : undefined
                 }
                 count={ordersStats.length}
@@ -2679,9 +2801,16 @@ export default function DashboardPage() {
                         onClick={() => setOrdersCompare(m)}
                         className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                         style={{
-                          backgroundColor: ordersCompare === m ? "var(--color-primary)" : "transparent",
-                          color: ordersCompare === m ? "white" : "var(--color-text-muted)",
-                          borderRight: i === 0 ? "1px solid var(--color-border)" : "none",
+                          backgroundColor:
+                            ordersCompare === m
+                              ? "var(--color-primary)"
+                              : "transparent",
+                          color:
+                            ordersCompare === m
+                              ? "white"
+                              : "var(--color-text-muted)",
+                          borderRight:
+                            i === 0 ? "1px solid var(--color-border)" : "none",
                         }}
                       >
                         {m === "period" ? "Período" : "Semana"}
@@ -2702,9 +2831,18 @@ export default function DashboardPage() {
                             onClick={() => setOrdersWeekday(idx)}
                             className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                             style={{
-                              backgroundColor: ordersWeekday === idx ? "var(--color-primary)" : "transparent",
-                              color: ordersWeekday === idx ? "white" : "var(--color-text-muted)",
-                              borderRight: idx < 6 ? "1px solid var(--color-border)" : "none",
+                              backgroundColor:
+                                ordersWeekday === idx
+                                  ? "var(--color-primary)"
+                                  : "transparent",
+                              color:
+                                ordersWeekday === idx
+                                  ? "white"
+                                  : "var(--color-text-muted)",
+                              borderRight:
+                                idx < 6
+                                  ? "1px solid var(--color-border)"
+                                  : "none",
                             }}
                           >
                             {label}
@@ -2721,9 +2859,18 @@ export default function DashboardPage() {
                             onClick={() => setOrdersWeekCount(n)}
                             className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                             style={{
-                              backgroundColor: ordersWeekCount === n ? "var(--color-primary)" : "transparent",
-                              color: ordersWeekCount === n ? "white" : "var(--color-text-muted)",
-                              borderRight: i < WEEKCOUNT_OPTIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+                              backgroundColor:
+                                ordersWeekCount === n
+                                  ? "var(--color-primary)"
+                                  : "transparent",
+                              color:
+                                ordersWeekCount === n
+                                  ? "white"
+                                  : "var(--color-text-muted)",
+                              borderRight:
+                                i < WEEKCOUNT_OPTIONS.length - 1
+                                  ? "1px solid var(--color-border)"
+                                  : "none",
                             }}
                           >
                             {n}x
@@ -2741,7 +2888,10 @@ export default function DashboardPage() {
                       </span>
                       <span
                         className="px-1.5 py-0.5 rounded-full font-semibold"
-                        style={{ backgroundColor: "rgba(239,68,68,0.12)", color: "var(--color-error)" }}
+                        style={{
+                          backgroundColor: "rgba(239,68,68,0.12)",
+                          color: "var(--color-error)",
+                        }}
                       >
                         {ordersCancelRate}% cancelados
                       </span>
@@ -2750,21 +2900,67 @@ export default function DashboardPage() {
                 }
               >
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordersData} margin={{ top: 4, right: 36, bottom: 0, left: 0 }} barGap={2}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                    <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
-                    <YAxis yAxisId="left" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} width={30} />
-                    <YAxis yAxisId="right" orientation="right" stroke={CHART_COLORS.warning} tick={{ fill: CHART_COLORS.warning, fontSize: 10 }} width={32} tickFormatter={(v) => `${v}%`} />
+                  <ComposedChart
+                    data={ordersData}
+                    margin={{ top: 4, right: 36, bottom: 0, left: 0 }}
+                    barGap={2}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={CHART_COLORS.border}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      width={30}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke={CHART_COLORS.warning}
+                      tick={{ fill: CHART_COLORS.warning, fontSize: 10 }}
+                      width={32}
+                      tickFormatter={(v) => `${v}%`}
+                    />
                     <Tooltip
                       {...TOOLTIP_STYLE}
                       formatter={(v, name) =>
-                        name === "Taxa %" ? [`${v}%`, "Taxa cancelamento"] : [v, name]
+                        name === "Taxa %"
+                          ? [`${v}%`, "Taxa cancelamento"]
+                          : [v, name]
                       }
                     />
-                    <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
-                    <Bar yAxisId="left" dataKey="Finalizados" fill={CHART_COLORS.success} radius={[3, 3, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="Cancelados" fill={CHART_COLORS.error} radius={[3, 3, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="Taxa %" stroke={CHART_COLORS.warning} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                    <Legend
+                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
+                    />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="Finalizados"
+                      fill={CHART_COLORS.success}
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="Cancelados"
+                      fill={CHART_COLORS.error}
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="Taxa %"
+                      stroke={CHART_COLORS.warning}
+                      strokeWidth={2}
+                      dot={false}
+                      strokeDasharray="4 2"
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -2799,9 +2995,16 @@ export default function DashboardPage() {
                           onClick={() => setTopItemsView(v)}
                           className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                           style={{
-                            backgroundColor: topItemsView === v ? "var(--color-primary)" : "transparent",
-                            color: topItemsView === v ? "white" : "var(--color-text-muted)",
-                            borderRight: i < 1 ? "1px solid var(--color-border)" : "none",
+                            backgroundColor:
+                              topItemsView === v
+                                ? "var(--color-primary)"
+                                : "transparent",
+                            color:
+                              topItemsView === v
+                                ? "white"
+                                : "var(--color-text-muted)",
+                            borderRight:
+                              i < 1 ? "1px solid var(--color-border)" : "none",
                           }}
                         >
                           {v === "items" ? "Itens" : "Subitens"}
@@ -2819,9 +3022,16 @@ export default function DashboardPage() {
                           onClick={() => setTopItemsLimit(n)}
                           className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                           style={{
-                            backgroundColor: topItemsLimit === n ? "var(--color-primary)" : "transparent",
-                            color: topItemsLimit === n ? "white" : "var(--color-text-muted)",
-                            borderRight: i < 4 ? "1px solid var(--color-border)" : "none",
+                            backgroundColor:
+                              topItemsLimit === n
+                                ? "var(--color-primary)"
+                                : "transparent",
+                            color:
+                              topItemsLimit === n
+                                ? "white"
+                                : "var(--color-text-muted)",
+                            borderRight:
+                              i < 4 ? "1px solid var(--color-border)" : "none",
                           }}
                         >
                           {n === Infinity ? "Tudo" : n}
@@ -2889,21 +3099,35 @@ export default function DashboardPage() {
                 onRangeChange={setPaymentRange}
                 onClearClick={
                   canDeleteChartData
-                    ? () => setClearModal({ label: "Distribuição por pagamento", range: paymentRange })
+                    ? () =>
+                        setClearModal({
+                          label: "Distribuição por pagamento",
+                          range: paymentRange,
+                        })
                     : undefined
                 }
                 count={paymentStats.length}
                 extra={
-                  <div className="flex rounded-[var(--radius-sm)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  <div
+                    className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
                     {(["pie", "bar"] as const).map((m, i) => (
                       <button
                         key={m}
                         onClick={() => setPaymentMode(m)}
                         className="px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all"
                         style={{
-                          backgroundColor: paymentMode === m ? "var(--color-primary)" : "transparent",
-                          color: paymentMode === m ? "white" : "var(--color-text-muted)",
-                          borderRight: i < 1 ? "1px solid var(--color-border)" : "none",
+                          backgroundColor:
+                            paymentMode === m
+                              ? "var(--color-primary)"
+                              : "transparent",
+                          color:
+                            paymentMode === m
+                              ? "white"
+                              : "var(--color-text-muted)",
+                          borderRight:
+                            i < 1 ? "1px solid var(--color-border)" : "none",
                         }}
                       >
                         {m === "pie" ? "Pizza" : "Barras"}
@@ -2913,7 +3137,10 @@ export default function DashboardPage() {
                 }
               >
                 {paymentPieData.length === 0 ? (
-                  <p className="text-sm text-center py-8" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-sm text-center py-8"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Sem dados no período
                   </p>
                 ) : paymentMode === "pie" ? (
@@ -2936,19 +3163,46 @@ export default function DashboardPage() {
                         fill={CHART_COLORS.text}
                       >
                         {paymentPieData.map((_, index) => (
-                          <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          <Cell
+                            key={index}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
                         ))}
                       </Pie>
-                      <Tooltip {...TOOLTIP_STYLE} formatter={(v) => fmtCurrency(Number(v ?? 0))} />
-                      <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }} />
+                      <Tooltip
+                        {...TOOLTIP_STYLE}
+                        formatter={(v) => fmtCurrency(Number(v ?? 0))}
+                      />
+                      <Legend
+                        wrapperStyle={{
+                          color: CHART_COLORS.text,
+                          fontSize: 12,
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={paymentPieData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                      <XAxis dataKey="name" stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} />
-                      <YAxis stroke={CHART_COLORS.text} tick={{ fill: CHART_COLORS.text, fontSize: 11 }} tickFormatter={(v) => `R$${v}`} width={60} />
+                    <BarChart
+                      data={paymentPieData}
+                      margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke={CHART_COLORS.border}
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="name"
+                        stroke={CHART_COLORS.text}
+                        tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      />
+                      <YAxis
+                        stroke={CHART_COLORS.text}
+                        tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                        tickFormatter={(v) => `R$${v}`}
+                        width={60}
+                      />
                       <Tooltip
                         {...TOOLTIP_STYLE}
                         contentStyle={{
@@ -2962,7 +3216,10 @@ export default function DashboardPage() {
                       />
                       <Bar dataKey="value" name="Valor" radius={[4, 4, 0, 0]}>
                         {paymentPieData.map((_, index) => (
-                          <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          <Cell
+                            key={index}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
                         ))}
                       </Bar>
                     </BarChart>
