@@ -32,6 +32,7 @@ import {
   FiDollarSign,
   FiStar,
   FiSliders,
+  FiBarChart2,
 } from "react-icons/fi";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,6 +41,7 @@ import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
 import Input from "@/components/ui/Input";
 import FeedbackTab from "./FeedbackTab";
+import StatisticsTab from "./StatisticsTab";
 import {
   Film,
   FilmClassification,
@@ -1786,7 +1788,7 @@ export default function SitePage() {
   const [siteUrl, setSiteUrl] = useState("https://cinedrivein.com/");
   const [savingUrl, setSavingUrl] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"general" | "feedback">(
+  const [activeTab, setActiveTab] = useState<"general" | "feedback" | "statistics">(
     "general",
   );
   const [unseenFeedbackCount, setUnseenFeedbackCount] = useState(0);
@@ -2333,6 +2335,24 @@ export default function SitePage() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("statistics")}
+              className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all"
+              style={{
+                backgroundColor:
+                  activeTab === "statistics"
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
+                border: `1px solid ${activeTab === "statistics" ? "var(--color-primary)" : "var(--color-border)"}`,
+                color:
+                  activeTab === "statistics"
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
+              }}
+            >
+              <FiBarChart2 size={14} />
+              Estatísticas
+            </button>
           </div>
 
           {activeTab === "feedback" ? (
@@ -2340,6 +2360,8 @@ export default function SitePage() {
               canManage={canManageSiteSettings}
               onUnseenCountChange={setUnseenFeedbackCount}
             />
+          ) : activeTab === "statistics" ? (
+            <StatisticsTab canManage={canManageSiteSettings} />
           ) : loading ? (
         <div className="flex justify-center py-20">
           <svg className="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
