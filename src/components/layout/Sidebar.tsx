@@ -31,6 +31,7 @@ import { ref, onValue } from "firebase/database";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 import ThermalPrinterBar, { usePrinter } from "../orders/ThermalPrinter";
+import { useLogoEasterEgg } from "@/hooks/useLogoEasterEgg";
 
 interface NavItem {
   label: string;
@@ -178,6 +179,7 @@ export default function Sidebar() {
   const [printerModalOpen, setPrinterModalOpen] = useState(false);
   const { isConnected, connectionMode, status, setPrinterBarOpen } =
     usePrinter();
+  const onLogoClick = useLogoEasterEgg();
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
@@ -203,6 +205,7 @@ export default function Sidebar() {
           alt="Cine Drive-in"
           width={36}
           height={36}
+          onClick={onLogoClick}
         />
         <div>
           <p
@@ -509,6 +512,7 @@ export default function Sidebar() {
             alt="Cine Drive-in"
             width={28}
             height={28}
+            onClick={onLogoClick}
           />
           <span
             className="text-sm font-bold"

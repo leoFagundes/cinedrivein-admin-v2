@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useKonamiCode } from "@/hooks/useKonamiCode";
 
 const AuthProvider = dynamic(
   () =>
@@ -9,5 +10,6 @@ const AuthProvider = dynamic(
 );
 
 export default function Providers({ children }: { children: React.ReactNode }) {
+  useKonamiCode();
   return <AuthProvider>{children}</AuthProvider>;
 }

@@ -27,6 +27,7 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 ## Funcionalidades
 
 ### Dashboard
+
 - Visão geral do dia: total de pedidos, receita, taxa de serviço e descontos
 - Gráficos de pedidos por hora, receita por forma de pagamento e itens mais vendidos
 - Abertura e fechamento de expediente com geração de estatísticas diárias no Firestore
@@ -35,6 +36,7 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 - Histórico de estatísticas anteriores com gráficos comparativos (área, barras, compostos)
 
 ### Pedidos
+
 - Lista de pedidos em tempo real via `onSnapshot` do Firestore
 - Criação manual de pedidos pela equipe
 - Atualização de status: ativo → finalizado / cancelado
@@ -46,6 +48,7 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 - Alertas sonoros configuráveis para novos pedidos e mensagens no chat
 
 ### Estoque
+
 - Cadastro completo de itens: código, categoria, preço, preço visível, foto, quantidade e visibilidade
 - Subitens (adicionais) com quatro grupos independentes: additionals, sauce, drink, sweet
 - Controle automático de estoque: decremento ao finalizar pedidos e alerta de estoque baixo
@@ -53,6 +56,7 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 - Upload de imagens para Firebase Storage
 
 ### Usuários e Permissões
+
 - Cadastro por fluxo de convite (`/signup`)
 - Aprovação manual de novos usuários (status: pending → approved / rejected)
 - Perfis de permissão reutilizáveis (ex.: "Atendente", "Gerente", "Caixa")
@@ -61,6 +65,7 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 - Tela de bloqueio (lock screen) para ausentar-se sem encerrar a sessão
 
 ### Logs e Auditoria
+
 - Registro automático de todas as ações relevantes no Firestore
 - Filtros por categoria (auth, users, profiles, orders, stock, site), período e busca textual
 - Visualização de mudanças campo a campo (`from → to`)
@@ -71,6 +76,7 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 - Exclusão de logs individuais ou em lote (requer `delete_logs`)
 
 ### Configurações do Site
+
 - Gerenciamento das 4 sessões de filmes (pôster, sinopse, elenco, trailer, classificação, avisos, etc.)
 - Configuração de preços por dia da semana (meia e inteira)
 - Pop-up de avisos: ativar/desativar, imagem, título e descrições
@@ -78,22 +84,13 @@ O acesso é controlado por autenticação Firebase e um sistema de permissões g
 - Feedbacks dos clientes: listagem, marcação de favoritos e visualização de avaliações
 
 ### Estatísticas do Site
+
 - Dados coletados anonimamente pelo site público (visitas, cliques por filme, por página, por sessão, dispositivos)
 - Períodos: Hoje, 7 dias, 30 dias, 90 dias
 - KPIs: visitas totais, cliques em filmes, filmes únicos, sessões únicas, cliques em páginas, distribuição de dispositivos
 - Gráficos: visitas diárias (área), dispositivos (pizza), cliques por filme (barras), por sessão (barras), por página (barras), por dia da semana (barras)
 - Toggle de comparação entre períodos
 - Exportação dos dados brutos em CSV
-
-### Dev Mode *(somente owner)*
-Painel ativado com `Ctrl+Shift+D` com flags para facilitar o desenvolvimento:
-- Desativar gravação de logs no Firestore (fire-and-forget ignorado)
-- Redirecionar logs para `console.log` em vez do banco
-- Suprimir notificações toast de sucesso/info/warning
-- Bypass nas verificações de permissão (`can()` sempre retorna `true`)
-- Exibir IDs dos documentos Firestore na interface
-- Pular modais de confirmação em ações destrutivas
-- Simular um perfil de permissão diferente do próprio
 
 ---
 
@@ -160,27 +157,28 @@ src/
 
 ## Tecnologias
 
-| Tecnologia | Versão | Uso |
-|---|---|---|
-| [Next.js](https://nextjs.org/) | 16 | Framework com App Router (Server + Client Components) |
-| [React](https://react.dev/) | 19 | Interface com TypeScript |
-| [TypeScript](https://www.typescriptlang.org/) | 5 | Tipagem estática |
-| [Tailwind CSS](https://tailwindcss.com/) | 4 | Estilização utilitária |
-| [Firebase Firestore](https://firebase.google.com/docs/firestore) | 12 | Banco de dados principal (pedidos, estoque, logs, configurações) |
-| [Firebase RTDB](https://firebase.google.com/docs/database) | 12 | Dados em tempo real (status da loja, presença) |
-| [Firebase Auth](https://firebase.google.com/docs/auth) | 12 | Autenticação de usuários com email/senha |
-| [Firebase Storage](https://firebase.google.com/docs/storage) | 12 | Upload de imagens (itens do estoque, pop-up do site) |
-| [Recharts](https://recharts.org/) | 3 | Gráficos do dashboard e estatísticas do site |
-| [jsPDF](https://github.com/parallax/jsPDF) + [AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) | 4 / 5 | Geração de relatórios PDF |
-| [QZ Tray](https://qz.io/) | — | Impressão térmica via aplicativo desktop instalado na máquina |
-| [Web Serial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) | — | Alternativa serial para impressoras em Chrome/Edge |
-| [React Icons](https://react-icons.github.io/) | 5 | Ícones SVG (Feather Icons) |
+| Tecnologia                                                                                                  | Versão | Uso                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| [Next.js](https://nextjs.org/)                                                                              | 16     | Framework com App Router (Server + Client Components)            |
+| [React](https://react.dev/)                                                                                 | 19     | Interface com TypeScript                                         |
+| [TypeScript](https://www.typescriptlang.org/)                                                               | 5      | Tipagem estática                                                 |
+| [Tailwind CSS](https://tailwindcss.com/)                                                                    | 4      | Estilização utilitária                                           |
+| [Firebase Firestore](https://firebase.google.com/docs/firestore)                                            | 12     | Banco de dados principal (pedidos, estoque, logs, configurações) |
+| [Firebase RTDB](https://firebase.google.com/docs/database)                                                  | 12     | Dados em tempo real (status da loja, presença)                   |
+| [Firebase Auth](https://firebase.google.com/docs/auth)                                                      | 12     | Autenticação de usuários com email/senha                         |
+| [Firebase Storage](https://firebase.google.com/docs/storage)                                                | 12     | Upload de imagens (itens do estoque, pop-up do site)             |
+| [Recharts](https://recharts.org/)                                                                           | 3      | Gráficos do dashboard e estatísticas do site                     |
+| [jsPDF](https://github.com/parallax/jsPDF) + [AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) | 4 / 5  | Geração de relatórios PDF                                        |
+| [QZ Tray](https://qz.io/)                                                                                   | —      | Impressão térmica via aplicativo desktop instalado na máquina    |
+| [Web Serial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API)                           | —      | Alternativa serial para impressoras em Chrome/Edge               |
+| [React Icons](https://react-icons.github.io/)                                                               | 5      | Ícones SVG (Feather Icons)                                       |
 
 ---
 
 ## Configuração do ambiente
 
 ### Pré-requisitos
+
 - Node.js 18+
 - npm ou yarn
 - Projeto Firebase configurado (Firestore, RTDB, Auth, Storage)
@@ -223,9 +221,9 @@ Para usar a impressora térmica instale o [QZ Tray](https://qz.io/) no computado
 
 ## Relação com os outros sistemas
 
-| Sistema | Relação |
-|---|---|
-| **cine-drivein-site** | O admin configura filmes, preços e pop-up que o site consome em tempo real. O site envia dados de analytics que o admin exibe na aba Estatísticas. |
+| Sistema                 | Relação                                                                                                                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **cine-drivein-site**   | O admin configura filmes, preços e pop-up que o site consome em tempo real. O site envia dados de analytics que o admin exibe na aba Estatísticas.                                             |
 | **cine-drivein-web-v2** | O app dos clientes cria pedidos no Firestore/RTDB que o admin recebe em tempo real. O chat é bidirecional: clientes e atendentes trocam mensagens pelo mesmo documento `orders/{id}/messages`. |
 
 ---
