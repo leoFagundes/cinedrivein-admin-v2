@@ -20,6 +20,7 @@ import {
   FiHash,
   FiSkipForward,
   FiUsers,
+  FiFilm,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -2357,6 +2358,32 @@ export default function HelpPage() {
           ))}
         </div>
       )}
+
+      {/* Easter egg — sem categoria, sempre no final */}
+      <div
+        className="rounded-[var(--radius-lg)] px-5 py-4 flex items-start gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <FiFilm
+          size={18}
+          style={{ color: "var(--color-primary)", flexShrink: 0, marginTop: 2 }}
+        />
+        <div>
+          <p
+            className="text-sm font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            Easter egg escondido
+          </p>
+          <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
+            Clique 5 vezes seguidas no logo do Cine Drive-in, na barra
+            lateral, para abrir uma sessão secreta.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
