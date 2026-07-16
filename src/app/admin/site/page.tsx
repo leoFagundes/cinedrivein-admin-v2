@@ -2386,7 +2386,7 @@ export default function SitePage() {
 
       function formatPrices(p?: PriceRule[]) {
         if (!p) return null;
-        return p.map((r) => `${r.label}: M${r.meia}/I${r.inteira}`).join(" | ");
+        return p.map((r) => `${r.label}: M${r.meia}/I${r.inteira} [${r.days.join(",")}]`).join(" | ");
       }
 
       if (formatPrices(config.prices) !== formatPrices(final.prices)) {

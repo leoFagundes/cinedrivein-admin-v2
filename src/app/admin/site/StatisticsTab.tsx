@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-} from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
@@ -59,16 +53,30 @@ const SESSION_LABELS: Record<string, string> = {
 };
 
 const PAGE_LABELS: Record<string, string> = {
-  cardapio: "Ver Cardápio",
-  vendasOnline: "Vendas Online",
-  historia: "Nossa História",
-  mapa: "Mapa",
-  comoFunciona: "Como Funciona",
-  anunciante: "Seja Anunciante",
-  avaliacao: "Avaliação",
+  cardapio: 'Botão "Ver Cardápio"',
+  vendasOnline: 'Botão "Vendas Online"',
+  historia: 'Botão "Nossa História"',
+  mapa: "Localização",
+  comoFunciona: 'Página "Como Funciona"',
+  anunciante: 'Página "Seja um Anunciante"',
+  avaliacao: 'Página "Avaliação"',
 };
 
 const DOW_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTH_LABELS = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
 
 const PRESETS = [
   { label: "Hoje", days: 1 },
@@ -81,6 +89,7 @@ const C = {
   primary: "#0ea5e9",
   violet: "#8b5cf6",
   amber: "#f59e0b",
+  emerald: "#16a34a",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -119,24 +128,43 @@ function parseDoc(id: string, data: Record<string, unknown>): DayData {
       const sub = key.slice("devices.".length);
       if (sub === "mobile") mobile += value as number;
       else if (sub === "desktop") desktop += value as number;
-    } else if (key === "filmClicks" && typeof value === "object" && value !== null) {
-      for (const [film, count] of Object.entries(value as Record<string, number>))
+    } else if (
+      key === "filmClicks" &&
+      typeof value === "object" &&
+      value !== null
+    ) {
+      for (const [film, count] of Object.entries(
+        value as Record<string, number>,
+      ))
         filmClicks[film] = (filmClicks[film] ?? 0) + count;
     } else if (key.startsWith("filmClicks.")) {
       const film = key.slice("filmClicks.".length);
       filmClicks[film] = (filmClicks[film] ?? 0) + (value as number);
-    } else if (key === "pageClicks" && typeof value === "object" && value !== null) {
-      for (const [page, count] of Object.entries(value as Record<string, number>))
+    } else if (
+      key === "pageClicks" &&
+      typeof value === "object" &&
+      value !== null
+    ) {
+      for (const [page, count] of Object.entries(
+        value as Record<string, number>,
+      ))
         pageClicks[page] = (pageClicks[page] ?? 0) + count;
     } else if (key.startsWith("pageClicks.")) {
       const page = key.slice("pageClicks.".length);
       pageClicks[page] = (pageClicks[page] ?? 0) + (value as number);
-    } else if (key === "sessionClicks" && typeof value === "object" && value !== null) {
-      for (const [session, count] of Object.entries(value as Record<string, number>))
+    } else if (
+      key === "sessionClicks" &&
+      typeof value === "object" &&
+      value !== null
+    ) {
+      for (const [session, count] of Object.entries(
+        value as Record<string, number>,
+      ))
         sessionClicks[session] = (sessionClicks[session] ?? 0) + count;
     } else if (key.startsWith("sessionClicks.")) {
       const session = key.slice("sessionClicks.".length);
-      sessionClicks[session] = (sessionClicks[session] ?? 0) + (value as number);
+      sessionClicks[session] =
+        (sessionClicks[session] ?? 0) + (value as number);
     }
   }
 
@@ -150,7 +178,10 @@ function parseDoc(id: string, data: Record<string, unknown>): DayData {
   };
 }
 
-function prevPeriod(start: string, end: string): { prevStart: string; prevEnd: string } {
+function prevPeriod(
+  start: string,
+  end: string,
+): { prevStart: string; prevEnd: string } {
   const s = new Date(start + "T12:00:00");
   const e = new Date(end + "T12:00:00");
   const spanDays = Math.round((e.getTime() - s.getTime()) / 86400000);
@@ -173,10 +204,20 @@ function pctDelta(current: number, prev: number): number | null {
 
 function InfoTooltip({ text }: { text: string }) {
   return (
-    <span className="relative group cursor-help inline-flex" style={{ color: "var(--color-text-muted)" }}>
+    <span
+      className="relative group cursor-help inline-flex"
+      style={{ color: "var(--color-text-muted)" }}
+    >
       <FiInfo size={13} />
-      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-2.5 py-2 rounded-lg text-[11px] leading-snug font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 whitespace-normal"
-        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+      <span
+        className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-2.5 py-2 rounded-lg text-[11px] leading-snug font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 whitespace-normal"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text-primary)",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+      >
         {text}
       </span>
     </span>
@@ -187,29 +228,82 @@ function Spinner() {
   return (
     <div className="flex justify-center py-20">
       <svg className="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-20" cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="3" />
-        <path className="opacity-80" fill="var(--color-primary)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        <circle
+          className="opacity-20"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="var(--color-primary)"
+          strokeWidth="3"
+        />
+        <path
+          className="opacity-80"
+          fill="var(--color-primary)"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
       </svg>
     </div>
   );
 }
 
-function KpiCard({ label, value, icon, delta }: { label: string; value: number; icon: React.ReactNode; delta?: number | null }) {
+function KpiCard({
+  label,
+  value,
+  icon,
+  delta,
+  prevValue,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  delta?: number | null;
+  prevValue?: number | null;
+}) {
+  const isNew = delta === null && prevValue === 0 && value > 0;
+
   return (
-    <div className="flex flex-col gap-2 p-4 rounded-[var(--radius-lg)]"
-      style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-      <div className="flex items-center gap-2" style={{ color: "var(--color-text-muted)" }}>
+    <div
+      className="flex flex-col gap-2 p-4 rounded-[var(--radius-lg)]"
+      style={{
+        backgroundColor: "var(--color-bg-elevated)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <div
+        className="flex items-center gap-2"
+        style={{ color: "var(--color-text-muted)" }}
+      >
         {icon}
         <span className="text-xs font-medium">{label}</span>
       </div>
       <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>
+        <span
+          className="text-2xl font-bold"
+          style={{ color: "var(--color-text-primary)" }}
+        >
           {value.toLocaleString("pt-BR")}
         </span>
-        {delta !== null && delta !== undefined && (
-          <span className={`text-xs font-semibold mb-0.5 ${delta >= 0 ? "text-green-500" : "text-red-400"}`}>
-            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
+        {isNew && (
+          <span className="text-xs font-semibold mb-0.5 text-green-500">
+            ↑ Novo
           </span>
+        )}
+        {!isNew && delta !== null && delta !== undefined && (
+          <div className="flex flex-col items-start gap-0.5 mb-0.5">
+            <span
+              className={`text-xs font-semibold leading-none ${delta >= 0 ? "text-green-500" : "text-red-400"}`}
+            >
+              {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
+            </span>
+            {prevValue != null && (
+              <span
+                className="text-[10px] leading-none"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                vs {prevValue.toLocaleString("pt-BR")}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -241,6 +335,7 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
   const [days, setDays] = useState<DayData[]>([]);
   const [prevDays, setPrevDays] = useState<DayData[]>([]);
   const [showComparison, setShowComparison] = useState(false);
+  const [dowView, setDowView] = useState<"weekday" | "month">("weekday");
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
   const [toggleLoading, setToggleLoading] = useState(false);
 
@@ -292,11 +387,17 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
     setToggleLoading(true);
     const next = !analyticsEnabled;
     try {
-      await setDoc(doc(db, "siteConfig", "analyticsConfig"), { isEnabled: next }, { merge: true });
+      await setDoc(
+        doc(db, "siteConfig", "analyticsConfig"),
+        { isEnabled: next },
+        { merge: true },
+      );
       setAnalyticsEnabled(next);
       toastSuccess(
         next ? "Coleta ativada" : "Coleta desativada",
-        next ? "Interações do site serão registradas." : "Nenhum dado novo será salvo.",
+        next
+          ? "Interações do site serão registradas."
+          : "Nenhum dado novo será salvo.",
       );
       log({
         action: next ? "enable_analytics" : "disable_analytics",
@@ -305,8 +406,14 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
           ? "Ativou a coleta de estatísticas do site"
           : "Desativou a coleta de estatísticas do site",
         performedBy: actor,
-        target: { type: "config", id: "analyticsConfig", name: "Coleta de Estatísticas" },
-        changes: [{ field: "isEnabled", from: String(!next), to: String(next) }],
+        target: {
+          type: "config",
+          id: "analyticsConfig",
+          name: "Coleta de Estatísticas",
+        },
+        changes: [
+          { field: "isEnabled", from: String(!next), to: String(next) },
+        ],
       });
     } catch (e) {
       console.error(e);
@@ -318,12 +425,18 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
 
   // ── Aggregates ────────────────────────────────────────────────────────────────
 
+  const { prevStart, prevEnd } = prevPeriod(startDate, endDate);
+  const hasPrevData = prevDays.length > 0;
+
   const totalVisits = days.reduce((s, d) => s + d.visits, 0);
   const totalMobile = days.reduce((s, d) => s + d.devices.mobile, 0);
   const totalDesktop = days.reduce((s, d) => s + d.devices.desktop, 0);
 
   const pageClickTotals = Object.entries(PAGE_LABELS)
-    .map(([key, label]) => ({ label, value: days.reduce((s, d) => s + (d.pageClicks[key] ?? 0), 0) }))
+    .map(([key, label]) => ({
+      label,
+      value: days.reduce((s, d) => s + (d.pageClicks[key] ?? 0), 0),
+    }))
     .filter((p) => p.value > 0)
     .sort((a, b) => b.value - a.value);
 
@@ -332,8 +445,10 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
   const prevTotalVisits = prevDays.reduce((s, d) => s + d.visits, 0);
   const prevTotalMobile = prevDays.reduce((s, d) => s + d.devices.mobile, 0);
   const prevTotalDesktop = prevDays.reduce((s, d) => s + d.devices.desktop, 0);
-  const prevTotalPageClicks = Object.keys(PAGE_LABELS)
-    .reduce((s, k) => s + prevDays.reduce((ss, d) => ss + (d.pageClicks[k] ?? 0), 0), 0);
+  const prevTotalPageClicks = Object.keys(PAGE_LABELS).reduce(
+    (s, k) => s + prevDays.reduce((ss, d) => ss + (d.pageClicks[k] ?? 0), 0),
+    0,
+  );
 
   const dowData = DOW_LABELS.map((label, i) => ({
     label,
@@ -342,23 +457,42 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
       .reduce((s, d) => s + d.visits, 0),
   }));
 
+  const monthData = MONTH_LABELS.map((label, i) => ({
+    label,
+    value: days
+      .filter((d) => parseInt(d.date.split("-")[1]) - 1 === i)
+      .reduce((s, d) => s + d.visits, 0),
+  }));
+
   function exportCSV() {
     const escape = (v: string | number) =>
       typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v;
-    const allFilms = Array.from(new Set(days.flatMap((d) => Object.keys(d.filmClicks)))).sort();
+    const allFilms = Array.from(
+      new Set(days.flatMap((d) => Object.keys(d.filmClicks))),
+    ).sort();
     const header = [
-      "Data", "Visitas", "Mobile", "Desktop",
+      "Data",
+      "Visitas",
+      "Mobile",
+      "Desktop",
       ...Object.entries(PAGE_LABELS).map(([, v]) => `Seção: ${v}`),
       ...Object.entries(SESSION_LABELS).map(([, v]) => v),
       ...allFilms.map((f) => `Filme: ${f}`),
-    ].map(escape).join(",");
+    ]
+      .map(escape)
+      .join(",");
     const rows = days.map((d) =>
       [
-        d.date, d.visits, d.devices.mobile, d.devices.desktop,
+        d.date,
+        d.visits,
+        d.devices.mobile,
+        d.devices.desktop,
         ...Object.keys(PAGE_LABELS).map((k) => d.pageClicks[k] ?? 0),
         ...Object.keys(SESSION_LABELS).map((k) => d.sessionClicks[k] ?? 0),
         ...allFilms.map((f) => d.filmClicks[f] ?? 0),
-      ].map(escape).join(","),
+      ]
+        .map(escape)
+        .join(","),
     );
     const csv = "﻿" + [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -373,7 +507,10 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
   }
 
   const sessionClickData = Object.entries(SESSION_LABELS)
-    .map(([key, label]) => ({ label, value: days.reduce((s, d) => s + (d.sessionClicks[key] ?? 0), 0) }))
+    .map(([key, label]) => ({
+      label,
+      value: days.reduce((s, d) => s + (d.sessionClicks[key] ?? 0), 0),
+    }))
     .filter((s) => s.value > 0);
 
   const filmClickMap: Record<string, number> = {};
@@ -384,21 +521,35 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
   const filmData = Object.entries(filmClickMap)
     .sort(([, a], [, b]) => (b as number) - (a as number))
     .slice(0, 6)
-    .map(([name, value]) => ({ name: name.length > 18 ? name.slice(0, 16) + "…" : name, value }));
+    .map(([name, value]) => ({
+      name: name.length > 18 ? name.slice(0, 16) + "…" : name,
+      value,
+    }));
 
   const devicePieData = [
     { name: "Mobile", value: totalMobile },
     { name: "Desktop", value: totalDesktop },
   ].filter((d) => d.value > 0);
 
-  const visitChartData = days.map((d) => ({ date: fmtLabel(d.date), Visitas: d.visits }));
+  const visitChartData = days.map((d, i) => ({
+    date: fmtLabel(d.date),
+    Visitas: d.visits,
+    ...(showComparison && hasPrevData
+      ? { Anterior: prevDays[i]?.visits ?? 0 }
+      : {}),
+  }));
 
-  const hasData = totalVisits > 0 || totalPageClicks > 0 || filmData.length > 0 || sessionClickData.length > 0;
+  const hasData =
+    totalVisits > 0 ||
+    totalPageClicks > 0 ||
+    filmData.length > 0 ||
+    sessionClickData.length > 0;
 
   // Highlight preset button when dates match
-  const activePreset = PRESETS.find(
-    (p) => startDate === offsetKey(p.days) && endDate === todayKey(),
-  )?.days ?? null;
+  const activePreset =
+    PRESETS.find(
+      (p) => startDate === offsetKey(p.days) && endDate === todayKey(),
+    )?.days ?? null;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -407,12 +558,21 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          <h2
+            className="text-base font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
             Estatísticas
           </h2>
           {!analyticsEnabled && (
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: "var(--color-bg-elevated)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+            <span
+              className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                color: "var(--color-text-muted)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
               Coleta pausada
             </span>
           )}
@@ -422,7 +582,11 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
             <button
               onClick={exportCSV}
               className="flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-all"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text-secondary)",
+              }}
             >
               <FiDownload size={12} />
               Exportar
@@ -432,7 +596,11 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
             onClick={() => void fetchData()}
             disabled={loading}
             className="flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-all disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+            style={{
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-secondary)",
+            }}
           >
             <FiRefreshCw size={12} className={loading ? "animate-spin" : ""} />
             Atualizar
@@ -441,13 +609,24 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
       </div>
 
       {/* Analytics toggle */}
-      <div className="flex items-center justify-between p-4 rounded-[var(--radius-lg)]"
-        style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
+      <div
+        className="flex items-center justify-between p-4 rounded-[var(--radius-lg)]"
+        style={{
+          backgroundColor: "var(--color-bg-elevated)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
         <div>
-          <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+          <p
+            className="text-sm font-medium"
+            style={{ color: "var(--color-text-primary)" }}
+          >
             Coleta de estatísticas
           </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+          <p
+            className="text-xs mt-0.5"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             Registra cliques e visitas no site público
           </p>
         </div>
@@ -455,11 +634,19 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
           onClick={() => void handleToggle()}
           disabled={toggleLoading || !canManage}
           className="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: analyticsEnabled ? "var(--color-primary)" : "var(--color-border)" }}
+          style={{
+            backgroundColor: analyticsEnabled
+              ? "var(--color-primary)"
+              : "var(--color-border)",
+          }}
         >
           <span
             className="inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200"
-            style={{ transform: analyticsEnabled ? "translateX(22px)" : "translateX(2px)" }}
+            style={{
+              transform: analyticsEnabled
+                ? "translateX(22px)"
+                : "translateX(2px)",
+            }}
           />
         </button>
       </div>
@@ -473,12 +660,19 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
             return (
               <button
                 key={d}
-                onClick={() => { setStartDate(offsetKey(d)); setEndDate(todayKey()); }}
+                onClick={() => {
+                  setStartDate(offsetKey(d));
+                  setEndDate(todayKey());
+                }}
                 className="h-8 px-3 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-all"
                 style={{
-                  backgroundColor: isActive ? "var(--color-primary-light)" : "var(--color-bg-elevated)",
+                  backgroundColor: isActive
+                    ? "var(--color-primary-light)"
+                    : "var(--color-bg-elevated)",
                   border: `1px solid ${isActive ? "var(--color-primary)" : "var(--color-border)"}`,
-                  color: isActive ? "var(--color-primary)" : "var(--color-text-secondary)",
+                  color: isActive
+                    ? "var(--color-primary)"
+                    : "var(--color-text-secondary)",
                 }}
               >
                 {label}
@@ -488,11 +682,19 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
         </div>
 
         {/* Divider */}
-        <div className="h-5 w-px hidden sm:block" style={{ backgroundColor: "var(--color-border)" }} />
+        <div
+          className="h-5 w-px hidden sm:block"
+          style={{ backgroundColor: "var(--color-border)" }}
+        />
 
         {/* Custom date range */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>De</span>
+          <span
+            className="text-xs font-medium"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            De
+          </span>
           <input
             type="date"
             value={startDate}
@@ -506,7 +708,12 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
               colorScheme: "light dark",
             }}
           />
-          <span className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>até</span>
+          <span
+            className="text-xs font-medium"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            até
+          </span>
           <input
             type="date"
             value={endDate}
@@ -525,29 +732,70 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
       </div>
 
       {/* Comparison toggle */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setShowComparison(!showComparison)}
-          className="relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer"
-          style={{ backgroundColor: showComparison ? "var(--color-primary)" : "var(--color-border)" }}
-        >
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowComparison(!showComparison)}
+            className="relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer"
+            style={{
+              backgroundColor: showComparison
+                ? "var(--color-primary)"
+                : "var(--color-border)",
+            }}
+          >
+            <span
+              className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+              style={{
+                transform: showComparison
+                  ? "translateX(18px)"
+                  : "translateX(2px)",
+              }}
+            />
+          </button>
           <span
-            className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-            style={{ transform: showComparison ? "translateX(18px)" : "translateX(2px)" }}
-          />
-        </button>
-        <span className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
-          Comparar com período anterior
-        </span>
-        <InfoTooltip text="Mostra a variação percentual dos KPIs em relação ao mesmo intervalo imediatamente anterior. Ex: selecionando 7 dias, compara com os 7 dias anteriores a esse período." />
+            className="text-xs font-medium"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            Comparar com período anterior
+          </span>
+          {showComparison && (
+            <span
+              className="text-[10px]"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              ({fmtLabel(prevStart)} – {fmtLabel(prevEnd)})
+            </span>
+          )}
+          <InfoTooltip text="Mostra a variação percentual dos KPIs em relação ao mesmo intervalo imediatamente anterior. Ex: selecionando 7 dias, compara com os 7 dias anteriores a esse período." />
+        </div>
+
+        {showComparison && !hasPrevData && !loading && (
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] text-xs"
+            style={{
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            <FiInfo size={13} />
+            Sem dados para o período anterior ({fmtLabel(prevStart)} –{" "}
+            {fmtLabel(prevEnd)}). Nenhuma comparação disponível.
+          </div>
+        )}
       </div>
 
       {loading ? (
         <Spinner />
       ) : !hasData ? (
-        <div className="flex flex-col items-center gap-3 py-20" style={{ color: "var(--color-text-muted)" }}>
+        <div
+          className="flex flex-col items-center gap-3 py-20"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           <FiBarChart2 size={32} />
-          <p className="text-sm font-medium">Nenhum dado para o período selecionado</p>
+          <p className="text-sm font-medium">
+            Nenhum dado para o período selecionado
+          </p>
           <p className="text-xs text-center">
             Quando usuários interagirem com o site, os dados aparecerão aqui.
           </p>
@@ -556,55 +804,211 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
         <>
           {/* KPI cards */}
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
-            <KpiCard label="Visitas" value={totalVisits} icon={<FiUsers size={15} />}
-              delta={showComparison ? pctDelta(totalVisits, prevTotalVisits) : undefined} />
-            <KpiCard label="Interações" value={totalPageClicks} icon={<FiMousePointer size={15} />}
-              delta={showComparison ? pctDelta(totalPageClicks, prevTotalPageClicks) : undefined} />
-            <KpiCard label="Mobile" value={totalMobile} icon={<FiSmartphone size={15} />}
-              delta={showComparison ? pctDelta(totalMobile, prevTotalMobile) : undefined} />
-            <KpiCard label="Desktop" value={totalDesktop} icon={<FiMonitor size={15} />}
-              delta={showComparison ? pctDelta(totalDesktop, prevTotalDesktop) : undefined} />
+            <KpiCard
+              label="Visitas"
+              value={totalVisits}
+              icon={<FiUsers size={15} />}
+              delta={
+                showComparison && hasPrevData
+                  ? pctDelta(totalVisits, prevTotalVisits)
+                  : undefined
+              }
+              prevValue={
+                showComparison && hasPrevData ? prevTotalVisits : undefined
+              }
+            />
+            <KpiCard
+              label="Interações"
+              value={totalPageClicks}
+              icon={<FiMousePointer size={15} />}
+              delta={
+                showComparison && hasPrevData
+                  ? pctDelta(totalPageClicks, prevTotalPageClicks)
+                  : undefined
+              }
+              prevValue={
+                showComparison && hasPrevData ? prevTotalPageClicks : undefined
+              }
+            />
+            <KpiCard
+              label="Mobile"
+              value={totalMobile}
+              icon={<FiSmartphone size={15} />}
+              delta={
+                showComparison && hasPrevData
+                  ? pctDelta(totalMobile, prevTotalMobile)
+                  : undefined
+              }
+              prevValue={
+                showComparison && hasPrevData ? prevTotalMobile : undefined
+              }
+            />
+            <KpiCard
+              label="Desktop"
+              value={totalDesktop}
+              icon={<FiMonitor size={15} />}
+              delta={
+                showComparison && hasPrevData
+                  ? pctDelta(totalDesktop, prevTotalDesktop)
+                  : undefined
+              }
+              prevValue={
+                showComparison && hasPrevData ? prevTotalDesktop : undefined
+              }
+            />
           </div>
 
           {/* Visits over time */}
           {totalVisits > 0 && (
-            <div className="p-4 rounded-[var(--radius-lg)]"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-              <p className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+            <div
+              className="p-4 rounded-[var(--radius-lg)]"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <p
+                className="text-sm font-semibold mb-4"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Visitas por dia
               </p>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={visitChartData}>
                   <defs>
                     <linearGradient id="visitGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.primary} stopOpacity={0.25} />
-                      <stop offset="95%" stopColor={C.primary} stopOpacity={0} />
+                      <stop
+                        offset="5%"
+                        stopColor={C.primary}
+                        stopOpacity={0.25}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor={C.primary}
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                    <linearGradient id="prevGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="5%"
+                        stopColor={C.violet}
+                        stopOpacity={0.12}
+                      />
+                      <stop offset="95%" stopColor={C.violet} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                  <XAxis dataKey="date" tick={axisTickStyle} tickLine={false} axisLine={false} />
-                  <YAxis tick={axisTickStyle} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--color-border)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="Visitas" stroke={C.primary} fill="url(#visitGrad)" strokeWidth={2} dot={false} />
+                  {showComparison && hasPrevData && (
+                    <Area
+                      type="monotone"
+                      dataKey="Anterior"
+                      stroke={C.violet}
+                      fill="url(#prevGrad)"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 3"
+                      dot={false}
+                      opacity={0.7}
+                    />
+                  )}
+                  <Area
+                    type="monotone"
+                    dataKey="Visitas"
+                    stroke={C.primary}
+                    fill="url(#visitGrad)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* Visits by day of week */}
+          {/* Visits by day of week / month */}
           {totalVisits > 0 && (
-            <div className="p-4 rounded-[var(--radius-lg)]"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-              <p className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
-                Visitas por dia da semana
-              </p>
+            <div
+              className="p-4 rounded-[var(--radius-lg)]"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {dowView === "weekday"
+                    ? "Visitas por dia da semana"
+                    : "Visitas por mês"}
+                </p>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {(["weekday", "month"] as const).map((v, i) => (
+                    <button
+                      key={v}
+                      onClick={() => setDowView(v)}
+                      className="px-2.5 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                      style={{
+                        backgroundColor:
+                          dowView === v
+                            ? "var(--color-primary)"
+                            : "var(--color-bg-elevated)",
+                        color:
+                          dowView === v ? "white" : "var(--color-text-muted)",
+                        borderLeft:
+                          i > 0 ? "1px solid var(--color-border)" : undefined,
+                      }}
+                    >
+                      {v === "weekday" ? "Semana" : "Meses"}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={dowData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                  <XAxis dataKey="label" tick={axisTickStyle} tickLine={false} axisLine={false} />
-                  <YAxis tick={axisTickStyle} tickLine={false} axisLine={false} allowDecimals={false} />
+                <BarChart data={dowView === "weekday" ? dowData : monthData}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--color-border)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="value" name="Visitas" fill={C.violet} radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="value"
+                    name="Visitas"
+                    fill={C.violet}
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -612,18 +1016,55 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
 
           {/* Page clicks */}
           {pageClickTotals.length > 0 && (
-            <div className="p-4 rounded-[var(--radius-lg)]"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-              <p className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+            <div
+              className="p-4 rounded-[var(--radius-lg)]"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <p
+                className="text-sm font-semibold mb-4"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Cliques por seção
               </p>
-              <ResponsiveContainer width="100%" height={Math.max(160, pageClickTotals.length * 38)}>
-                <BarChart data={pageClickTotals} layout="vertical" margin={{ left: 8, right: 28 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
-                  <XAxis type="number" tick={axisTickStyle} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <YAxis type="category" dataKey="label" width={118} tick={axisTickStyle} tickLine={false} axisLine={false} />
+              <ResponsiveContainer
+                width="100%"
+                height={Math.max(160, pageClickTotals.length * 38)}
+              >
+                <BarChart
+                  data={pageClickTotals}
+                  layout="vertical"
+                  margin={{ left: 8, right: 28 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--color-border)"
+                    horizontal={false}
+                  />
+                  <XAxis
+                    type="number"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={118}
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="value" name="Cliques" fill={C.primary} radius={[0, 4, 4, 0]} />
+                  <Bar
+                    dataKey="value"
+                    name="Cliques"
+                    fill={C.primary}
+                    radius={[0, 4, 4, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -631,18 +1072,48 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
 
           {/* Session clicks */}
           {sessionClickData.length > 0 && (
-            <div className="p-4 rounded-[var(--radius-lg)]"
-              style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-              <p className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+            <div
+              className="p-4 rounded-[var(--radius-lg)]"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <p
+                className="text-sm font-semibold mb-4"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 Cliques por sessão
               </p>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={sessionClickData} margin={{ left: 8, right: 28 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                  <XAxis dataKey="label" tick={axisTickStyle} tickLine={false} axisLine={false} />
-                  <YAxis tick={axisTickStyle} tickLine={false} axisLine={false} allowDecimals={false} />
+                <BarChart
+                  data={sessionClickData}
+                  margin={{ left: 8, right: 28 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--color-border)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="value" name="Cliques" fill={C.amber} radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="value"
+                    name="Cliques"
+                    fill={C.emerald}
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -651,38 +1122,85 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
           {/* Films + Devices */}
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
             {filmData.length > 0 && (
-              <div className="p-4 rounded-[var(--radius-lg)]"
-                style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-                <p className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+              <div
+                className="p-4 rounded-[var(--radius-lg)]"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                <p
+                  className="text-sm font-semibold mb-4"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
                   Filmes mais clicados
                 </p>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={filmData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--color-text-muted)" }} tickLine={false} axisLine={false} />
-                    <YAxis tick={axisTickStyle} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--color-border)"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10, fill: "var(--color-text-muted)" }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      tick={axisTickStyle}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Bar dataKey="value" name="Cliques" fill={C.violet} radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="value"
+                      name="Cliques"
+                      fill={C.violet}
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
 
             {devicePieData.length > 0 && (
-              <div className="p-4 rounded-[var(--radius-lg)]"
-                style={{ backgroundColor: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}>
-                <p className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+              <div
+                className="p-4 rounded-[var(--radius-lg)]"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                <p
+                  className="text-sm font-semibold mb-4"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
                   Dispositivos
                 </p>
                 <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
-                    <Pie data={devicePieData} cx="50%" cy="50%" innerRadius={52} outerRadius={78}
-                      dataKey="value" nameKey="name" paddingAngle={3}>
+                    <Pie
+                      data={devicePieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={78}
+                      dataKey="value"
+                      nameKey="name"
+                      paddingAngle={3}
+                    >
                       <Cell fill={C.amber} />
                       <Cell fill={C.primary} />
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                    <Legend
+                      iconType="circle"
+                      iconSize={10}
+                      wrapperStyle={{ fontSize: 12 }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

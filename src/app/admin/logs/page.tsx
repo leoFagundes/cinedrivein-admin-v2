@@ -44,7 +44,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
 import { useDevMode } from "@/contexts/DevModeContext";
-import { Log, LogCategory, SiteConfig, PriceRule, EventType } from "@/types";
+import { Log, LogCategory, SiteConfig, PriceRule, EventType, UserStatus } from "@/types";
 import { log as writeLog } from "@/lib/logger";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -373,11 +373,11 @@ function LogRow({
               {log.description}
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">
-              {canRestore && ((log.changes?.length ?? 0) > 0 || !!log.snapshot) && (
+              {canRestore && isRestorableLog(log) && (
                 <button
                   onClick={() => onRestore(log)}
                   title="Restaurar estado anterior"
-                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 transition-all"
                   style={{ color: "var(--color-text-muted)" }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = "rgba(0,136,194,0.1)";
@@ -395,7 +395,7 @@ function LogRow({
                 <button
                   onClick={() => onDelete(log.id)}
                   title="Excluir log"
-                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                  className="w-7 h-7 rounded flex items-center justify-center cursor-pointer flex-shrink-0 transition-all"
                   style={{ color: "var(--color-text-muted)" }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.1)";
@@ -635,17 +635,73 @@ function analyzeSiteChange(c: LogChange): RestoreItem {
     case "Preços": {
       if (!c.from) return ok("Tabela de preços será limpa", { prices: [] });
       const rules = c.from.split(" | ").map((part) => {
-        const m = part.match(/^(.+): M([\d.]+)\/I([\d.]+)$/);
+        const m = part.match(/^(.+): M([\d.]+)\/I([\d.]+)(?: \[([0-9,]*)\])?$/);
         if (!m) return null;
-        return { label: m[1], meia: Number(m[2]), inteira: Number(m[3]), days: [] } as PriceRule;
+        const days = m[4] ? m[4].split(",").filter(Boolean).map(Number) : [];
+        return { label: m[1], meia: Number(m[2]), inteira: Number(m[3]), days } as PriceRule;
       });
       if (rules.some((r) => r === null))
         return impossible(c, "Formato dos preços não pôde ser interpretado");
-      return { ...c, status: "partial", reason: "Valores e rótulos serão restaurados, mas os dias da semana serão redefinidos", target: { collection: "siteConfig", docId: "main", fields: { prices: rules as PriceRule[] }, mode: "update" as const } };
+      const allHaveDays = (rules as PriceRule[]).every((r) => r.days.length > 0);
+      if (!allHaveDays)
+        return { ...c, status: "partial" as const, reason: "Valores e rótulos restaurados, mas dias da semana redefinidos (log gerado antes da atualização)", target: { collection: "siteConfig", docId: "main", fields: { prices: rules as PriceRule[] }, mode: "update" as const } };
+      return ok("Tabela de preços completa (valores, rótulos e dias da semana) será restaurada", { prices: rules as PriceRule[] });
     }
     default:
       return impossible(c, "Campo não suportado para restauração");
   }
+}
+
+// ── User fields ───────────────────────────────────────────────────────────────
+const STATUS_FROM_LABEL: Record<string, UserStatus> = {
+  Pendente: "pending",
+  Aprovado: "approved",
+  Rejeitado: "rejected",
+};
+
+function analyzeUserChange(c: LogChange, docId: string): RestoreItem {
+  const ok = (reason: string, fields: Record<string, unknown>): RestoreItem =>
+    ({ ...c, status: "ok", reason, target: { collection: "users", docId, fields, mode: "update" as const } });
+
+  switch (c.field) {
+    case "Status": {
+      const v = c.from !== null ? STATUS_FROM_LABEL[c.from] : null;
+      return v
+        ? ok(`Será restaurado para: "${c.from}"`, { status: v })
+        : impossible(c, "Status anterior não reconhecido");
+    }
+    case "Usuário":
+      return impossible(c, "Mudança de nome de usuário requer atualização em múltiplos registros e não pode ser restaurada automaticamente");
+    case "perfil":
+      return impossible(c, "Atribuição de perfil requer o ID do perfil, que não foi armazenado no log");
+    default:
+      return impossible(c, "Campo não suportado para restauração");
+  }
+}
+
+// ── Profile fields ─────────────────────────────────────────────────────────────
+function analyzeProfileChange(c: LogChange, docId: string): RestoreItem {
+  const ok = (reason: string, fields: Record<string, unknown>): RestoreItem =>
+    ({ ...c, status: "ok", reason, target: { collection: "permissionProfiles", docId, fields, mode: "update" as const } });
+
+  switch (c.field) {
+    case "Nome":
+      return c.from !== null
+        ? ok(`Será restaurado para: "${c.from}"`, { name: c.from })
+        : impossible(c, "Nome anterior não disponível");
+    case "Adicionada":
+    case "Removida":
+      return impossible(c, "Alterações de permissões individuais não podem ser restauradas automaticamente — edite o perfil manualmente");
+    default:
+      return impossible(c, "Campo não suportado para restauração");
+  }
+}
+
+// ── Restore button eligibility ─────────────────────────────────────────────────
+function isRestorableLog(log: Log): boolean {
+  if (log.snapshot) return true;
+  if (!log.changes?.length) return false;
+  return log.category !== "auth" && log.category !== "orders";
 }
 
 // ── Dispatcher ─────────────────────────────────────────────────────────────────
@@ -697,10 +753,25 @@ function analyzeRestoreItems(log: Log): RestoreItem[] {
   if (log.category === "stock" && log.target?.type === "subitem")
     return changes.map((c) => analyzeSubitemChange(c, log.target!.id));
 
+  if (log.category === "users" && log.target?.type === "user")
+    return changes.map((c) => analyzeUserChange(c, log.target!.id));
+
+  if (log.category === "profiles" && log.target?.type === "profile")
+    return changes.map((c) => analyzeProfileChange(c, log.target!.id));
+
   return changes.map((c) => impossible(c, "Tipo de log não suportado para restauração automática"));
 }
 
 // ─── Restore modal ────────────────────────────────────────────────────────────
+
+function formatCurrentValue(v: unknown): string {
+  if (v === undefined || v === null) return "—";
+  if (typeof v === "boolean") return v ? "Sim" : "Não";
+  if (typeof v === "number") return v.toLocaleString("pt-BR");
+  if (Array.isArray(v)) return `${v.length} item(s)`;
+  if (typeof v === "string") return v || "—";
+  return "—";
+}
 
 function RestoreModal({
   log,
@@ -715,6 +786,33 @@ function RestoreModal({
 }) {
   const items = analyzeRestoreItems(log);
   const hasRestorable = items.some((i) => i.status !== "impossible");
+  const [currentDocs, setCurrentDocs] = useState<Record<string, Record<string, unknown>>>({});
+
+  useEffect(() => {
+    const unique = new Map<string, { colName: string; docId: string }>();
+    items
+      .filter((i) => i.status !== "impossible" && i.target)
+      .forEach((i) => {
+        const k = `${i.target!.collection}:${i.target!.docId}`;
+        if (!unique.has(k)) unique.set(k, { colName: i.target!.collection, docId: i.target!.docId });
+      });
+    if (unique.size === 0) return;
+    Promise.all(
+      [...unique.values()].map(({ colName, docId }) =>
+        getDoc(doc(db, colName, docId)).then((snap) => ({
+          key: `${colName}:${docId}`,
+          data: (snap.data() ?? {}) as Record<string, unknown>,
+        }))
+      )
+    )
+      .then((results) => {
+        const map: Record<string, Record<string, unknown>> = {};
+        results.forEach(({ key, data }) => { map[key] = data; });
+        setCurrentDocs(map);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const statusIcon = (status: RestoreStatus) => {
     if (status === "ok") return <FiCheckCircle size={14} style={{ color: "var(--color-success)", flexShrink: 0 }} />;
@@ -789,6 +887,33 @@ function RestoreModal({
                   </span>
                 </div>
                 <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{item.reason}</p>
+                {item.status !== "impossible" && item.target && (() => {
+                  const docKey = `${item.target.collection}:${item.target.docId}`;
+                  if (!(docKey in currentDocs)) return null;
+                  const docData = currentDocs[docKey];
+                  if (item.target.mode === "create") {
+                    const exists = Object.keys(docData).length > 0;
+                    return (
+                      <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                        Situação atual:{" "}
+                        <span style={{ color: exists ? "var(--color-warning)" : "var(--color-success)" }}>
+                          {exists ? "já existe no banco (será sobrescrito)" : "não encontrado — pode ser restaurado com segurança"}
+                        </span>
+                      </p>
+                    );
+                  }
+                  const fieldEntries = Object.entries(item.target.fields);
+                  if (fieldEntries.length !== 1) return null;
+                  const currVal = docData[fieldEntries[0][0]];
+                  return (
+                    <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      Valor atual:{" "}
+                      <span style={{ color: "var(--color-text-secondary)", fontWeight: 500 }}>
+                        {formatCurrentValue(currVal)}
+                      </span>
+                    </p>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -1027,15 +1152,15 @@ export default function LogsPage() {
   async function handleClearAll() {
     setClearLoading(true);
     try {
-      // Delete in batches of 500 (Firestore limit)
-      const snap = await getDocs(query(collection(db, "logs"), limit(500)));
-      if (snap.empty) {
-        setClearConfirm(false);
-        return;
+      let keepGoing = true;
+      while (keepGoing) {
+        const snap = await getDocs(query(collection(db, "logs"), limit(500)));
+        if (snap.empty) { keepGoing = false; break; }
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        if (snap.docs.length < 500) keepGoing = false;
       }
-      const batch = writeBatch(db);
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
       setLogs([]);
       setHasMore(false);
       success("Logs limpos", "Todos os registros foram excluídos.");

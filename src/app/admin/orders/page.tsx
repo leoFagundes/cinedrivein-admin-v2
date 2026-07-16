@@ -285,6 +285,7 @@ function OrderCard({
   onEdit,
   onChat,
   hasUnread,
+  hasAnyMsg,
   isPrinted,
 }: {
   order: Order;
@@ -293,6 +294,7 @@ function OrderCard({
   onEdit?: () => void;
   onChat?: () => void;
   hasUnread: boolean;
+  hasAnyMsg: boolean;
   isPrinted: boolean;
 }) {
   const { showDocIds } = useDevMode();
@@ -421,9 +423,13 @@ function OrderCard({
                     : "var(--color-text-muted)",
                   backgroundColor: hasUnread
                     ? "rgba(239,68,68,0.12)"
+                    : hasAnyMsg
+                    ? "var(--color-bg-elevated)"
                     : "transparent",
                   border: hasUnread
                     ? "1px solid rgba(239,68,68,0.3)"
+                    : hasAnyMsg
+                    ? "1px solid var(--color-border)"
                     : "1px solid transparent",
                 }}
                 title="Chat"
@@ -707,6 +713,7 @@ function FinishedCard({
   onReactivate,
   onChat,
   canDelete,
+  hasAnyMsg,
 }: {
   order: Order;
   expanded: boolean;
@@ -716,6 +723,7 @@ function FinishedCard({
   onReactivate: () => void;
   onChat?: () => void;
   canDelete: boolean;
+  hasAnyMsg: boolean;
 }) {
   const { showDocIds, skipConfirmations } = useDevMode();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -860,6 +868,12 @@ function FinishedCard({
                 {chip.label}
               </span>
             ))}
+            {hasAnyMsg && (
+              <FiMessageSquare
+                size={9}
+                style={{ color: "var(--color-text-muted)", opacity: 0.45, flexShrink: 0 }}
+              />
+            )}
             <div
               className="ml-auto flex items-center gap-1 text-[10px] flex-shrink-0"
               style={{ color: "var(--color-text-muted)" }}
@@ -1880,6 +1894,9 @@ function OrdersPageInner() {
   // from firing the callback twice (cache + server) and playing the sound twice
   const playedMsgIdsRef = useRef<Set<string>>(new Set());
 
+  const checkedForMsgsRef = useRef<Set<string>>(new Set());
+  const [ordersWithMessages, setOrdersWithMessages] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     chatOrderIdRef.current = chatOrder?.id ?? null;
   }, [chatOrder]);
@@ -1932,6 +1949,44 @@ function OrdersPageInner() {
     const seenTime = chatSeenTimes[orderId] ?? 0;
     return msgTime > 0 && msgTime > seenTime;
   }
+
+  useEffect(() => {
+    for (const o of activeOrders) {
+      if (checkedForMsgsRef.current.has(o.id)) continue;
+      checkedForMsgsRef.current.add(o.id);
+      getDocs(
+        query(
+          collection(db, "orders", o.id, "messages"),
+          orderBy("createdAt", "desc"),
+          limit(1),
+        ),
+      )
+        .then((snap) => {
+          if (!snap.empty)
+            setOrdersWithMessages((prev) => ({ ...prev, [o.id]: true }));
+        })
+        .catch((err) => console.error("[hasMsg] active", o.id, err));
+    }
+  }, [activeOrders]);
+
+  useEffect(() => {
+    for (const o of finishedOrders) {
+      if (checkedForMsgsRef.current.has(o.id)) continue;
+      checkedForMsgsRef.current.add(o.id);
+      getDocs(
+        query(
+          collection(db, "orders", o.id, "messages"),
+          orderBy("createdAt", "desc"),
+          limit(1),
+        ),
+      )
+        .then((snap) => {
+          if (!snap.empty)
+            setOrdersWithMessages((prev) => ({ ...prev, [o.id]: true }));
+        })
+        .catch((err) => console.error("[hasMsg] finished", o.id, err));
+    }
+  }, [finishedOrders]);
 
   const totalUnread = activeOrders.filter((o) => hasUnread(o.id)).length;
 
@@ -2627,6 +2682,7 @@ function OrdersPageInner() {
                         : undefined
                     }
                     hasUnread={hasUnread(order.id)}
+                    hasAnyMsg={!!ordersWithMessages[order.id]}
                   />
                 ))}
               </div>
@@ -2826,6 +2882,7 @@ function OrdersPageInner() {
                           }
                         : undefined
                     }
+                    hasAnyMsg={!!ordersWithMessages[order.id]}
                   />
                 ))}
               </div>
