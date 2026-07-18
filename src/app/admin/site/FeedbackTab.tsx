@@ -22,6 +22,7 @@ import {
   FiRefreshCw,
   FiCheckCircle,
   FiCheck,
+  FiBell,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -325,7 +326,7 @@ export default function FeedbackTab({
   canManage: boolean;
   onUnseenCountChange?: (count: number) => void;
 }) {
-  const { appUser } = useAuth();
+  const { appUser, refreshUser } = useAuth();
   const { success, error } = useToast();
   const devMode = useDevMode();
   const actor = appUser
@@ -335,6 +336,7 @@ export default function FeedbackTab({
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Feedback | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [savingSidebarNotify, setSavingSidebarNotify] = useState(false);
 
   async function fetchFeedbacks() {
     setLoading(true);
@@ -361,6 +363,22 @@ export default function FeedbackTab({
     onUnseenCountChange?.(feedbacks.filter((f) => !f.seen).length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedbacks]);
+
+  async function handleToggleSidebarNotify(checked: boolean) {
+    if (!appUser) return;
+    setSavingSidebarNotify(true);
+    try {
+      await updateDoc(doc(db, "users", appUser.uid), {
+        notifyReviewsInSidebar: checked,
+      });
+      await refreshUser();
+    } catch (err) {
+      console.error(err);
+      error("Erro ao atualizar preferência", "Tente novamente.");
+    } finally {
+      setSavingSidebarNotify(false);
+    }
+  }
 
   async function handleMarkAsSeen(feedback: Feedback) {
     if (feedback.seen) return;
@@ -479,6 +497,53 @@ export default function FeedbackTab({
         >
           <FiRefreshCw size={14} className={loading ? "animate-spin" : ""} />
           <span className="hidden sm:inline">Atualizar</span>
+        </button>
+      </div>
+
+      <div
+        className="flex items-center justify-between p-4 rounded-[var(--radius-lg)]"
+        style={{
+          backgroundColor: "var(--color-bg-elevated)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <FiBell size={16} style={{ color: "var(--color-text-muted)" }} />
+          <div>
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Aviso no menu lateral
+            </p>
+            <p
+              className="text-xs mt-0.5"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Mostra um badge de avaliações não vistas também na barra lateral
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() =>
+            handleToggleSidebarNotify(!appUser?.notifyReviewsInSidebar)
+          }
+          disabled={savingSidebarNotify}
+          className="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            backgroundColor: appUser?.notifyReviewsInSidebar
+              ? "var(--color-primary)"
+              : "var(--color-border)",
+          }}
+        >
+          <span
+            className="inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200"
+            style={{
+              transform: appUser?.notifyReviewsInSidebar
+                ? "translateX(22px)"
+                : "translateX(2px)",
+            }}
+          />
         </button>
       </div>
 

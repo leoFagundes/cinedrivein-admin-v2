@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { FiX } from "react-icons/fi";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { useAuth } from "@/contexts/AuthContext";
-import Starfield from "./Starfield";
+import Starfield from "@/components/ui/Starfield";
 import CountdownLeader from "./CountdownLeader";
 import DriveInScene from "./DriveInScene";
 import Credits from "./Credits";
@@ -27,6 +27,7 @@ export default function EasterEggPage() {
   const [runId, setRunId] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const [showSkip, setShowSkip] = useState(false);
+  const [creditsRevealed, setCreditsRevealed] = useState(false);
   const [visitCount] = useState<number>(() => {
     if (typeof window === "undefined") return 1;
     try {
@@ -73,6 +74,7 @@ export default function EasterEggPage() {
   const replay = useCallback(() => {
     setPhase("vanity");
     setRunId((id) => id + 1);
+    setCreditsRevealed(false);
   }, []);
 
   useEffect(() => {
@@ -104,7 +106,7 @@ export default function EasterEggPage() {
           key={`scene-${runId}`}
           reducedMotion={reducedMotion}
           showTitle={phase === "scene"}
-          showScreen={phase !== "credits"}
+          showScreen={phase !== "credits" || creditsRevealed}
           visitCount={visitCount}
         />
       </motion.div>
@@ -116,6 +118,7 @@ export default function EasterEggPage() {
           visitCount={visitCount}
           onReplay={replay}
           onReturn={goBack}
+          onScrollComplete={() => setCreditsRevealed(true)}
         />
       )}
 

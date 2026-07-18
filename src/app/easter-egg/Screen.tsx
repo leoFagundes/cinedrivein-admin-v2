@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence, type MotionValue } from "motion/react";
-import { FiFilm, FiZap, FiStar, FiEye } from "react-icons/fi";
+import { FiFilm, FiZap, FiStar, FiEye, FiKey } from "react-icons/fi";
 import CineDriveInLogo from "@/components/ui/CineDriveInLogo";
 
 interface ScreenProps {
@@ -17,6 +17,7 @@ interface FunFact {
   icon: React.ReactNode;
   label: string;
   text: string;
+  code?: string;
 }
 
 export default function Screen({
@@ -38,6 +39,12 @@ export default function Screen({
       icon: <FiZap size={20} />,
       label: "Dica",
       text: "Um dos carros pisca Morse nos faróis: flash curto = ponto, flash longo = traço.",
+    },
+    {
+      icon: <FiKey size={20} />,
+      label: "Pista",
+      text: "Decodificou a mensagem? Ela é o caminho de uma página secreta.",
+      code: "https://admin.cinedrivein.com/admin/<código>/",
     },
     {
       icon: <FiStar size={20} />,
@@ -110,6 +117,19 @@ export default function Screen({
               >
                 {activeFact.text}
               </p>
+              {activeFact.code && (
+                <p
+                  className="text-[11px] px-2.5 py-1 rounded"
+                  style={{
+                    fontFamily: "var(--font-mono), monospace",
+                    color: "#7dd3fc",
+                    backgroundColor: "rgba(0,136,194,0.12)",
+                    border: "1px solid rgba(0,136,194,0.3)",
+                  }}
+                >
+                  {activeFact.code}
+                </p>
+              )}
             </motion.div>
           ) : (
             <motion.div

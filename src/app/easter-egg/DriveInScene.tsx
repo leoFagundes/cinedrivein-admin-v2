@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   motion,
   AnimatePresence,
@@ -8,7 +8,7 @@ import {
   useSpring,
   useTransform,
 } from "motion/react";
-import { pickMorseWord } from "./morse";
+import { MORSE_WORD } from "./morse";
 import Car from "./Car";
 import Screen from "./Screen";
 
@@ -29,7 +29,6 @@ export default function DriveInScene({
   visitCount,
 }: DriveInSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const morseWord = useMemo(() => pickMorseWord(visitCount), [visitCount]);
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
   const smx = useSpring(mx, { stiffness: 40, damping: 18, mass: 0.6 });
@@ -109,7 +108,7 @@ export default function DriveInScene({
             key={i}
             index={i}
             morseActive={i === MORSE_CAR_INDEX}
-            morseWord={morseWord}
+            morseWord={MORSE_WORD}
             reducedMotion={reducedMotion}
           />
         ))}

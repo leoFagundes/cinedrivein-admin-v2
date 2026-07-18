@@ -2382,6 +2382,10 @@ export default function HelpPage() {
             Clique 5 vezes seguidas no logo do Cine Drive-in, na barra
             lateral, para abrir uma sessão secreta.
           </p>
+          <p className="text-xs mt-1.5" style={{ color: "var(--color-text-muted)" }}>
+            Preste atenção nos detalhes da cena — dizem que tem mais alguma
+            coisa escondida por lá.
+          </p>
         </div>
       </div>
     </div>

@@ -37,7 +37,13 @@
       "Bash(export NODE_PATH=\"/c/Users/Adm/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules\")",
       "Bash(node \"C:\\\\Users\\\\Adm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Adm-OneDrive-Documentos-Dev-cinedrivein-admin-v2\\\\d4096a5c-a14e-4103-bae1-2c2743f6bb08\\\\scratchpad\\\\test-easter-egg.js\")",
       "Bash(node \"C:\\\\Users\\\\Adm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Adm-OneDrive-Documentos-Dev-cinedrivein-admin-v2\\\\d4096a5c-a14e-4103-bae1-2c2743f6bb08\\\\scratchpad\\\\debug-rm.js\")",
-      "Bash(node \"C:\\\\Users\\\\Adm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Adm-OneDrive-Documentos-Dev-cinedrivein-admin-v2\\\\d4096a5c-a14e-4103-bae1-2c2743f6bb08\\\\scratchpad\\\\test-enhancements.js\")"
+      "Bash(node \"C:\\\\Users\\\\Adm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Adm-OneDrive-Documentos-Dev-cinedrivein-admin-v2\\\\d4096a5c-a14e-4103-bae1-2c2743f6bb08\\\\scratchpad\\\\test-enhancements.js\")",
+      "Bash(npx --yes tsx src/app/admin/snake/_manual-test.ts)",
+      "Bash(npm run *)",
+      "Bash(cat /tmp/dev-server2.log 2>/dev/null | tail -20)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=31004\")",
+      "PowerShell(taskkill /PID 28600 /T /F)"
     ]
   }
 }

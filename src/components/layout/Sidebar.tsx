@@ -32,6 +32,7 @@ import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 import ThermalPrinterBar, { usePrinter } from "../orders/ThermalPrinter";
 import { useLogoEasterEgg } from "@/hooks/useLogoEasterEgg";
+import { useUnseenFeedbackCount } from "@/hooks/useUnseenFeedbackCount";
 
 interface NavItem {
   label: string;
@@ -180,6 +181,9 @@ export default function Sidebar() {
   const { isConnected, connectionMode, status, setPrinterBarOpen } =
     usePrinter();
   const onLogoClick = useLogoEasterEgg();
+  const unseenFeedbackCount = useUnseenFeedbackCount(
+    !!appUser?.notifyReviewsInSidebar,
+  );
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
@@ -348,7 +352,9 @@ export default function Sidebar() {
               badge={
                 item.href === "/admin/orders" && !onOrdersPage && allowed
                   ? unseenCount
-                  : undefined
+                  : item.href === "/admin/site" && allowed
+                    ? unseenFeedbackCount
+                    : undefined
               }
               chatBadge={
                 item.href === "/admin/orders" && !onOrdersPage && allowed

@@ -59,6 +59,8 @@ export interface AppUser {
   avatarStyle?: string;
   avatarSeed?: string;
   createdAt: Date;
+  /** Se true, mostra um aviso de avaliações não vistas também no menu lateral. */
+  notifyReviewsInSidebar?: boolean;
 }
 
 export type LogCategory =

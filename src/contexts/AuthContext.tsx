@@ -69,6 +69,7 @@ async function loadAppUser(uid: string): Promise<AppUser | null> {
     avatarStyle: data.avatarStyle,
     avatarSeed: data.avatarSeed,
     createdAt: data.createdAt?.toDate(),
+    notifyReviewsInSidebar: data.notifyReviewsInSidebar ?? false,
   };
 }
 

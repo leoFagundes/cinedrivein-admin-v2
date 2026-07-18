@@ -1,26 +1,13 @@
 const MORSE: Record<string, string> = {
-  O: "---",
-  B: "-...",
-  R: ".-.",
-  I: "..",
-  G: "--.",
+  S: "...",
+  N: "-.",
   A: ".-",
-  D: "-..",
-  V: "...-",
-  L: ".-..",
+  K: "-.-",
   E: ".",
-  U: "..-",
-  T: "-",
-  C: "-.-.",
 };
 
-const WORD_POOL = ["OBRIGADO", "VALEU", "VOLTOU", "CDI"];
-
-/** Escolhe a palavra Morse do farol: sempre "OBRIGADO" até a 3ª visita, depois varia. */
-export function pickMorseWord(visitCount: number): string {
-  if (visitCount < 3) return "OBRIGADO";
-  return WORD_POOL[visitCount % WORD_POOL.length];
-}
+/** Palavra piscada pelo farol — pista para a página secreta /admin/<palavra>/. */
+export const MORSE_WORD = "SNAKE";
 
 export interface MorseSegment {
   on: boolean;

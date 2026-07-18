@@ -16,6 +16,8 @@ import {
   writeBatch,
   serverTimestamp,
   Timestamp,
+  getAggregateFromServer,
+  sum,
 } from "firebase/firestore";
 import {
   AreaChart,
@@ -84,6 +86,20 @@ const CHART_COLORS = {
 };
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTH_LABELS = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
 const WEEKCOUNT_OPTIONS = [3, 5, 7, 10, 15];
 
 const TOOLTIP_STYLE = {
@@ -231,6 +247,7 @@ function ChartCard({
   onRangeChange,
   onClearClick,
   count,
+  countLabel,
   extra,
   compareToggle,
   weekdayControls,
@@ -241,6 +258,8 @@ function ChartCard({
   onRangeChange: (r: { from: string; to: string }) => void;
   onClearClick?: () => void;
   count: number;
+  /** Sobrescreve o texto padrão "N dia(s)" — útil quando a contagem representa outra unidade. */
+  countLabel?: string;
   extra?: React.ReactNode;
   compareToggle?: React.ReactNode;
   weekdayControls?: React.ReactNode;
@@ -272,7 +291,7 @@ function ChartCard({
                 className="text-xs"
                 style={{ color: "var(--color-text-muted)" }}
               >
-                {count} dia{count !== 1 ? "s" : ""}
+                {countLabel ?? `${count} dia${count !== 1 ? "s" : ""}`}
               </span>
             )}
             {onClearClick && (
@@ -410,11 +429,25 @@ export default function DashboardPage() {
   const [paymentMode, setPaymentMode] = useState<"pie" | "bar">("pie");
 
   // Weekday comparison mode
-  const [revenueCompare, setRevenueCompare] = useState<"period" | "weekday">(
-    "period",
-  );
+  const [revenueCompare, setRevenueCompare] = useState<
+    "period" | "weekday" | "monthly" | "annual"
+  >("period");
   const [revenueWeekday, setRevenueWeekday] = useState(6);
   const [revenueWeekCount, setRevenueWeekCount] = useState(7);
+
+  // Visão mensal (um ano) e anual (todos os anos) do faturamento
+  const [revenueYear, setRevenueYear] = useState(() => new Date().getFullYear());
+  const [earliestStatsYear, setEarliestStatsYear] = useState<number | null>(
+    null,
+  );
+  const [monthlyRevenueStats, setMonthlyRevenueStats] = useState<
+    { month: number; total: number; subtotal: number }[]
+  >([]);
+  const [annualRevenueStats, setAnnualRevenueStats] = useState<
+    { year: number; total: number; subtotal: number }[]
+  >([]);
+  const [loadingRevenueAggregate, setLoadingRevenueAggregate] =
+    useState(false);
   const [ordersCompare, setOrdersCompare] = useState<"period" | "weekday">(
     "period",
   );
@@ -526,6 +559,105 @@ export default function DashboardPage() {
     }
     load();
   }, []);
+
+  // Ano do primeiro dailyStats registrado — define o intervalo disponível
+  // para as visões "Mensal" (seletor de ano) e "Anual" (todos os anos).
+  useEffect(() => {
+    async function loadEarliestYear() {
+      try {
+        const snap = await getDocs(
+          query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(1)),
+        );
+        if (!snap.empty) {
+          setEarliestStatsYear(Number(snap.docs[0].data().date.slice(0, 4)));
+        }
+      } catch {
+        // silent — visão anual fica vazia
+      }
+    }
+    loadEarliestYear();
+  }, []);
+
+  // Visão "Mensal": soma o faturamento por mês dentro do ano selecionado.
+  useEffect(() => {
+    if (revenueCompare !== "monthly") return;
+    let cancelled = false;
+    async function loadMonthly() {
+      setLoadingRevenueAggregate(true);
+      try {
+        const snap = await getDocs(
+          query(
+            collection(db, "dailyStats"),
+            where("date", ">=", `${revenueYear}-01-01`),
+            where("date", "<=", `${revenueYear}-12-31`),
+          ),
+        );
+        const buckets = Array.from({ length: 12 }, (_, i) => ({
+          month: i,
+          total: 0,
+          subtotal: 0,
+        }));
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          const monthIdx = Number((data.date as string).slice(5, 7)) - 1;
+          if (monthIdx >= 0 && monthIdx < 12) {
+            buckets[monthIdx].total += data.revenue?.total ?? 0;
+            buckets[monthIdx].subtotal += data.revenue?.subtotal ?? 0;
+          }
+        });
+        if (!cancelled) setMonthlyRevenueStats(buckets);
+      } catch {
+        // silent — gráfico fica vazio
+      } finally {
+        if (!cancelled) setLoadingRevenueAggregate(false);
+      }
+    }
+    loadMonthly();
+    return () => {
+      cancelled = true;
+    };
+  }, [revenueCompare, revenueYear]);
+
+  // Visão "Anual": soma o faturamento de cada ano via aggregation query
+  // (sum), sem baixar todos os documentos diários.
+  useEffect(() => {
+    if (revenueCompare !== "annual" || earliestStatsYear === null) return;
+    let cancelled = false;
+    async function loadAnnual() {
+      setLoadingRevenueAggregate(true);
+      try {
+        const currentYear = new Date().getFullYear();
+        const years: number[] = [];
+        for (let y = earliestStatsYear!; y <= currentYear; y++) years.push(y);
+        const results = await Promise.all(
+          years.map(async (year) => {
+            const snap = await getAggregateFromServer(
+              query(
+                collection(db, "dailyStats"),
+                where("date", ">=", `${year}-01-01`),
+                where("date", "<=", `${year}-12-31`),
+              ),
+              { total: sum("revenue.total"), subtotal: sum("revenue.subtotal") },
+            );
+            return {
+              year,
+              total: snap.data().total,
+              subtotal: snap.data().subtotal,
+            };
+          }),
+        );
+        if (!cancelled) setAnnualRevenueStats(results);
+      } catch {
+        // silent — gráfico fica vazio
+      } finally {
+        if (!cancelled) setLoadingRevenueAggregate(false);
+      }
+    }
+    loadAnnual();
+    return () => {
+      cancelled = true;
+    };
+  }, [revenueCompare, earliestStatsYear]);
 
   // Count archivable orders + breakdown for stat cards
   useEffect(() => {
@@ -1352,17 +1484,42 @@ export default function DashboardPage() {
     revenueCompare === "weekday"
       ? getWeekdayStats(revenueWeekday, revenueWeekCount)
       : filterStats(revenueRange);
-  const revenueData = revenueStats.map((s) => ({
-    date: fmtDate(s.date),
-    Total: +s.revenue.total.toFixed(2),
-    Subtotal: +s.revenue.subtotal.toFixed(2),
-  }));
+  const revenueData =
+    revenueCompare === "monthly"
+      ? monthlyRevenueStats.map((m) => ({
+          date: MONTH_LABELS[m.month],
+          Total: +m.total.toFixed(2),
+          Subtotal: +m.subtotal.toFixed(2),
+        }))
+      : revenueCompare === "annual"
+        ? annualRevenueStats.map((a) => ({
+            date: String(a.year),
+            Total: +a.total.toFixed(2),
+            Subtotal: +a.subtotal.toFixed(2),
+          }))
+        : revenueStats.map((s) => ({
+            date: fmtDate(s.date),
+            Total: +s.revenue.total.toFixed(2),
+            Subtotal: +s.revenue.subtotal.toFixed(2),
+          }));
   const revenueAvg =
     revenueData.length > 0
       ? +(
           revenueData.reduce((a, d) => a + d.Total, 0) / revenueData.length
         ).toFixed(2)
       : null;
+  const revenueCount =
+    revenueCompare === "monthly"
+      ? monthlyRevenueStats.filter((m) => m.total > 0 || m.subtotal > 0).length
+      : revenueCompare === "annual"
+        ? annualRevenueStats.length
+        : revenueStats.length;
+  const revenueCountLabel =
+    revenueCompare === "monthly"
+      ? `${revenueCount} ${revenueCount === 1 ? "mês" : "meses"}`
+      : revenueCompare === "annual"
+        ? `${revenueCount} ${revenueCount === 1 ? "ano" : "anos"}`
+        : undefined;
 
   const ordersStats =
     ordersCompare === "weekday"
@@ -2554,11 +2711,17 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Revenue chart */}
               <ChartCard
-                title="Faturamento por dia"
+                title={
+                  revenueCompare === "monthly"
+                    ? "Faturamento por mês"
+                    : revenueCompare === "annual"
+                      ? "Faturamento por ano"
+                      : "Faturamento por dia"
+                }
                 range={revenueRange}
                 onRangeChange={setRevenueRange}
                 onClearClick={
-                  canDeleteChartData
+                  canDeleteChartData && revenueCompare === "period"
                     ? () =>
                         setClearModal({
                           label: "Faturamento por dia",
@@ -2566,13 +2729,16 @@ export default function DashboardPage() {
                         })
                     : undefined
                 }
-                count={revenueStats.length}
+                count={revenueCount}
+                countLabel={revenueCountLabel}
                 compareToggle={
                   <div
-                    className="flex rounded-[var(--radius-sm)] overflow-hidden"
+                    className="flex rounded-[var(--radius-sm)] overflow-hidden flex-wrap"
                     style={{ border: "1px solid var(--color-border)" }}
                   >
-                    {(["period", "weekday"] as const).map((m, i) => (
+                    {(
+                      ["period", "weekday", "monthly", "annual"] as const
+                    ).map((m, i, arr) => (
                       <button
                         key={m}
                         onClick={() => setRevenueCompare(m)}
@@ -2587,10 +2753,18 @@ export default function DashboardPage() {
                               ? "white"
                               : "var(--color-text-muted)",
                           borderRight:
-                            i === 0 ? "1px solid var(--color-border)" : "none",
+                            i < arr.length - 1
+                              ? "1px solid var(--color-border)"
+                              : "none",
                         }}
                       >
-                        {m === "period" ? "Período" : "Semana"}
+                        {m === "period"
+                          ? "Período"
+                          : m === "weekday"
+                            ? "Semana"
+                            : m === "monthly"
+                              ? "Mensal"
+                              : "Anual"}
                       </button>
                     ))}
                   </div>
@@ -2655,6 +2829,48 @@ export default function DashboardPage() {
                         ))}
                       </div>
                     </div>
+                  ) : revenueCompare === "monthly" ? (
+                    <div className="flex items-center gap-2">
+                      <FiCalendar
+                        size={12}
+                        style={{ color: "var(--color-text-muted)" }}
+                      />
+                      <select
+                        value={revenueYear}
+                        onChange={(e) => setRevenueYear(Number(e.target.value))}
+                        className="h-7 px-2 text-xs rounded-[var(--radius-sm)] outline-none cursor-pointer"
+                        style={{
+                          backgroundColor: "var(--color-bg-elevated)",
+                          border: "1px solid var(--color-border)",
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {Array.from(
+                          {
+                            length:
+                              new Date().getFullYear() -
+                              (earliestStatsYear ?? new Date().getFullYear()) +
+                              1,
+                          },
+                          (_, i) =>
+                            (earliestStatsYear ?? new Date().getFullYear()) +
+                            i,
+                        )
+                          .reverse()
+                          .map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  ) : revenueCompare === "annual" ? (
+                    <p
+                      className="text-xs"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Todos os anos com dados registrados
+                    </p>
                   ) : undefined
                 }
                 extra={
@@ -2691,6 +2907,77 @@ export default function DashboardPage() {
                 }
               >
                 <ResponsiveContainer width="100%" height={220}>
+                  {(revenueCompare === "monthly" ||
+                    revenueCompare === "annual") &&
+                  loadingRevenueAggregate ? (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Carregando...
+                      </p>
+                    </div>
+                  ) : revenueCompare === "monthly" ||
+                    revenueCompare === "annual" ? (
+                  <BarChart
+                    data={revenueData}
+                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={CHART_COLORS.border}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                    />
+                    <YAxis
+                      stroke={CHART_COLORS.text}
+                      tick={{ fill: CHART_COLORS.text, fontSize: 11 }}
+                      tickFormatter={(v) => `R$${v}`}
+                      width={55}
+                    />
+                    <Tooltip
+                      {...TOOLTIP_STYLE}
+                      formatter={(v) => fmtCurrency(Number(v ?? 0))}
+                    />
+                    {(revenueMode === "total" || revenueMode === "ambos") && (
+                      <Bar
+                        dataKey="Total"
+                        fill={CHART_COLORS.primary}
+                        radius={[4, 4, 0, 0]}
+                      />
+                    )}
+                    {(revenueMode === "subtotal" ||
+                      revenueMode === "ambos") && (
+                      <Bar
+                        dataKey="Subtotal"
+                        fill={CHART_COLORS.teal}
+                        radius={[4, 4, 0, 0]}
+                      />
+                    )}
+                    {revenueAvg !== null && (
+                      <ReferenceLine
+                        y={revenueAvg}
+                        stroke={CHART_COLORS.warning}
+                        strokeDasharray="5 3"
+                        strokeWidth={1.5}
+                        label={{
+                          value: `Média ${fmtCurrency(revenueAvg)}`,
+                          fill: CHART_COLORS.warning,
+                          fontSize: 10,
+                          position: "insideTopRight",
+                        }}
+                      />
+                    )}
+                    <Legend
+                      wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
+                    />
+                  </BarChart>
+                  ) : (
                   <AreaChart
                     data={revenueData}
                     margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
@@ -2775,6 +3062,7 @@ export default function DashboardPage() {
                       wrapperStyle={{ color: CHART_COLORS.text, fontSize: 12 }}
                     />
                   </AreaChart>
+                  )}
                 </ResponsiveContainer>
               </ChartCard>
 

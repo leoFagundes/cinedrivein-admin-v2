@@ -39,6 +39,7 @@ const CONFETTI_COLORS = ["#eaf6ff", "#0088c2", "#fff4d6"];
 const CATCH_RADIUS = 32;
 const HOVER_RADIUS = 40;
 
+/** Céu estrelado animado em canvas — estrelas cintilantes + estrelas cadentes caçáveis (clique = confete). */
 export default function Starfield({ reducedMotion }: StarfieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
