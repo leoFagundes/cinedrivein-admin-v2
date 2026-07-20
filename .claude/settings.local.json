@@ -43,7 +43,39 @@
       "Bash(cat /tmp/dev-server2.log 2>/dev/null | tail -20)",
       "Bash(netstat -ano)",
       "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=31004\")",
-      "PowerShell(taskkill /PID 28600 /T /F)"
+      "PowerShell(taskkill /PID 28600 /T /F)",
+      "Bash(ls -la \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\\" 2>/dev/null)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev\" 2>/dev/**)",
+      "Bash(ls -la \"/c/Users/Adm/OneDrive/Documentos/Dev/\")",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev//**)",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-site\" && ls && cat package.json 2>/dev/null | head -50)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/**)",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-web-v2\" && ls && echo --- && cat package.json 2>/dev/null | head -60)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-web-v2/**)",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-site\" && find src -type f | grep -v node_modules)",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-site\" && echo \"--- sitePresence.ts ---\" && cat -n src/lib/sitePresence.ts && echo \"--- analytics.ts ---\" && cat -n src/lib/analytics.ts)",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-web-v2\" && find src/hooks -iname \"*notification*\")",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-site\" && grep -rn \"getDoc\\\\|getDocs\\\\|onSnapshot\\\\|persistentLocalCache\\\\|enableIndexedDbPersistence\\\\|initializeFirestore\" src/app/feedback/page.tsx src/app/info/page.tsx 2>/dev/null; grep -rn \"persistentLocalCache\\\\|enableIndexedDbPersistence\\\\|initializeFirestore\\\\|cacheSizeBytes\" -r src 2>/dev/null)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-web-v2/functions/**)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-web-v2/functions/src/**)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/src/hooks/**)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/src/components/**)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/src/types/**)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/src/app/\\\\\\(sections\\\\\\)/**)",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-site\" && cat eslint.config.mjs 2>/dev/null || cat .eslintrc.json 2>/dev/null || cat .eslintrc.js 2>/dev/null)",
+      "Bash(npx tsx *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(cd \"c:\\\\Users\\\\Adm\\\\OneDrive\\\\Documentos\\\\Dev\\\\cine-drivein-site\" && npm run build 2>&1 | tail -n 60)",
+      "Bash(git diff *)",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/src/**)",
+      "Bash(node -e \"const bi = require\\('react-icons/bi'\\); console.log\\(Object.keys\\(bi\\).filter\\(k => /calendar/i.test\\(k\\)\\)\\)\")",
+      "Read(//c/Users/Adm/OneDrive/Documentos/Dev/cine-drivein-site/src/lib/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Adm\\OneDrive\\Documentos\\Dev\\cine-drivein-site\\src\\types",
+      "c:\\Users\\Adm\\OneDrive\\Documentos\\Dev\\cine-drivein-site\\src\\lib",
+      "c:\\Users\\Adm\\OneDrive\\Documentos\\Dev\\cine-drivein-site\\src\\hooks",
+      "c:\\Users\\Adm\\OneDrive\\Documentos\\Dev\\cine-drivein-site\\src\\app\\(sections)"
     ]
   }
 }

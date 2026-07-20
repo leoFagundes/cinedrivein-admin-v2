@@ -1343,9 +1343,9 @@ const ARTICLES: Article[] = [
     category: "sistema",
     title: "Status do cinema e tema sazonal",
     summary:
-      "Como marcar o cinema como fechado e ativar temas de Natal, Halloween e outros.",
+      "Como marcar o cinema como fechado, programar fechamentos futuros e ativar temas de Natal, Halloween e outros.",
     bodyText:
-      "cinema fechado aberto status tema sazonal natal christmas halloween páscoa easter evento especial animação decoração",
+      "cinema fechado aberto status tema sazonal natal christmas halloween páscoa easter evento especial animação decoração programação avançada agendar agendamento feriado manutenção sobreposição data horário dia todo",
     content: (
       <div className="flex flex-col gap-3">
         <P>
@@ -1364,6 +1364,34 @@ const ARTICLES: Article[] = [
           Use ao final da temporada ou em períodos de manutenção — o app
           continua acessível para navegação mesmo com o aviso ativo.
         </P>
+        <P>
+          <B>Programações avançadas</B>
+        </P>
+        <P>
+          Logo abaixo do toggle, o card <B>Programações avançadas</B> permite
+          agendar fechamentos futuros com antecedência — feriados,
+          manutenções, eventos — sem precisar lembrar de ligar/desligar o
+          toggle manual no dia certo. Cada programação tem:
+        </P>
+        <List
+          items={[
+            "Um motivo/descrição, que aparece para o cliente no aviso do site",
+            "Um período (data de início e de fim — pode ser o mesmo dia)",
+            "Dia todo, ou um horário específico de início e fim dentro desse período",
+            "Um botão de ativar/desativar próprio, independente das outras",
+          ]}
+        />
+        <P>
+          Uma programação ativa mostra o aviso no site automaticamente quando
+          a data/hora chega, e some sozinha quando termina — mesmo com o
+          toggle <B>Status do cinema</B> marcado como aberto. As duas coisas
+          se somam, não se substituem.
+        </P>
+        <Note>
+          Não é permitido salvar duas programações ativas com datas/horários
+          sobrepostos — desative uma delas ou ajuste o período antes de
+          salvar.
+        </Note>
         <P>
           <B>Tema sazonal</B>
         </P>

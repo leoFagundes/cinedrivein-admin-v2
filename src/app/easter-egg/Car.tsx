@@ -14,6 +14,7 @@ interface CarProps {
 
 function useMorseBlink(active: boolean, word: string) {
   const [on, setOn] = useState(true);
+  const [signal, setSignal] = useState<"start" | "end" | undefined>(undefined);
   const schedule = useMemo(() => buildMorseSchedule(word), [word]);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ function useMorseBlink(active: boolean, word: string) {
     const step = () => {
       const seg = schedule[i % schedule.length];
       setOn(seg.on);
+      setSignal(seg.signal);
       i += 1;
       timer = setTimeout(step, seg.duration);
     };
@@ -32,7 +34,7 @@ function useMorseBlink(active: boolean, word: string) {
     return () => clearTimeout(timer);
   }, [active, schedule]);
 
-  return on;
+  return { on, signal };
 }
 
 export default function Car({
@@ -41,12 +43,29 @@ export default function Car({
   morseWord,
   reducedMotion,
 }: CarProps) {
-  const morseOn = useMorseBlink(morseActive && !reducedMotion, morseWord);
+  const { on: morseOn, signal: morseSignal } = useMorseBlink(
+    morseActive && !reducedMotion,
+    morseWord,
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const lastHonkRef = useRef(0);
   const [honkFlash, setHonkFlash] = useState(false);
 
   const lit = (morseActive ? (reducedMotion ? true : morseOn) : true) || honkFlash;
+  const activeSignal =
+    morseActive && !reducedMotion && !honkFlash ? morseSignal : undefined;
+  const signalStyle =
+    activeSignal === "start"
+      ? { color: "#4ade80", glow: "rgba(74,222,128,0.85)", glowSoft: "rgba(74,222,128,0.3)" }
+      : activeSignal === "end"
+        ? { color: "#f87171", glow: "rgba(248,113,113,0.85)", glowSoft: "rgba(248,113,113,0.3)" }
+        : null;
+  const headlightBg = signalStyle ? signalStyle.color : lit ? "#fff4d6" : "#3a3626";
+  const headlightShadow = signalStyle
+    ? `0 0 10px 3px ${signalStyle.glow}, 0 0 26px 8px ${signalStyle.glowSoft}`
+    : lit
+      ? "0 0 10px 3px rgba(255,244,214,0.75), 0 0 26px 8px rgba(255,244,214,0.25)"
+      : "none";
   const flickerDelay = (index * 0.37) % 1.6;
 
   function handleHonk() {
@@ -109,11 +128,9 @@ export default function Car({
           left: 4,
           width: 8,
           height: 8,
-          background: lit ? "#fff4d6" : "#3a3626",
+          background: headlightBg,
           opacity: lit ? 1 : 0.4,
-          boxShadow: lit
-            ? "0 0 10px 3px rgba(255,244,214,0.75), 0 0 26px 8px rgba(255,244,214,0.25)"
-            : "none",
+          boxShadow: headlightShadow,
           transition:
             morseActive && !honkFlash
               ? "none"
@@ -131,11 +148,9 @@ export default function Car({
           right: 4,
           width: 8,
           height: 8,
-          background: lit ? "#fff4d6" : "#3a3626",
+          background: headlightBg,
           opacity: lit ? 1 : 0.4,
-          boxShadow: lit
-            ? "0 0 10px 3px rgba(255,244,214,0.75), 0 0 26px 8px rgba(255,244,214,0.25)"
-            : "none",
+          boxShadow: headlightShadow,
           transition:
             morseActive && !honkFlash
               ? "none"

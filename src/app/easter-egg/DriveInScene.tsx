@@ -16,6 +16,7 @@ interface DriveInSceneProps {
   reducedMotion: boolean;
   showTitle: boolean;
   showScreen: boolean;
+  morseActive: boolean;
   visitCount: number;
 }
 
@@ -26,6 +27,7 @@ export default function DriveInScene({
   reducedMotion,
   showTitle,
   showScreen,
+  morseActive,
   visitCount,
 }: DriveInSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,7 +109,7 @@ export default function DriveInScene({
           <Car
             key={i}
             index={i}
-            morseActive={i === MORSE_CAR_INDEX}
+            morseActive={i === MORSE_CAR_INDEX && morseActive}
             morseWord={MORSE_WORD}
             reducedMotion={reducedMotion}
           />

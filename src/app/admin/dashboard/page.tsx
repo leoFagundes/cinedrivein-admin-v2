@@ -437,9 +437,6 @@ export default function DashboardPage() {
 
   // Visão mensal (um ano) e anual (todos os anos) do faturamento
   const [revenueYear, setRevenueYear] = useState(() => new Date().getFullYear());
-  const [earliestStatsYear, setEarliestStatsYear] = useState<number | null>(
-    null,
-  );
   const [monthlyRevenueStats, setMonthlyRevenueStats] = useState<
     { month: number; total: number; subtotal: number }[]
   >([]);
@@ -560,23 +557,16 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  // Ano do primeiro dailyStats registrado — define o intervalo disponível
-  // para as visões "Mensal" (seletor de ano) e "Anual" (todos os anos).
-  useEffect(() => {
-    async function loadEarliestYear() {
-      try {
-        const snap = await getDocs(
-          query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(1)),
-        );
-        if (!snap.empty) {
-          setEarliestStatsYear(Number(snap.docs[0].data().date.slice(0, 4)));
-        }
-      } catch {
-        // silent — visão anual fica vazia
-      }
-    }
-    loadEarliestYear();
-  }, []);
+  // Ano do primeiro dailyStats já carregado em `stats` — define o intervalo
+  // disponível para as visões "Mensal" (seletor de ano) e "Anual" (todos os
+  // anos). Derivado direto de `stats` (já buscado acima) em vez de uma nova
+  // query: evita depender de uma segunda leitura que podia ficar presa em
+  // `null` para sempre se o primeiro doc tivesse um `date` inesperado.
+  const earliestStatsYearMatch =
+    stats.length > 0 ? /^(\d{4})/.exec(stats[0].date) : null;
+  const earliestStatsYear = earliestStatsYearMatch
+    ? Number(earliestStatsYearMatch[1])
+    : null;
 
   // Visão "Mensal": soma o faturamento por mês dentro do ano selecionado.
   useEffect(() => {
@@ -606,8 +596,8 @@ export default function DashboardPage() {
           }
         });
         if (!cancelled) setMonthlyRevenueStats(buckets);
-      } catch {
-        // silent — gráfico fica vazio
+      } catch (err) {
+        console.error("Falha ao carregar faturamento mensal:", err);
       } finally {
         if (!cancelled) setLoadingRevenueAggregate(false);
       }
@@ -647,8 +637,8 @@ export default function DashboardPage() {
           }),
         );
         if (!cancelled) setAnnualRevenueStats(results);
-      } catch {
-        // silent — gráfico fica vazio
+      } catch (err) {
+        console.error("Falha ao carregar faturamento anual:", err);
       } finally {
         if (!cancelled) setLoadingRevenueAggregate(false);
       }
@@ -1502,10 +1492,23 @@ export default function DashboardPage() {
             Total: +s.revenue.total.toFixed(2),
             Subtotal: +s.revenue.subtotal.toFixed(2),
           }));
+  // Meses/anos sem nenhum registro entram em revenueData como 0 (para o
+  // calendário ficar completo no gráfico), mas não devem contar na média —
+  // senão ela cai artificialmente enquanto o ano/histórico ainda não fechou.
+  const revenueAvgSource =
+    revenueCompare === "monthly"
+      ? monthlyRevenueStats
+          .filter((m) => m.total > 0 || m.subtotal > 0)
+          .map((m) => m.total)
+      : revenueCompare === "annual"
+        ? annualRevenueStats
+            .filter((a) => a.total > 0 || a.subtotal > 0)
+            .map((a) => a.total)
+        : revenueData.map((d) => d.Total);
   const revenueAvg =
-    revenueData.length > 0
+    revenueAvgSource.length > 0
       ? +(
-          revenueData.reduce((a, d) => a + d.Total, 0) / revenueData.length
+          revenueAvgSource.reduce((a, v) => a + v, 0) / revenueAvgSource.length
         ).toFixed(2)
       : null;
   const revenueCount =

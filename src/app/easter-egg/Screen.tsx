@@ -33,12 +33,12 @@ export default function Screen({
     {
       icon: <FiFilm size={20} />,
       label: "Curiosidade",
-      text: "Essa sessão roda 100% em Next.js, React e Firebase.",
+      text: "O primeiro cine drive-in do mundo abriu em 1933, em Camden, Nova Jersey — e cobrava por carro, não por pessoa.",
     },
     {
       icon: <FiZap size={20} />,
       label: "Dica",
-      text: "Um dos carros pisca Morse nos faróis: flash curto = ponto, flash longo = traço.",
+      text: "Um dos carros pisca Morse nos faróis: flash curto = ponto, flash longo = traço. Verde avisa que a mensagem vai começar, vermelho avisa que terminou.",
     },
     {
       icon: <FiKey size={20} />,

@@ -10,7 +10,6 @@ interface CreditsProps {
   visitCount: number;
   onReplay: () => void;
   onReturn: () => void;
-  onScrollComplete?: () => void;
 }
 
 function buildBlocks(
@@ -68,7 +67,6 @@ export default function Credits({
   visitCount,
   onReplay,
   onReturn,
-  onScrollComplete,
 }: CreditsProps) {
   const [showActions, setShowActions] = useState(reducedMotion);
   const blocks = buildBlocks(starringName, visitCount);
@@ -138,7 +136,6 @@ export default function Credits({
         initial={{ y: "100%" }}
         animate={{ y: "-135%" }}
         transition={{ duration: 20, ease: "linear" }}
-        onAnimationComplete={onScrollComplete}
         className="absolute left-0 right-0 px-4"
       >
         <p

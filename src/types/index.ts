@@ -145,6 +145,20 @@ export interface Feedback {
   createdAt: Date;
 }
 
+export interface ClosureSchedule {
+  id: string;
+  active: boolean;
+  /** Aviso sutil no site, nos dias antes do fechamento. Padrão: true. */
+  visibleToCustomers?: boolean;
+  reason: string;
+  fromDate: string;
+  toDate: string;
+  allDay: boolean;
+  startTime?: string;
+  endTime?: string;
+  createdAt: number;
+}
+
 export interface SiteConfig {
   siteUrl: string;
   isClosed: boolean;
@@ -159,6 +173,7 @@ export interface SiteConfig {
   session3?: Film | null;
   session4?: Film | null;
   prices?: PriceRule[];
+  closureSchedules?: ClosureSchedule[];
 }
 
 export interface DailyStats {

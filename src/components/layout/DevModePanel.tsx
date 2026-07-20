@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -35,7 +36,8 @@ const FLAGS: {
   {
     key: "disableLogs",
     label: "Desativar logs",
-    description: "Ignora todas as chamadas de log (nada é gravado no Firestore)",
+    description:
+      "Ignora todas as chamadas de log (nada é gravado no Firestore)",
     icon: <FiSlash size={14} />,
   },
   {
@@ -95,7 +97,9 @@ export default function DevModePanel() {
   useEffect(() => {
     if (!open || profiles.length > 0) return;
     setLoadingProfiles(true);
-    getDocs(query(collection(db, "permissionProfiles"), orderBy("createdAt", "asc")))
+    getDocs(
+      query(collection(db, "permissionProfiles"), orderBy("createdAt", "asc")),
+    )
       .then((snap) =>
         setProfiles(
           snap.docs.map((d) => ({
@@ -161,7 +165,7 @@ export default function DevModePanel() {
             color: "rgb(234,179,8)",
             boxShadow: "0 0 12px rgba(234,179,8,0.15)",
           }}
-          title="Dev Mode ativo — Ctrl+Shift+D para abrir"
+          title="Dev Mode ativo"
         >
           <FiZap size={11} />
           DEV
@@ -230,7 +234,7 @@ export default function DevModePanel() {
                 style={{ color: "var(--color-text-muted)" }}
               >
                 Flags persistem no localStorage deste navegador e afetam apenas
-                esta sessão. Ctrl+Shift+D para abrir/fechar.
+                esta sessão.
               </p>
 
               {FLAGS.map(({ key, label, description, icon }) => {
@@ -308,14 +312,23 @@ export default function DevModePanel() {
                 style={{ borderTop: "1px solid var(--color-border)" }}
               >
                 <div className="flex items-center gap-1.5 mb-2">
-                  <FiUsers size={12} style={{ color: "var(--color-text-muted)" }} />
-                  <p className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>
+                  <FiUsers
+                    size={12}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <p
+                    className="text-xs font-medium"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Simular perfil
                   </p>
                 </div>
 
                 {loadingProfiles ? (
-                  <p className="text-xs py-1" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-xs py-1"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Carregando perfis...
                   </p>
                 ) : (
@@ -343,7 +356,10 @@ export default function DevModePanel() {
                     </button>
 
                     {profiles.length === 0 ? (
-                      <p className="text-xs py-1" style={{ color: "var(--color-text-muted)" }}>
+                      <p
+                        className="text-xs py-1"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
                         Nenhum perfil encontrado.
                       </p>
                     ) : (
@@ -378,9 +394,15 @@ export default function DevModePanel() {
                 )}
 
                 {flags.simulateRole && (
-                  <p className="text-xs mt-2" style={{ color: "var(--color-text-muted)" }}>
-                    {flags.simulateRole.permissions.length} permissão(ões) ativa(s) —{" "}
-                    <span style={{ color: "rgb(234,179,8)" }}>isOwner ignorado</span>
+                  <p
+                    className="text-xs mt-2"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    {flags.simulateRole.permissions.length} permissão(ões)
+                    ativa(s) —{" "}
+                    <span style={{ color: "rgb(234,179,8)" }}>
+                      isOwner ignorado
+                    </span>
                   </p>
                 )}
               </div>

@@ -30,6 +30,7 @@ import {
   FiInfo,
   FiUsers,
   FiMaximize2,
+  FiCalendar,
 } from "react-icons/fi";
 import { db, storage, rtdb } from "@/lib/firebase";
 import { ref as rtdbRef, onValue } from "firebase/database";
@@ -41,12 +42,17 @@ import Input from "@/components/ui/Input";
 import FeedbackTab from "./FeedbackTab";
 import StatisticsTab from "./StatisticsTab";
 import {
+  validateScheduleFields,
+  findScheduleConflict,
+} from "./closureScheduleUtils";
+import {
   Film,
   FilmClassification,
   EventType,
   SessionKey,
   SiteConfig,
   PriceRule,
+  ClosureSchedule,
 } from "@/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1172,6 +1178,11 @@ function ExtraSettings({
   const [popupExpanded, setPopupExpanded] = useState(false);
   const [prices, setPrices] = useState<PriceRule[]>(config.prices ?? []);
   const [pricesExpanded, setPricesExpanded] = useState(false);
+  const [schedules, setSchedules] = useState<ClosureSchedule[]>(
+    config.closureSchedules ?? [],
+  );
+  const [schedulesExpanded, setSchedulesExpanded] = useState(false);
+  const { error: showError } = useToast();
 
   const hasUnsavedChanges =
     isClosed !== (config.isClosed ?? false) ||
@@ -1181,7 +1192,8 @@ function ExtraSettings({
     popUpDescs !== (config.popUpDescriptions ?? []).join("\n") ||
     popUpFile !== null ||
     (popUpFile === null && popUpImage !== (config.popUpImage ?? "")) ||
-    JSON.stringify(prices) !== JSON.stringify(config.prices ?? []);
+    JSON.stringify(prices) !== JSON.stringify(config.prices ?? []) ||
+    JSON.stringify(schedules) !== JSON.stringify(config.closureSchedules ?? []);
 
   // Local copy of image history — syncs from config when Firestore updates
   const [imageHistory, setImageHistory] = useState<string[]>(
@@ -1198,6 +1210,7 @@ function ExtraSettings({
     setPopUpDescs((config.popUpDescriptions ?? []).join("\n"));
     setImageHistory(config.popUpImageHistory ?? []);
     setPrices(config.prices ?? []);
+    setSchedules(config.closureSchedules ?? []);
     // Only update image/preview if there's no pending local file
     setPopUpFile((prev) => {
       if (prev === null) {
@@ -1249,13 +1262,35 @@ function ExtraSettings({
     }
   }
 
+  function validateSchedulesOrShowError(): boolean {
+    for (const s of schedules) {
+      const fieldError = validateScheduleFields(s);
+      if (fieldError) {
+        showError("Programação inválida", `"${s.reason || "Sem motivo"}": ${fieldError}`);
+        return false;
+      }
+    }
+    const conflict = findScheduleConflict(schedules);
+    if (conflict) {
+      showError(
+        "Programações sobrepostas",
+        `"${conflict.a.reason}" e "${conflict.b.reason}" têm datas/horários em conflito. Desative uma delas ou ajuste o período.`,
+      );
+      return false;
+    }
+    return true;
+  }
+
   async function handleSave() {
+    if (!validateSchedulesOrShowError()) return;
+
     const updates: Partial<SiteConfig> = {
       isClosed,
       isEvent,
       popUpEnabled,
       popUpTitle,
       prices,
+      closureSchedules: schedules,
       popUpDescriptions: popUpDescs
         .split("\n")
         .map((l) => l.trim())
@@ -1281,6 +1316,7 @@ function ExtraSettings({
       popUpEnabled,
       popUpTitle,
       prices,
+      closureSchedules: schedules,
       popUpDescriptions: popUpDescs
         .split("\n")
         .map((l) => l.trim())
@@ -1423,6 +1459,409 @@ function ExtraSettings({
           </div>
           {isClosed ? "Cinema fechado" : "Cinema aberto"}
         </button>
+      </div>
+
+      {/* Closure schedules */}
+      <div
+        className="rounded-[var(--radius-xl)]"
+        style={{ border: "1px solid var(--color-border)" }}
+      >
+        {/* Header clicável — sem overflow-hidden no container pai (aqui do
+            lado de fora) para o tooltip de Info não ser cortado; o
+            arredondamento é replicado manualmente no header/corpo. */}
+        <div
+          className={`flex items-center justify-between px-4 sm:px-5 py-3.5 cursor-pointer select-none gap-2 ${
+            schedulesExpanded
+              ? "rounded-t-[var(--radius-xl)]"
+              : "rounded-[var(--radius-xl)]"
+          }`}
+          style={{ backgroundColor: "var(--color-bg-surface)" }}
+          onClick={() => setSchedulesExpanded((v) => !v)}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <p
+              className="text-xs font-semibold uppercase tracking-wide flex-shrink-0"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Programações avançadas
+            </p>
+            <InfoTooltip text="Cadastre com antecedência fechamentos programados (feriados, manutenções, eventos). Cada programação tem seu próprio motivo, data e horário, e liga/desliga independente do toggle 'Status do cinema' acima." />
+            {schedules.length > 0 && (
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {schedules.length} programação{schedules.length > 1 ? "ões" : ""}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {schedulesExpanded && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSchedules([
+                    ...schedules,
+                    {
+                      id: crypto.randomUUID(),
+                      active: true,
+                      visibleToCustomers: true,
+                      reason: "",
+                      fromDate: "",
+                      toDate: "",
+                      allDay: true,
+                      createdAt: Date.now(),
+                    },
+                  ]);
+                }}
+                className="flex items-center gap-1.5 h-7 px-3 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-secondary)",
+                }}
+              >
+                <FiPlus size={12} />
+                <span className="hidden sm:inline">Nova programação</span>
+              </button>
+            )}
+            <span
+              className="flex items-center gap-1 text-xs"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              {schedulesExpanded ? (
+                <FiChevronUp size={14} />
+              ) : (
+                <FiChevronDown size={14} />
+              )}
+              <span className="hidden sm:inline">
+                {schedulesExpanded ? "Recolher" : "Editar"}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {/* Corpo expansível */}
+        {schedulesExpanded && (
+          <div
+            className="flex flex-col gap-3 p-5 rounded-b-[var(--radius-xl)]"
+            style={{
+              borderTop: "1px solid var(--color-border)",
+              backgroundColor: "var(--color-bg-surface)",
+            }}
+          >
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              Uma programação ativa mostra o aviso no site durante a janela
+              cadastrada, mesmo com o cinema marcado como aberto no toggle
+              acima — e some sozinha quando a janela termina. Não é permitido
+              ter duas programações ativas com datas/horários sobrepostos.
+            </p>
+
+            {schedules.map((s, i) => {
+              const fieldError = validateScheduleFields(s);
+              return (
+                <div
+                  key={s.id}
+                  className="rounded-[var(--radius-lg)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  <div
+                    className="flex items-center gap-3 px-4 py-2.5"
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      borderBottom: "1px solid var(--color-border)",
+                    }}
+                  >
+                    <button
+                      onClick={() =>
+                        setSchedules(
+                          schedules.map((s2, idx) =>
+                            idx === i ? { ...s2, active: !s2.active } : s2,
+                          ),
+                        )
+                      }
+                      className="relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer"
+                      style={{
+                        backgroundColor: s.active
+                          ? "var(--color-primary)"
+                          : "var(--color-border)",
+                      }}
+                    >
+                      <span
+                        className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+                        style={{
+                          transform: s.active
+                            ? "translateX(18px)"
+                            : "translateX(2px)",
+                        }}
+                      />
+                    </button>
+                    <input
+                      value={s.reason}
+                      onChange={(e) =>
+                        setSchedules(
+                          schedules.map((s2, idx) =>
+                            idx === i ? { ...s2, reason: e.target.value } : s2,
+                          ),
+                        )
+                      }
+                      placeholder="Ex: Fechado para manutenção"
+                      className="flex-1 bg-transparent text-sm outline-none"
+                      style={{
+                        color: s.reason
+                          ? "var(--color-text-primary)"
+                          : "var(--color-text-muted)",
+                      }}
+                    />
+                    <button
+                      onClick={() =>
+                        setSchedules(schedules.filter((_, idx) => idx !== i))
+                      }
+                      className="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-all flex-shrink-0"
+                      style={{ color: "var(--color-text-muted)" }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(239,68,68,0.1)";
+                        e.currentTarget.style.color = "var(--color-error)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = "var(--color-text-muted)";
+                      }}
+                    >
+                      <FiX size={13} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-3 p-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label
+                          className="text-[10px] font-semibold uppercase tracking-wide"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          De
+                        </label>
+                        <input
+                          type="date"
+                          value={s.fromDate}
+                          onChange={(e) =>
+                            setSchedules(
+                              schedules.map((s2, idx) =>
+                                idx === i
+                                  ? { ...s2, fromDate: e.target.value }
+                                  : s2,
+                              ),
+                            )
+                          }
+                          className="h-9 px-2 text-sm rounded-[var(--radius-sm)] outline-none"
+                          style={{
+                            backgroundColor: "var(--color-bg-elevated)",
+                            border: "1px solid var(--color-border)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label
+                          className="text-[10px] font-semibold uppercase tracking-wide"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          Até
+                        </label>
+                        <input
+                          type="date"
+                          value={s.toDate}
+                          onChange={(e) =>
+                            setSchedules(
+                              schedules.map((s2, idx) =>
+                                idx === i
+                                  ? { ...s2, toDate: e.target.value }
+                                  : s2,
+                              ),
+                            )
+                          }
+                          className="h-9 px-2 text-sm rounded-[var(--radius-sm)] outline-none"
+                          style={{
+                            backgroundColor: "var(--color-bg-elevated)",
+                            border: "1px solid var(--color-border)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          setSchedules(
+                            schedules.map((s2, idx) =>
+                              idx === i ? { ...s2, allDay: !s2.allDay } : s2,
+                            ),
+                          )
+                        }
+                        className="relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer"
+                        style={{
+                          backgroundColor: s.allDay
+                            ? "var(--color-primary)"
+                            : "var(--color-border)",
+                        }}
+                      >
+                        <span
+                          className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+                          style={{
+                            transform: s.allDay
+                              ? "translateX(18px)"
+                              : "translateX(2px)",
+                          }}
+                        />
+                      </button>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        Dia todo
+                      </span>
+                    </div>
+
+                    {!s.allDay && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label
+                            className="text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Início
+                          </label>
+                          <input
+                            type="time"
+                            value={s.startTime ?? ""}
+                            onChange={(e) =>
+                              setSchedules(
+                                schedules.map((s2, idx) =>
+                                  idx === i
+                                    ? { ...s2, startTime: e.target.value }
+                                    : s2,
+                                ),
+                              )
+                            }
+                            className="h-9 px-2 text-sm rounded-[var(--radius-sm)] outline-none"
+                            style={{
+                              backgroundColor: "var(--color-bg-elevated)",
+                              border: "1px solid var(--color-border)",
+                              color: "var(--color-text-primary)",
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label
+                            className="text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: "var(--color-text-muted)" }}
+                          >
+                            Fim
+                          </label>
+                          <input
+                            type="time"
+                            value={s.endTime ?? ""}
+                            onChange={(e) =>
+                              setSchedules(
+                                schedules.map((s2, idx) =>
+                                  idx === i
+                                    ? { ...s2, endTime: e.target.value }
+                                    : s2,
+                                ),
+                              )
+                            }
+                            className="h-9 px-2 text-sm rounded-[var(--radius-sm)] outline-none"
+                            style={{
+                              backgroundColor: "var(--color-bg-elevated)",
+                              border: "1px solid var(--color-border)",
+                              color: "var(--color-text-primary)",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          setSchedules(
+                            schedules.map((s2, idx) =>
+                              idx === i
+                                ? {
+                                    ...s2,
+                                    visibleToCustomers: !(
+                                      s2.visibleToCustomers ?? true
+                                    ),
+                                  }
+                                : s2,
+                            ),
+                          )
+                        }
+                        className="relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 cursor-pointer"
+                        style={{
+                          backgroundColor:
+                            (s.visibleToCustomers ?? true)
+                              ? "var(--color-primary)"
+                              : "var(--color-border)",
+                        }}
+                      >
+                        <span
+                          className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+                          style={{
+                            transform: (s.visibleToCustomers ?? true)
+                              ? "translateX(18px)"
+                              : "translateX(2px)",
+                          }}
+                        />
+                      </button>
+                      <span
+                        className="text-xs flex items-center gap-1.5"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        Mostrar para os clientes
+                        <InfoTooltip text="Nos dias antes do fechamento, mostra um aviso sutil no site avisando que não vai ter sessão nessa data. No dia do fechamento em si, quem avisa é o aviso principal (o mesmo do toggle 'Status do cinema')." />
+                      </span>
+                    </div>
+
+                    {fieldError && (
+                      <p
+                        className="text-[11px] flex items-center gap-1.5"
+                        style={{ color: "var(--color-error)" }}
+                      >
+                        <FiAlertTriangle size={11} /> {fieldError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {schedules.length === 0 && (
+              <div
+                className="flex flex-col items-center justify-center py-10 gap-2 rounded-[var(--radius-lg)]"
+                style={{
+                  border: "1px dashed var(--color-border)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                <FiCalendar size={20} style={{ opacity: 0.35 }} />
+                <p className="text-sm">Nenhuma programação cadastrada</p>
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Clique em &quot;Nova programação&quot; para adicionar.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Event toggles */}
@@ -2343,6 +2782,15 @@ export default function SitePage() {
           field: "Cinema fechado",
           from: boolStr(config.isClosed),
           to: boolStr(final.isClosed),
+        });
+      if (
+        JSON.stringify(final.closureSchedules ?? []) !==
+        JSON.stringify(config.closureSchedules ?? [])
+      )
+        changes.push({
+          field: "Programações de fechamento",
+          from: `${(config.closureSchedules ?? []).length} programação(ões)`,
+          to: `${(final.closureSchedules ?? []).length} programação(ões)`,
         });
       if (final.isEvent !== config.isEvent)
         changes.push({

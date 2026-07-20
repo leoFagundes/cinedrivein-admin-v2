@@ -27,7 +27,6 @@ export default function EasterEggPage() {
   const [runId, setRunId] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const [showSkip, setShowSkip] = useState(false);
-  const [creditsRevealed, setCreditsRevealed] = useState(false);
   const [visitCount] = useState<number>(() => {
     if (typeof window === "undefined") return 1;
     try {
@@ -74,7 +73,6 @@ export default function EasterEggPage() {
   const replay = useCallback(() => {
     setPhase("vanity");
     setRunId((id) => id + 1);
-    setCreditsRevealed(false);
   }, []);
 
   useEffect(() => {
@@ -106,7 +104,8 @@ export default function EasterEggPage() {
           key={`scene-${runId}`}
           reducedMotion={reducedMotion}
           showTitle={phase === "scene"}
-          showScreen={phase !== "credits" || creditsRevealed}
+          showScreen={phase === "scene" || phase === "credits"}
+          morseActive={phase === "scene" || phase === "credits"}
           visitCount={visitCount}
         />
       </motion.div>
@@ -118,7 +117,6 @@ export default function EasterEggPage() {
           visitCount={visitCount}
           onReplay={replay}
           onReturn={goBack}
-          onScrollComplete={() => setCreditsRevealed(true)}
         />
       )}
 
