@@ -35,6 +35,29 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;
     }
 
+    // Placar público da Snake no site — visitante anônimo, sem login, então
+    // a "identidade" é um UUID gerado no navegador (doc id). Sem request.auth
+    // pra confiar, então a validação fica toda aqui: nome curto, pontuação
+    // numérica dentro de um teto plausível (grade 20x20 = 397 pontos no
+    // máximo teórico), e só pode subir — nunca abaixar um recorde já salvo.
+    // Coleção separada de `snakeScores` (placar do admin) de propósito.
+    match /siteSnakeScores/{playerId} {
+      allow create: if request.resource.data.keys().hasOnly(["name", "highScore", "updatedAt"])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 24
+        && request.resource.data.highScore is int
+        && request.resource.data.highScore > 0
+        && request.resource.data.highScore <= 500;
+      allow update: if request.resource.data.keys().hasOnly(["name", "highScore", "updatedAt"])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 24
+        && request.resource.data.highScore is int
+        && request.resource.data.highScore > resource.data.highScore
+        && request.resource.data.highScore <= 500;
+    }
+
     // Tudo o mais exige autenticação de admin
     match /{document=**} {
       allow read: if true;
