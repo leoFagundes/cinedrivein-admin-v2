@@ -61,6 +61,8 @@ export interface AppUser {
   createdAt: Date;
   /** Se true, mostra um aviso de avaliações não vistas também no menu lateral. */
   notifyReviewsInSidebar?: boolean;
+  /** Última vez que a pessoa teve uma sessão autenticada válida (login explícito ou sessão restaurada). */
+  lastLoginAt?: Date;
 }
 
 export type LogCategory =

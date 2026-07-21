@@ -1840,7 +1840,6 @@ function OrdersPageInner() {
   const {
     activeOrders,
     markAsSeen,
-    readyToPrintIds,
     printedIds,
     customerMsgTimes,
     chatSeenTimes,
@@ -1900,9 +1899,6 @@ function OrdersPageInner() {
   useEffect(() => {
     chatOrderIdRef.current = chatOrder?.id ?? null;
   }, [chatOrder]);
-
-  // 🖨️ Auto-print hook — fires whenever a truly new order appears
-  // useAutoPrint(activeOrders, readyToPrintIds);
 
   // auto-sound
   useAutoSound(activeOrders);
@@ -2001,7 +1997,6 @@ function OrdersPageInner() {
       collection(db, "orders"),
       where("status", "in", ["finished", "canceled"]),
       orderBy("createdAt", "desc"),
-      limit(100),
     );
     return onSnapshot(q, (snap) => {
       setFinishedOrders(

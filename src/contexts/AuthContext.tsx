@@ -24,6 +24,27 @@ const SESSION_KEY = "cdi_session_start";
 const SESSION_EXPIRED_KEY = "cdi_session_expired";
 const SESSION_DURATION = 15 * 60 * 60 * 1000;
 const CHECK_INTERVAL = 5 * 60 * 1000;
+const LAST_LOGIN_MARK_KEY = "cdi_last_login_marked";
+
+/**
+ * Marca `lastLoginAt` no doc do usuário — no máximo 1x por dia local (via
+ * localStorage, sem precisar ler o doc antes). Chamado tanto no login
+ * explícito quanto toda vez que uma sessão já autenticada é restaurada
+ * (reabrir o navegador, recarregar a página) — diferente do log de auditoria
+ * de "login" (que só registra a digitação de senha), isso reflete de verdade
+ * a última vez que a pessoa usou o sistema, mesmo sem precisar logar de novo.
+ */
+async function markLastLogin(uid: string) {
+  try {
+    const today = new Date().toDateString();
+    const marker = `${uid}:${today}`;
+    if (localStorage.getItem(LAST_LOGIN_MARK_KEY) === marker) return;
+    await setDoc(doc(db, "users", uid), { lastLoginAt: serverTimestamp() }, { merge: true });
+    localStorage.setItem(LAST_LOGIN_MARK_KEY, marker);
+  } catch {
+    // silencioso — não é crítico, só afeta a exibição de "último login"
+  }
+}
 
 interface SignUpData {
   username: string;
@@ -70,6 +91,7 @@ async function loadAppUser(uid: string): Promise<AppUser | null> {
     avatarSeed: data.avatarSeed,
     createdAt: data.createdAt?.toDate(),
     notifyReviewsInSidebar: data.notifyReviewsInSidebar ?? false,
+    lastLoginAt: data.lastLoginAt?.toDate(),
   };
 }
 
@@ -100,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setFirebaseUser(fbUser);
         const user = await loadAppUser(fbUser.uid);
         setAppUser(user);
+        void markLastLogin(fbUser.uid);
       } else {
         setFirebaseUser(null);
         setAppUser(null);
@@ -194,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           description: `@${appUserData.username} fez login`,
           performedBy: { uid: appUserData.uid, username: appUserData.username },
         });
+        void markLastLogin(appUserData.uid);
       }
     } finally {
       signingInRef.current = false;

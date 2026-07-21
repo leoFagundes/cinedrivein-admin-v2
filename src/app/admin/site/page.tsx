@@ -1480,7 +1480,7 @@ function ExtraSettings({
         >
           <div className="flex items-center gap-2 min-w-0">
             <p
-              className="text-xs font-semibold uppercase tracking-wide flex-shrink-0"
+              className="text-xs font-semibold uppercase tracking-wide truncate"
               style={{ color: "var(--color-text-muted)" }}
             >
               Programações avançadas
@@ -1914,7 +1914,7 @@ function ExtraSettings({
         >
           <div className="flex items-center gap-2 min-w-0">
             <p
-              className="text-xs font-semibold uppercase tracking-wide flex-shrink-0"
+              className="text-xs font-semibold uppercase tracking-wide truncate"
               style={{ color: "var(--color-text-muted)" }}
             >
               Tabela de preços
@@ -3010,7 +3010,7 @@ export default function SitePage() {
       ) : (
         <>
           {/* Tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveTab("general")}
               className="flex items-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all"

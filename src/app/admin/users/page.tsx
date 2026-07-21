@@ -20,13 +20,14 @@ import {
   createUserWithEmailAndPassword,
   signOut as fbSignOut,
 } from "firebase/auth";
+import { ref, onValue } from "firebase/database";
 
-import { db, getSecondaryAuth } from "@/lib/firebase";
+import { db, rtdb, getSecondaryAuth } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { can, canAny } from "@/lib/access";
-import { AppUser, Permission, PermissionProfile, UserStatus } from "@/types";
+import { AppUser, Permission, PermissionProfile, UserStatus, Log, LogCategory } from "@/types";
 import {
   PERMISSION_GROUPS,
   PERMISSION_META,
@@ -51,6 +52,11 @@ import {
   FiUsers,
   FiClock,
   FiSearch,
+  FiActivity,
+  FiLogIn,
+  FiShoppingBag,
+  FiBox,
+  FiGlobe,
 } from "react-icons/fi";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -83,29 +89,49 @@ function Avatar({
   size = 8,
   avatarStyle,
   avatarSeed,
+  online,
 }: {
   name: string;
   size?: number;
   avatarStyle?: string;
   avatarSeed?: string;
+  online?: boolean;
 }) {
   const px = size * 4; // size 8 → 32px, size 9 → 36px
+  const dot = online && (
+    <span
+      title="Ativo agora"
+      className="absolute bottom-0 right-0 rounded-full"
+      style={{
+        width: Math.max(9, px * 0.28),
+        height: Math.max(9, px * 0.28),
+        backgroundColor: "var(--color-success)",
+        border: "2px solid var(--color-bg-surface)",
+      }}
+    />
+  );
   if (avatarStyle && avatarSeed) {
     return (
-      <div
-        className="rounded-full overflow-hidden flex-shrink-0"
-        style={{ width: px, height: px, flexShrink: 0 }}
-      >
-        <DiceBearAvatar style={avatarStyle} seed={avatarSeed} size={px} />
+      <div className="relative flex-shrink-0" style={{ width: px, height: px }}>
+        <div
+          className="rounded-full overflow-hidden"
+          style={{ width: px, height: px }}
+        >
+          <DiceBearAvatar style={avatarStyle} seed={avatarSeed} size={px} />
+        </div>
+        {dot}
       </div>
     );
   }
   return (
-    <div
-      className={`w-${size} h-${size} rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0`}
-      style={{ backgroundColor: "var(--color-primary)", color: "white" }}
-    >
-      {name.charAt(0).toUpperCase()}
+    <div className="relative flex-shrink-0" style={{ width: px, height: px }}>
+      <div
+        className={`w-${size} h-${size} rounded-full flex items-center justify-center text-xs font-bold`}
+        style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+      >
+        {name.charAt(0).toUpperCase()}
+      </div>
+      {dot}
     </div>
   );
 }
@@ -930,6 +956,145 @@ function ProfileModal({
   );
 }
 
+// ─── Activity modal ───────────────────────────────────────────────────────────
+
+const ACTIVITY_CATEGORY_META: Record<
+  LogCategory,
+  { label: string; icon: React.ReactNode; color: string }
+> = {
+  users: { label: "Usuários", icon: <FiUsers size={12} />, color: "var(--color-primary)" },
+  profiles: { label: "Perfis", icon: <FiShield size={12} />, color: "#a855f7" },
+  auth: { label: "Acesso", icon: <FiLogIn size={12} />, color: "var(--color-text-muted)" },
+  orders: { label: "Pedidos", icon: <FiShoppingBag size={12} />, color: "var(--color-warning)" },
+  stock: { label: "Estoque", icon: <FiBox size={12} />, color: "#14b8a6" },
+  site: { label: "Site", icon: <FiGlobe size={12} />, color: "var(--color-success)" },
+};
+
+function timeAgoCompact(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const min = Math.floor(diff / 60000);
+  const hr = Math.floor(diff / 3600000);
+  const day = Math.floor(diff / 86400000);
+  if (diff < 60000) return "agora mesmo";
+  if (min < 60) return `há ${min} minuto${min !== 1 ? "s" : ""}`;
+  if (hr < 24) return `há ${hr} hora${hr !== 1 ? "s" : ""}`;
+  if (day < 7) return `há ${day} dia${day !== 1 ? "s" : ""}`;
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function ActivityModal({
+  user,
+  onClose,
+}: {
+  user: AppUser;
+  onClose: () => void;
+}) {
+  const [logs, setLogs] = useState<Log[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Filtro único (sem orderBy combinado) pra não exigir índice composto —
+    // ordena e corta os 20 mais recentes no cliente depois de buscar.
+    getDocs(query(collection(db, "logs"), where("performedBy.uid", "==", user.uid)))
+      .then((snap) => {
+        if (cancelled) return;
+        const items: Log[] = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            action: data.action,
+            category: data.category,
+            description: data.description,
+            performedBy: data.performedBy,
+            target: data.target,
+            changes: data.changes,
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+          } as Log;
+        });
+        items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setLogs(items.slice(0, 20));
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.uid]);
+
+  return (
+    <Modal title={`Atividade de @${user.username}`} onClose={onClose}>
+      <div className="p-4 flex flex-col gap-1 overflow-y-auto">
+        {logs === null && !loadError && (
+          <p
+            className="text-sm text-center py-8"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Carregando...
+          </p>
+        )}
+        {loadError && (
+          <p
+            className="text-sm text-center py-8"
+            style={{ color: "var(--color-error)" }}
+          >
+            Não foi possível carregar a atividade.
+          </p>
+        )}
+        {logs && logs.length === 0 && (
+          <p
+            className="text-sm text-center py-8"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Nenhuma atividade registrada ainda.
+          </p>
+        )}
+        {logs &&
+          logs.map((l) => {
+            const meta = ACTIVITY_CATEGORY_META[l.category];
+            return (
+              <div
+                key={l.id}
+                className="flex items-start gap-2.5 py-2.5"
+                style={{ borderBottom: "1px solid var(--color-border)" }}
+              >
+                <div
+                  className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    color: meta.color,
+                  }}
+                >
+                  {meta.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {l.description}
+                  </p>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                    title={l.createdAt.toLocaleString("pt-BR")}
+                  >
+                    {timeAgoCompact(l.createdAt)}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </Modal>
+  );
+}
+
 // ─── User card (mobile) ───────────────────────────────────────────────────────
 
 function fmtShortDate(d: Date): string {
@@ -951,7 +1116,10 @@ function UserCard({
   onEdit,
   onDelete,
   onDeleteDirect,
+  onShowActivity,
+  canViewActivity,
   lastLogin,
+  isOnline,
 }: {
   user: AppUser;
   canApprove: boolean;
@@ -963,7 +1131,10 @@ function UserCard({
   onEdit: (user: AppUser) => void;
   onDelete: (user: AppUser) => void;
   onDeleteDirect: (user: AppUser) => void;
+  onShowActivity: (user: AppUser) => void;
+  canViewActivity: boolean;
   lastLogin?: Date;
+  isOnline?: boolean;
 }) {
   const { showDocIds, skipConfirmations } = useDevMode();
   return (
@@ -981,6 +1152,7 @@ function UserCard({
             size={9}
             avatarStyle={user.avatarStyle}
             avatarSeed={user.avatarSeed}
+            online={isOnline}
           />
           <div className="min-w-0">
             <p
@@ -1081,6 +1253,20 @@ function UserCard({
               </button>
             </>
           )}
+          {canViewActivity && (
+            <button
+              onClick={() => onShowActivity(user)}
+              title="Ver atividade"
+              className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <FiActivity size={13} />
+            </button>
+          )}
           {(canManage || canDelete) && !user.isOwner && (
             <>
               {canManage && user.status === "approved" && (
@@ -1152,7 +1338,7 @@ function UserCard({
             className="text-xs"
             style={{ color: "var(--color-text-muted)" }}
           >
-            · Último acesso {fmtShortDate(lastLogin)}
+            · Último login: {fmtShortDate(lastLogin)}
           </span>
         )}
       </div>
@@ -1164,10 +1350,12 @@ function UserCard({
 
 function ProfileCard({
   profile,
+  userCount,
   onEdit,
   onDelete,
 }: {
   profile: PermissionProfile;
+  userCount: number;
   onEdit: (p: PermissionProfile) => void;
   onDelete: (id: string) => void;
 }) {
@@ -1199,7 +1387,8 @@ function ProfileCard({
           </p>
           <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
             {profile.permissions.length} permissão
-            {profile.permissions.length !== 1 ? "ões" : ""}
+            {profile.permissions.length !== 1 ? "ões" : ""} · {userCount}{" "}
+            usuário{userCount !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -1304,6 +1493,7 @@ export default function UsersPage() {
   const canDeleteUsers = can(appUser, "delete_users");
   const canManageProfiles = can(appUser, "manage_profiles");
   const canCreateUser = can(appUser, "create_user");
+  const canViewLogs = can(appUser, "view_logs");
 
   const [tab, setTab] = useState<Tab>("users");
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -1318,6 +1508,8 @@ export default function UsersPage() {
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [activityTarget, setActivityTarget] = useState<AppUser | null>(null);
+  const [onlineUids, setOnlineUids] = useState<Set<string>>(new Set());
   const [profileModal, setProfileModal] = useState<{
     open: boolean;
     editing?: PermissionProfile;
@@ -1327,11 +1519,20 @@ export default function UsersPage() {
     name: string;
   } | null>(null);
   const [deleteProfileLoading, setDeleteProfileLoading] = useState(false);
-  const [lastLogins, setLastLogins] = useState<Record<string, Date>>({});
 
   const actor = appUser
     ? { uid: appUser.uid, username: appUser.username }
     : { uid: "unknown", username: "unknown" };
+
+  // "Ativo agora" — quem está com o admin aberto neste momento (RTDB).
+  // Falha silenciosamente se as regras do RTDB não permitirem este path.
+  useEffect(() => {
+    return onValue(
+      ref(rtdb, "adminPresence"),
+      (snap) => setOnlineUids(new Set(Object.keys(snap.val() ?? {}))),
+      () => {},
+    );
+  }, []);
 
   useEffect(() => {
     getDocs(query(collection(db, "users"), orderBy("createdAt", "desc")))
@@ -1351,6 +1552,7 @@ export default function UsersPage() {
               avatarStyle: data.avatarStyle,
               avatarSeed: data.avatarSeed,
               createdAt: data.createdAt?.toDate() ?? new Date(),
+              lastLoginAt: data.lastLoginAt?.toDate(),
             };
           }),
         ),
@@ -1377,26 +1579,6 @@ export default function UsersPage() {
       .finally(() => setLoadingProfiles(false));
   }, []);
 
-  useEffect(() => {
-    // Busca apenas a categoria "auth" — filtra action client-side para
-    // evitar índice composto no Firestore.
-    getDocs(query(collection(db, "logs"), where("category", "==", "auth")))
-      .then((snap) => {
-        const map: Record<string, Date> = {};
-        for (const d of snap.docs) {
-          const data = d.data();
-          if (data.action !== "login") continue;
-          const username = data.performedBy?.username as string | undefined;
-          if (!username) continue;
-          const ts: number = data.createdAt?.toMillis?.() ?? 0;
-          if (!map[username] || ts > map[username].getTime()) {
-            map[username] = data.createdAt?.toDate?.() ?? new Date(ts);
-          }
-        }
-        setLastLogins(map);
-      })
-      .catch(() => {});
-  }, []);
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
 
@@ -1918,7 +2100,10 @@ export default function UsersPage() {
                         onEdit={setEditTarget}
                         onDelete={setDeleteTarget}
                         onDeleteDirect={handleDelete}
-                        lastLogin={lastLogins[user.username]}
+                        onShowActivity={setActivityTarget}
+                        canViewActivity={canViewLogs}
+                        lastLogin={user.lastLoginAt}
+                        isOnline={onlineUids.has(user.uid)}
                       />
                     ))}
                   </div>
@@ -1972,6 +2157,7 @@ export default function UsersPage() {
                                   name={user.username}
                                   avatarStyle={user.avatarStyle}
                                   avatarSeed={user.avatarSeed}
+                                  online={onlineUids.has(user.uid)}
                                 />
                                 <div>
                                   <p
@@ -2041,18 +2227,34 @@ export default function UsersPage() {
                               >
                                 {fmtShortDate(user.createdAt)}
                               </p>
-                              {lastLogins[user.username] && (
+                              {user.lastLoginAt && (
                                 <p
                                   className="text-xs mt-0.5 flex items-center gap-1"
                                   style={{ color: "var(--color-text-muted)" }}
+                                  title="Último login registrado"
                                 >
                                   <FiClock size={10} />
-                                  {fmtShortDate(lastLogins[user.username])}
+                                  Último login: {fmtShortDate(user.lastLoginAt)}
                                 </p>
                               )}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1.5">
+                                {canViewLogs && (
+                                  <button
+                                    onClick={() => setActivityTarget(user)}
+                                    title="Ver atividade"
+                                    className="w-8 h-8 rounded flex items-center justify-center cursor-pointer transition-all"
+                                    style={{
+                                      backgroundColor:
+                                        "var(--color-bg-elevated)",
+                                      color: "var(--color-text-secondary)",
+                                      border: "1px solid var(--color-border)",
+                                    }}
+                                  >
+                                    <FiActivity size={13} />
+                                  </button>
+                                )}
                                 {user.status === "pending" &&
                                   canApproveUsers &&
                                   !user.isOwner && (
@@ -2275,6 +2477,10 @@ export default function UsersPage() {
                     <ProfileCard
                       key={p.id}
                       profile={p}
+                      userCount={
+                        users.filter((u) => u.profileId === p.id && !u.isOwner)
+                          .length
+                      }
                       onEdit={(p) =>
                         setProfileModal({ open: true, editing: p })
                       }
@@ -2370,6 +2576,12 @@ export default function UsersPage() {
             />
           );
         })()}
+      {activityTarget && (
+        <ActivityModal
+          user={activityTarget}
+          onClose={() => setActivityTarget(null)}
+        />
+      )}
     </div>
   );
 }
