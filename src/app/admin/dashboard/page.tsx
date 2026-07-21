@@ -64,6 +64,7 @@ import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { Order, DailyStats } from "@/types";
 import { parseOrder } from "@/contexts/OrdersContext";
 import {
@@ -498,6 +499,7 @@ export default function DashboardPage() {
     async function load() {
       try {
         const snap = await getDoc(doc(db, "storeConfig", "main"));
+        recordFirestoreRead(1);
         if (snap.exists()) {
           const d = snap.data();
           setIsOpen(d.isOpen ?? false);
@@ -526,6 +528,7 @@ export default function DashboardPage() {
             limit(365),
           ),
         );
+        recordFirestoreRead(snap.size);
         setStats(
           snap.docs.map((d) => ({
             id: d.id,
@@ -582,6 +585,7 @@ export default function DashboardPage() {
             where("date", "<=", `${revenueYear}-12-31`),
           ),
         );
+        recordFirestoreRead(snap.size);
         const buckets = Array.from({ length: 12 }, (_, i) => ({
           month: i,
           total: 0,
@@ -629,6 +633,7 @@ export default function DashboardPage() {
               ),
               { total: sum("revenue.total"), subtotal: sum("revenue.subtotal") },
             );
+            recordFirestoreRead(1);
             return {
               year,
               total: snap.data().total,
@@ -659,6 +664,7 @@ export default function DashboardPage() {
             where("status", "in", ["finished", "canceled"]),
           ),
         );
+        recordFirestoreRead(snap.size);
         setArchivableCount(snap.size);
         let finished = 0,
           canceled = 0,
@@ -691,6 +697,7 @@ export default function DashboardPage() {
       try {
         // 1. Check if this day was already archived in dailyStats
         const statsSnap = await getDoc(doc(db, "dailyStats", reportDate));
+        recordFirestoreRead(1);
         if (statsSnap.exists()) {
           const data = statsSnap.data();
           setArchivedStats({
@@ -722,6 +729,7 @@ export default function DashboardPage() {
             where("status", "in", ["finished", "canceled"]),
           ),
         );
+        recordFirestoreRead(snap.size);
         const start = operationalDayStart(reportDate);
         const end = operationalDayEnd(reportDate);
         const filtered = snap.docs
@@ -746,6 +754,7 @@ export default function DashboardPage() {
       const snap = await getDocs(
         query(collection(db, "dailyStats"), orderBy("date")),
       );
+      recordFirestoreRead(snap.size);
       const toDelete = snap.docs.filter((d) => {
         const date = d.data().date as string;
         if (clearPeriodRange.from && date < clearPeriodRange.from) return false;
@@ -761,8 +770,10 @@ export default function DashboardPage() {
       }
       for (let i = 0; i < toDelete.length; i += 500) {
         const batch = writeBatch(db);
-        toDelete.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+        const chunk = toDelete.slice(i, i + 500);
+        chunk.forEach((d) => batch.delete(d.ref));
         await batch.commit();
+        recordFirestoreWrite(chunk.length);
       }
       setStats((prev) =>
         prev.filter((s) => {
@@ -797,6 +808,7 @@ export default function DashboardPage() {
         { isOpen: newVal },
         { merge: true },
       );
+      recordFirestoreWrite(1);
       setIsOpen(newVal);
       log({
         action: newVal ? "Lanchonete aberta" : "Lanchonete fechada",
@@ -829,6 +841,7 @@ export default function DashboardPage() {
         { chatEnabled: newVal },
         { merge: true },
       );
+      recordFirestoreWrite(1);
       setIsChatEnabled(newVal);
       log({
         action: newVal ? "Chat ativado" : "Chat desativado",
@@ -860,6 +873,7 @@ export default function DashboardPage() {
         { openingTime, closingTime },
         { merge: true },
       );
+      recordFirestoreWrite(1);
       log({
         action: "Horários atualizados",
         category: "site",
@@ -888,6 +902,7 @@ export default function DashboardPage() {
           where("status", "in", ["finished", "canceled"]),
         ),
       );
+      recordFirestoreRead(snap.size);
       if (snap.empty) {
         info("Nada a arquivar", "Não há pedidos finalizados ou cancelados.");
         setShowCloseModal(false);
@@ -980,6 +995,7 @@ export default function DashboardPage() {
 
         // Read existing stats — accumulate instead of replace
         const existingSnap = await getDoc(doc(db, "dailyStats", dateKey));
+        recordFirestoreRead(1);
         let finalRevenue = newRevenue;
         let finalTotal = dayOrders.length;
         let finalFinished = finished.length;
@@ -1051,6 +1067,7 @@ export default function DashboardPage() {
             : serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
       }
 
       // Delete messages subcollections first (Firestore não deleta automaticamente)
@@ -1061,36 +1078,46 @@ export default function DashboardPage() {
           ),
         )
       ).flatMap((s) => s.docs.map((d) => d.ref));
+      recordFirestoreRead(allMessageRefs.length);
 
       for (let i = 0; i < allMessageRefs.length; i += 500) {
         const batch = writeBatch(db);
-        allMessageRefs.slice(i, i + 500).forEach((r) => batch.delete(r));
+        const chunk = allMessageRefs.slice(i, i + 500);
+        chunk.forEach((r) => batch.delete(r));
         await batch.commit();
+        recordFirestoreWrite(chunk.length);
       }
 
       // Delete archived orders in batches of 500
       const refs = snap.docs.map((d) => d.ref);
       for (let i = 0; i < refs.length; i += 500) {
         const batch = writeBatch(db);
-        refs.slice(i, i + 500).forEach((ref) => batch.delete(ref));
+        const chunk = refs.slice(i, i + 500);
+        chunk.forEach((ref) => batch.delete(ref));
         await batch.commit();
+        recordFirestoreWrite(chunk.length);
       }
 
       // Reset order number counter so next day starts from #1
       await setDoc(doc(db, "counters", "orders"), { last: 0 });
+      recordFirestoreWrite(1);
 
       // Clean up FCM lock documents that accumulate from push notification sessions
       const fcmSnap = await getDocs(collection(db, "_fcm_locks"));
+      recordFirestoreRead(fcmSnap.size);
       for (let i = 0; i < fcmSnap.docs.length; i += 500) {
         const batch = writeBatch(db);
-        fcmSnap.docs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+        const chunk = fcmSnap.docs.slice(i, i + 500);
+        chunk.forEach((d) => batch.delete(d.ref));
         await batch.commit();
+        recordFirestoreWrite(chunk.length);
       }
 
       // Refresh stats
       const statsSnap = await getDocs(
         query(collection(db, "dailyStats"), orderBy("date", "asc"), limit(365)),
       );
+      recordFirestoreRead(statsSnap.size);
       setStats(
         statsSnap.docs.map((d) => ({
           id: d.id,
@@ -1260,6 +1287,7 @@ export default function DashboardPage() {
   async function handleDeleteDay(dateKey: string) {
     try {
       await deleteDoc(doc(db, "dailyStats", dateKey));
+      recordFirestoreWrite(1);
       setStats((prev) => prev.filter((s) => s.date !== dateKey));
       if (archivedStats?.date === dateKey) {
         setArchivedStats(null);
@@ -1283,6 +1311,7 @@ export default function DashboardPage() {
       const snap = await getDocs(
         query(collection(db, "dailyStats"), orderBy("date")),
       );
+      recordFirestoreRead(snap.size);
       const toDelete = snap.docs.filter((d) => {
         const date = d.data().date as string;
         if (range.from && date < range.from) return false;
@@ -1297,8 +1326,10 @@ export default function DashboardPage() {
       }
       for (let i = 0; i < toDelete.length; i += 500) {
         const batch = writeBatch(db);
-        toDelete.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+        const chunk = toDelete.slice(i, i + 500);
+        chunk.forEach((d) => batch.delete(d.ref));
         await batch.commit();
+        recordFirestoreWrite(chunk.length);
       }
       setStats((prev) =>
         prev.filter((s) => {

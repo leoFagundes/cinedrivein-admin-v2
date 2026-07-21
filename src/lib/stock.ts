@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { OrderItem } from "@/types";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ function normalize(s: string): string {
  */
 async function getSubitemNameToLinkedItem(): Promise<Map<string, string>> {
   const snap = await getDocs(collection(db, "subitems"));
+  recordFirestoreRead(snap.size);
   const map = new Map<string, string>();
   for (const d of snap.docs) {
     const linkedItemId = d.data().linkedItemId as string | undefined;
@@ -111,12 +113,14 @@ export async function decreaseStock(items: OrderItem[]): Promise<void> {
     await runTransaction(db, async (tx) => {
       const ref = doc(db, "items", itemId);
       const snap = await tx.get(ref);
+      recordFirestoreRead(1);
       if (!snap.exists() || !snap.data().trackStock) return;
       const current = snap.data().quantity ?? 0;
       const next = Math.max(0, current - qty);
       const updates: Record<string, unknown> = { quantity: next };
       if (next <= 0) updates.isVisible = false;
       tx.update(ref, updates);
+      recordFirestoreWrite(1);
     });
   }
 }
@@ -128,9 +132,11 @@ export async function increaseStock(items: OrderItem[]): Promise<void> {
 
   const batch = writeBatch(db);
   let hasBatch = false;
+  let batchedCount = 0;
 
   for (const [itemId, qty] of totals) {
     const snap = await getDoc(doc(db, "items", itemId));
+    recordFirestoreRead(1);
     if (!snap.exists() || !snap.data().trackStock) continue;
 
     const data = snap.data();
@@ -146,9 +152,13 @@ export async function increaseStock(items: OrderItem[]): Promise<void> {
 
     batch.update(doc(db, "items", itemId), updates);
     hasBatch = true;
+    batchedCount++;
   }
 
-  if (hasBatch) await batch.commit();
+  if (hasBatch) {
+    await batch.commit();
+    recordFirestoreWrite(batchedCount);
+  }
 }
 
 // ── diffOrderStock ────────────────────────────────────────────────────────────

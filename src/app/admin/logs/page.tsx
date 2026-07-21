@@ -46,6 +46,7 @@ import { can } from "@/lib/access";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { Log, LogCategory, SiteConfig, PriceRule, EventType, UserStatus } from "@/types";
 import { log as writeLog } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -806,6 +807,7 @@ function RestoreModal({
       )
     )
       .then((results) => {
+        recordFirestoreRead(results.length);
         const map: Record<string, Record<string, unknown>> = {};
         results.forEach(({ key, data }) => { map[key] = data; });
         setCurrentDocs(map);
@@ -1047,6 +1049,7 @@ export default function LogsPage() {
       const snap = await getDocs(
         query(collection(db, "logs"), ...buildDateConstraints(), orderBy("createdAt", "desc"), limit(PAGE_SIZE)),
       );
+      recordFirestoreRead(snap.size);
       setLogs(snap.docs.map(parseLog));
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -1070,6 +1073,7 @@ export default function LogsPage() {
         const snap = await getDocs(
           query(collection(db, "logs"), ...c, orderBy("createdAt", "desc"), limit(PAGE_SIZE)),
         );
+        recordFirestoreRead(snap.size);
         setLogs(snap.docs.map(parseLog));
         setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
         setHasMore(snap.docs.length === PAGE_SIZE);
@@ -1085,13 +1089,14 @@ export default function LogsPage() {
   // Fetch admin usernames once for dropdown
   useEffect(() => {
     getDocs(query(collection(db, "users"), orderBy("username")))
-      .then((snap) =>
+      .then((snap) => {
+        recordFirestoreRead(snap.size);
         setAdminUsers(
           snap.docs
             .map((d) => d.data().username as string)
             .filter(Boolean),
-        ),
-      )
+        );
+      })
       .catch(() => {});
   }, []);
 
@@ -1111,6 +1116,7 @@ export default function LogsPage() {
     if (toDate) constraints.push(where("createdAt", "<=", Timestamp.fromDate(endOfDay(toDate))));
     getDocs(query(collection(db, "logs"), ...constraints, orderBy("createdAt", "desc")))
       .then((snap) => {
+        recordFirestoreRead(snap.size);
         if (!cancelled) setAllLogs(snap.docs.map(parseLog));
       })
       .catch((err) => console.error(err))
@@ -1125,6 +1131,7 @@ export default function LogsPage() {
       const snap = await getDocs(
         query(collection(db, "logs"), ...buildDateConstraints(), orderBy("createdAt", "desc"), startAfter(lastDoc), limit(PAGE_SIZE)),
       );
+      recordFirestoreRead(snap.size);
       setLogs((prev) => [...prev, ...snap.docs.map(parseLog)]);
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -1139,6 +1146,7 @@ export default function LogsPage() {
     setDeleteLoading(true);
     try {
       await deleteDoc(doc(db, "logs", id));
+      recordFirestoreWrite(1);
       setLogs((prev) => prev.filter((l) => l.id !== id));
       success("Log removido", "O registro foi excluído.");
       setDeleteTarget(null);
@@ -1155,10 +1163,12 @@ export default function LogsPage() {
       let keepGoing = true;
       while (keepGoing) {
         const snap = await getDocs(query(collection(db, "logs"), limit(500)));
+        recordFirestoreRead(snap.size);
         if (snap.empty) { keepGoing = false; break; }
         const batch = writeBatch(db);
         snap.docs.forEach((d) => batch.delete(d.ref));
         await batch.commit();
+        recordFirestoreWrite(snap.docs.length);
         if (snap.docs.length < 500) keepGoing = false;
       }
       setLogs([]);
@@ -1187,10 +1197,12 @@ export default function LogsPage() {
             limit(500),
           ),
         );
+        recordFirestoreRead(snap.size);
         if (snap.empty) { keepGoing = false; break; }
         const batch = writeBatch(db);
         snap.docs.forEach((d) => batch.delete(d.ref));
         await batch.commit();
+        recordFirestoreWrite(snap.docs.length);
         total += snap.docs.length;
         if (snap.docs.length < 500) keepGoing = false;
       }
@@ -1232,6 +1244,7 @@ export default function LogsPage() {
         } else {
           await updateDoc(doc(db, col, docId), fields);
         }
+        recordFirestoreWrite(1);
       }
 
       writeLog({

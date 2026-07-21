@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { FiRefreshCw, FiX } from "react-icons/fi";
 import { db } from "@/lib/firebase";
+import { recordFirestoreRead } from "@/lib/firestoreDevTracker";
 
 const CURRENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
 const TOKEN_KEY = "cdi_version_update";
@@ -60,6 +61,7 @@ export default function VersionBanner() {
   // Escuta versão remota
   useEffect(() => {
     return onSnapshot(doc(db, "storeConfig", "version"), (snap) => {
+      recordFirestoreRead(1);
       if (!snap.exists()) return;
       const remote = snap.data().version as string;
       setRemoteVersion(remote);

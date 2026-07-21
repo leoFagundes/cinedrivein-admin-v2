@@ -20,6 +20,7 @@ import {
   FiMessageSquare,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Order } from "@/types";
 
@@ -93,6 +94,7 @@ function useSoundAlertCore() {
   useEffect(() => {
     getDoc(doc(db, "storeConfig", SOUND_DOC))
       .then((snap) => {
+        recordFirestoreRead(1);
         const loaded = snap.exists() ? normalize(snap.data()) : { ...DEFAULTS };
         _live = loaded;
         _liveLoaded = true;
@@ -112,6 +114,7 @@ function useSoundAlertCore() {
     setSettings({ ..._live });
     try {
       await setDoc(doc(db, "storeConfig", SOUND_DOC), _live);
+      recordFirestoreWrite(1);
     } catch {
       // silent — UI already updated, Firebase write best-effort
     }

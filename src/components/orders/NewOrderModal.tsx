@@ -29,6 +29,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { StockItem, Subitem, Order, OrderItem } from "@/types";
 import { diffOrderStock } from "@/lib/stock";
 
@@ -487,6 +488,7 @@ export default function NewOrderModal({
           getDocs(collection(db, "subitems")),
           getDoc(doc(db, "stockConfig", "categoryOrder")),
         ]);
+        recordFirestoreRead(itemsSnap.size + subSnap.size + 1);
         setStockItems(
           itemsSnap.docs
             .map((d) => {
@@ -713,6 +715,7 @@ export default function NewOrderModal({
           serviceFee,
           total,
         });
+        recordFirestoreWrite(1);
         await diffOrderStock(
           editOrder.items,
           itemsPayload as unknown as OrderItem[],
@@ -736,8 +739,10 @@ export default function NewOrderModal({
         const counterRef = doc(db, "counters", "orders");
         const orderNumber = await runTransaction(db, async (tx) => {
           const snap = await tx.get(counterRef);
+          recordFirestoreRead(1);
           const next = (snap.exists() ? (snap.data().last as number) : 0) + 1;
           tx.set(counterRef, { last: next }, { merge: true });
+          recordFirestoreWrite(1);
           return next;
         });
         const orderRef = await addDoc(collection(db, "orders"), {
@@ -754,6 +759,7 @@ export default function NewOrderModal({
           total,
           createdAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
         log({
           action: "Pedido criado",
           category: "orders",

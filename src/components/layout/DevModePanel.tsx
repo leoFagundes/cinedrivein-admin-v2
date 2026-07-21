@@ -14,9 +14,20 @@ import {
   FiSkipForward,
   FiRotateCcw,
   FiUsers,
+  FiClock,
+  FiDatabase,
 } from "react-icons/fi";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
 import { PermissionProfile } from "@/types";
 import {
   DevModeFlags,
@@ -26,6 +37,26 @@ import {
   resetDevMode,
   setDevMode,
 } from "@/lib/devMode";
+import {
+  getFirestoreDevStats,
+  resetFirestoreDevStats,
+  recordFirestoreRead,
+  recordFirestoreWrite,
+} from "@/lib/firestoreDevTracker";
+
+const SESSION_ADJUST_OPTIONS = [
+  { label: "-1h", ms: 1 * 60 * 60 * 1000 },
+  { label: "-14h", ms: 14 * 60 * 60 * 1000 },
+];
+
+function fmtSessionRemaining(ms: number): string {
+  if (ms <= 0) return "expirada";
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${m}min`;
+}
 
 const FLAGS: {
   key: Exclude<keyof DevModeFlags, "simulateRole">;
@@ -77,11 +108,55 @@ const FLAGS: {
 ];
 
 export default function DevModePanel() {
+  const { sessionStartedAt, sessionDurationMs, debugSetSessionStart } =
+    useAuth();
   const [open, setOpen] = useState(false);
   const [flags, setFlags] = useState<DevModeFlags>(getDevMode);
   const [active, setActive] = useState(() => isDevModeActive());
   const [profiles, setProfiles] = useState<PermissionProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
+
+  // Contador de comandas (counters/orders.last)
+  const [orderCounter, setOrderCounter] = useState<number | null>(null);
+  const [orderCounterInput, setOrderCounterInput] = useState("");
+  const [loadingCounter, setLoadingCounter] = useState(false);
+  const [savingCounter, setSavingCounter] = useState(false);
+  const [counterSaved, setCounterSaved] = useState(false);
+
+  // Só pra manter o "tempo restante" da sessão atualizado enquanto o painel está aberto.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!open) return;
+    const id = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(id);
+  }, [open]);
+
+  function adjustSession(offsetMs: number) {
+    const base = sessionStartedAt ?? now;
+    debugSetSessionStart(base - offsetMs);
+  }
+
+  function expireSessionNow() {
+    const base = sessionStartedAt ?? now;
+    debugSetSessionStart(base - sessionDurationMs - 60_000);
+  }
+
+  /** Deixa exatamente 1min restante, independente de quando a sessão começou. */
+  function leaveOneMinuteLeft() {
+    debugSetSessionStart(now - sessionDurationMs + 60_000);
+  }
+
+  // Contador de leituras/escritas do Firestore (desde que a aba foi aberta)
+  const [firestoreStats, setFirestoreStats] = useState(() =>
+    getFirestoreDevStats(),
+  );
+  useEffect(() => {
+    function sync() {
+      setFirestoreStats(getFirestoreDevStats());
+    }
+    window.addEventListener("firestoredev:change", sync);
+    return () => window.removeEventListener("firestoredev:change", sync);
+  }, []);
 
   // Sync badge when flags change (from this panel or any other source)
   useEffect(() => {
@@ -100,16 +175,55 @@ export default function DevModePanel() {
     getDocs(
       query(collection(db, "permissionProfiles"), orderBy("createdAt", "asc")),
     )
-      .then((snap) =>
+      .then((snap) => {
+        recordFirestoreRead(snap.size);
         setProfiles(
           snap.docs.map((d) => ({
             id: d.id,
             ...(d.data() as Omit<PermissionProfile, "id">),
           })),
-        ),
-      )
+        );
+      })
       .finally(() => setLoadingProfiles(false));
   }, [open, profiles.length]);
+
+  // Busca o contador de comandas sempre que o painel abre — é um valor vivo,
+  // que muda a cada pedido criado, então não faz sentido cachear como os perfis.
+  useEffect(() => {
+    if (!open) return;
+    setLoadingCounter(true);
+    setCounterSaved(false);
+    getDoc(doc(db, "counters", "orders"))
+      .then((snap) => {
+        recordFirestoreRead(1);
+        const last = snap.exists() ? ((snap.data().last as number) ?? 0) : 0;
+        setOrderCounter(last);
+        setOrderCounterInput(String(last));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingCounter(false));
+  }, [open]);
+
+  async function handleSaveCounter() {
+    const next = parseInt(orderCounterInput, 10);
+    if (!Number.isFinite(next) || next < 0) return;
+    setSavingCounter(true);
+    setCounterSaved(false);
+    try {
+      await setDoc(
+        doc(db, "counters", "orders"),
+        { last: next },
+        { merge: true },
+      );
+      recordFirestoreWrite(1);
+      setOrderCounter(next);
+      setCounterSaved(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingCounter(false);
+    }
+  }
 
   function selectRole(profile: PermissionProfile | null) {
     const next = profile
@@ -158,9 +272,9 @@ export default function DevModePanel() {
             setFlags(getDevMode());
             setOpen(true);
           }}
-          className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold cursor-pointer select-none"
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold cursor-pointer select-none"
           style={{
-            backgroundColor: "rgba(234,179,8,0.15)",
+            backgroundColor: "rgba(200,159,8,0.3)",
             border: "1px solid rgba(234,179,8,0.4)",
             color: "rgb(234,179,8)",
             boxShadow: "0 0 12px rgba(234,179,8,0.15)",
@@ -405,6 +519,249 @@ export default function DevModePanel() {
                     </span>
                   </p>
                 )}
+              </div>
+
+              {/* Order counter (Firestore: counters/orders.last) */}
+              <div
+                className="mt-2 pt-3"
+                style={{ borderTop: "1px solid var(--color-border)" }}
+              >
+                <div className="flex items-center gap-1.5 mb-2">
+                  <FiHash
+                    size={12}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <p
+                    className="text-xs font-medium"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Número da comanda
+                  </p>
+                </div>
+
+                {loadingCounter ? (
+                  <p
+                    className="text-xs py-1"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Carregando contador...
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={orderCounterInput}
+                        onChange={(e) => {
+                          setOrderCounterInput(e.target.value);
+                          setCounterSaved(false);
+                        }}
+                        className="w-24 h-8 px-2 text-sm rounded-md outline-none"
+                        style={{
+                          backgroundColor: "var(--color-bg-elevated)",
+                          border: "1px solid var(--color-border)",
+                          color: "var(--color-text-primary)",
+                        }}
+                      />
+                      <button
+                        onClick={handleSaveCounter}
+                        disabled={
+                          savingCounter ||
+                          orderCounterInput === "" ||
+                          Number(orderCounterInput) === orderCounter
+                        }
+                        className="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{
+                          backgroundColor: "rgba(234,179,8,0.12)",
+                          border: "1px solid rgba(234,179,8,0.4)",
+                          color: "rgb(234,179,8)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {savingCounter ? "Salvando..." : "Salvar"}
+                      </button>
+                      {counterSaved && (
+                        <span
+                          className="text-xs"
+                          style={{ color: "var(--color-success)" }}
+                        >
+                          Salvo!
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className="text-xs mt-2"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Esse é o número da última comanda registrada (Firestore:{" "}
+                      <code>counters/orders.last</code>) — o próximo pedido
+                      criado usará{" "}
+                      <strong>
+                        {orderCounterInput !== "" &&
+                        Number.isFinite(Number(orderCounterInput))
+                          ? Number(orderCounterInput) + 1
+                          : "?"}
+                      </strong>
+                      . Mude com cuidado: números duplicados ou pulados podem
+                      confundir a numeração das comandas impressas.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Session clock (test) */}
+              <div
+                className="mt-2 pt-3"
+                style={{ borderTop: "1px solid var(--color-border)" }}
+              >
+                <div className="flex items-center gap-1.5 mb-2">
+                  <FiClock
+                    size={12}
+                    style={{ color: "var(--color-text-muted)" }}
+                  />
+                  <p
+                    className="text-xs font-medium"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Relógio da sessão (teste)
+                  </p>
+                </div>
+
+                {sessionStartedAt == null ? (
+                  <p
+                    className="text-xs py-1"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Sem sessão ativa.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SESSION_ADJUST_OPTIONS.map(({ label, ms }) => (
+                        <button
+                          key={label}
+                          onClick={() => adjustSession(ms)}
+                          className="text-xs px-2.5 py-1 rounded-md cursor-pointer transition-all"
+                          style={{
+                            backgroundColor: "var(--color-bg-elevated)",
+                            border: "1px solid var(--color-border)",
+                            color: "var(--color-text-secondary)",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={leaveOneMinuteLeft}
+                        className="text-xs px-2.5 py-1 rounded-md cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: "rgba(234,179,8,0.08)",
+                          border: "1px solid rgba(234,179,8,0.3)",
+                          color: "rgb(234,179,8)",
+                        }}
+                      >
+                        Deixar 1min
+                      </button>
+                      <button
+                        onClick={expireSessionNow}
+                        className="text-xs px-2.5 py-1 rounded-md cursor-pointer transition-all"
+                        style={{
+                          backgroundColor: "rgba(239,68,68,0.08)",
+                          border: "1px solid rgba(239,68,68,0.2)",
+                          color: "var(--color-error)",
+                        }}
+                      >
+                        Expirar agora
+                      </button>
+                    </div>
+                    <p
+                      className="text-xs mt-2"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Faltam{" "}
+                      {fmtSessionRemaining(
+                        sessionStartedAt + sessionDurationMs - now,
+                      )}{" "}
+                      pra expirar. Cada clique empurra o início da sessão pra
+                      trás — dá pra ver o aviso na página de perfil e o logout
+                      automático sem esperar de verdade.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Firestore read/write counter */}
+              <div
+                className="mt-2 pt-3"
+                style={{ borderTop: "1px solid var(--color-border)" }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <FiDatabase
+                      size={12}
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                    <p
+                      className="text-xs font-medium"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Firestore nesta aba
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      resetFirestoreDevStats();
+                      setFirestoreStats(getFirestoreDevStats());
+                    }}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-md cursor-pointer transition-all"
+                    style={{ color: "var(--color-text-muted)" }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor =
+                        "var(--color-bg-elevated)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "transparent")
+                    }
+                    title="Zerar contador"
+                  >
+                    <FiRotateCcw size={11} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span
+                    className="text-sm font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {firestoreStats.reads}{" "}
+                    <span
+                      className="text-xs font-normal"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      leituras
+                    </span>
+                  </span>
+                  <span
+                    className="text-sm font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {firestoreStats.writes}{" "}
+                    <span
+                      className="text-xs font-normal"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      escritas
+                    </span>
+                  </span>
+                </div>
+                <p
+                  className="text-xs mt-2"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Conta desde que essa aba foi aberta (zera ao recarregar).
+                  Cobre o site inteiro (pedidos, dashboard, estoque, usuários,
+                  logs, chat, login/sessão etc.).
+                </p>
               </div>
             </div>
 

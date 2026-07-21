@@ -61,6 +61,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { StockItem, Subitem, AdditionalGroup } from "@/types";
 import Input from "@/components/ui/Input";
 import Image from "next/image";
@@ -4177,10 +4178,14 @@ export default function StockPage() {
       ),
     )
       .then((snap) => {
+        recordFirestoreRead(snap.size);
         if (snap.empty) return;
         const batch = writeBatch(db);
         snap.docs.forEach((d) => batch.delete(d.ref));
-        batch.commit().catch(() => {});
+        batch
+          .commit()
+          .then(() => recordFirestoreWrite(snap.docs.length))
+          .catch(() => {});
       })
       .catch(() => {});
   }, []);
@@ -4190,6 +4195,7 @@ export default function StockPage() {
     const unsub = onSnapshot(
       doc(db, "storeConfig", "stockNotifications"),
       (snap) => {
+        recordFirestoreRead(1);
         if (snap.exists()) {
           const d = snap.data();
           const s = {
@@ -4215,6 +4221,7 @@ export default function StockPage() {
         orderBy("createdAt", "desc"),
       ),
       (snap) => {
+        recordFirestoreRead(snap.docChanges().length);
         setStockAlerts(
           snap.docs.map((d) => ({
             id: d.id,
@@ -4244,6 +4251,7 @@ export default function StockPage() {
       await setDoc(doc(db, "storeConfig", "stockNotifications"), next, {
         merge: true,
       });
+      recordFirestoreWrite(1);
     } catch {
       /* ignore */
     } finally {
@@ -4258,6 +4266,7 @@ export default function StockPage() {
     const unsub = onSnapshot(
       query(collection(db, "items"), orderBy("createdAt", "desc")),
       (snap) => {
+        recordFirestoreRead(snap.docChanges().length);
         const newItems = snap.docs.map((d) => {
           const data = d.data();
           return {
@@ -4302,6 +4311,7 @@ export default function StockPage() {
         const snap = await getDocs(
           query(collection(db, "subitems"), orderBy("createdAt", "asc")),
         );
+        recordFirestoreRead(snap.size);
         setSubitems(
           snap.docs.map((d) => ({
             id: d.id,
@@ -4327,6 +4337,7 @@ export default function StockPage() {
       setLoadingCategories(true);
       try {
         const snap = await getDoc(doc(db, "stockConfig", "categoryOrder"));
+        recordFirestoreRead(1);
         if (snap.exists()) {
           const cats = snap.data().categories ?? [];
           setCategoryOrder(cats);
@@ -4561,6 +4572,7 @@ export default function StockPage() {
         }
 
         await updateDoc(doc(db, "items", old.id), data);
+        recordFirestoreWrite(1);
         success("Item atualizado", `"${data.name}" foi salvo.`);
         log({
           action: "update_item",
@@ -4575,6 +4587,7 @@ export default function StockPage() {
           ...data,
           createdAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
         success("Item criado", `"${data.name}" foi adicionado ao estoque.`);
         log({
           action: "create_item",
@@ -4609,6 +4622,7 @@ export default function StockPage() {
     }
     try {
       await updateDoc(doc(db, "items", item.id), { isVisible: next });
+      recordFirestoreWrite(1);
       info(
         next ? "Item visível" : "Item oculto",
         `"${item.name}" foi ${next ? "exibido" : "ocultado"}.`,
@@ -4634,14 +4648,16 @@ export default function StockPage() {
     try {
       const batch = writeBatch(db);
       batch.update(doc(db, "items", item.id), { isVisible: nextVisible });
+      let batchedSubitems = 0;
       if (applyToSubitems) {
-        linkedSubitems
-          .filter((s) => selectedIds.has(s.id))
-          .forEach((s) =>
-            batch.update(doc(db, "subitems", s.id), { isVisible: nextVisible }),
-          );
+        const toApply = linkedSubitems.filter((s) => selectedIds.has(s.id));
+        batchedSubitems = toApply.length;
+        toApply.forEach((s) =>
+          batch.update(doc(db, "subitems", s.id), { isVisible: nextVisible }),
+        );
       }
       await batch.commit();
+      recordFirestoreWrite(1 + batchedSubitems);
       if (applyToSubitems) {
         const ids = new Set([...selectedIds]);
         setSubitems((prev) =>
@@ -4676,6 +4692,7 @@ export default function StockPage() {
     const next = !item.isFeatured;
     try {
       await updateDoc(doc(db, "items", item.id), { isFeatured: next });
+      recordFirestoreWrite(1);
       info(next ? "Item em destaque" : "Destaque removido", `"${item.name}".`);
       log({
         action: "toggle_item_featured",
@@ -4694,6 +4711,7 @@ export default function StockPage() {
     try {
       if (item.photo) await deletePhotoFromStorage(item.photo);
       await deleteDoc(doc(db, "items", item.id));
+      recordFirestoreWrite(1);
       success("Item excluído", `"${item.name}" foi removido.`);
       const { id: _id, ...rawItem } = item;
       const itemSnapshot = Object.fromEntries(Object.entries(rawItem).filter(([, v]) => v !== undefined));
@@ -4779,6 +4797,7 @@ export default function StockPage() {
           });
 
         await updateDoc(doc(db, "subitems", editing.id), data);
+        recordFirestoreWrite(1);
         setSubitems((prev) =>
           prev.map((s) =>
             s.id === editing.id
@@ -4805,6 +4824,7 @@ export default function StockPage() {
           ...data,
           createdAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
         const newSub: Subitem = {
           id: ref.id,
           ...data,
@@ -4836,6 +4856,7 @@ export default function StockPage() {
     const next = !subitem.isVisible;
     try {
       await updateDoc(doc(db, "subitems", subitem.id), { isVisible: next });
+      recordFirestoreWrite(1);
       setSubitems((prev) =>
         prev.map((s) => (s.id === subitem.id ? { ...s, isVisible: next } : s)),
       );
@@ -4858,7 +4879,9 @@ export default function StockPage() {
     try {
       // Remove referências em todos os itens (cascade)
       const itemsSnap = await getDocs(collection(db, "items"));
+      recordFirestoreRead(itemsSnap.size);
       const batch = writeBatch(db);
+      let referencedCount = 0;
       itemsSnap.docs.forEach((d) => {
         const data = d.data();
         const referenced = [
@@ -4868,6 +4891,7 @@ export default function StockPage() {
           ...(data.additionals_sweet ?? []),
         ].includes(subitem.id);
         if (referenced) {
+          referencedCount++;
           batch.update(d.ref, {
             additionals: arrayRemove(subitem.id),
             additionals_sauce: arrayRemove(subitem.id),
@@ -4878,6 +4902,7 @@ export default function StockPage() {
       });
       batch.delete(doc(db, "subitems", subitem.id));
       await batch.commit();
+      recordFirestoreWrite(referencedCount + 1);
       if (subitem.photo) await deletePhotoFromStorage(subitem.photo);
 
       setSubitems((prev) => prev.filter((s) => s.id !== subitem.id));
@@ -4911,6 +4936,7 @@ export default function StockPage() {
       await setDoc(doc(db, "stockConfig", "categoryOrder"), {
         categories: categoryOrder,
       });
+      recordFirestoreWrite(1);
       setSavedCategoryOrder(categoryOrder);
       success("Ordem salva", "A ordem das categorias foi atualizada.");
       log({
@@ -4995,6 +5021,7 @@ export default function StockPage() {
     await updateDoc(doc(db, "stockAlerts", alertId), {
       dismissedBy: arrayUnion(appUser.uid),
     });
+    recordFirestoreWrite(1);
   }
 
   function openAlertItem(alertId: string, itemId: string) {
@@ -5034,6 +5061,7 @@ export default function StockPage() {
           additionals_sweet: [],
           createdAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
         imported++;
       } catch {
         failed++;
@@ -5118,6 +5146,7 @@ export default function StockPage() {
       });
     }
     await batch.commit();
+    recordFirestoreWrite(allNotifications.length);
     setNotifOpen(false);
   }
 

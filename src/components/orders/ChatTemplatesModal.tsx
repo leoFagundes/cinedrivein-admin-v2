@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { FiX, FiPlus, FiEdit2, FiTrash2, FiArrowLeft } from "react-icons/fi";
 import { db } from "@/lib/firebase";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { ChatTemplate } from "@/types";
 import { renderMarkdown } from "@/lib/chat-format";
 import RichTextToolbar from "@/components/ui/RichTextToolbar";
@@ -46,6 +47,7 @@ export default function ChatTemplatesModal({
   useEffect(() => {
     const q = query(collection(db, "chatTemplates"), orderBy("trigger"));
     return onSnapshot(q, (snap) => {
+      recordFirestoreRead(snap.docChanges().length);
       setTemplates(
         snap.docs.map((d) => ({
           id: d.id,
@@ -125,11 +127,13 @@ export default function ChatTemplatesModal({
       };
       if (editing) {
         await updateDoc(doc(db, "chatTemplates", editing.id), payload);
+        recordFirestoreWrite(1);
       } else {
         await addDoc(collection(db, "chatTemplates"), {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
       }
       backToList();
     } finally {
@@ -141,6 +145,7 @@ export default function ChatTemplatesModal({
     setDeletingId(id);
     try {
       await deleteDoc(doc(db, "chatTemplates", id));
+      recordFirestoreWrite(1);
       setConfirmDeleteId(null);
     } finally {
       setDeletingId(null);

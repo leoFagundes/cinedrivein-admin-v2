@@ -27,6 +27,7 @@ import { useLock } from "@/contexts/LockContext";
 import { can } from "@/lib/access";
 import { db, rtdb } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
+import { recordFirestoreRead } from "@/lib/firestoreDevTracker";
 import { ref, onValue } from "firebase/database";
 import { Permission } from "@/types";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
@@ -187,6 +188,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
+      recordFirestoreRead(1);
       if (snap.exists()) setStoreOpen(snap.data().isOpen ?? false);
     });
     return unsub;

@@ -38,6 +38,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { can } from "@/lib/access";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import Input from "@/components/ui/Input";
 import FeedbackTab from "./FeedbackTab";
 import StatisticsTab from "./StatisticsTab";
@@ -2483,6 +2484,7 @@ export default function SitePage() {
     async function load() {
       try {
         const snap = await getDoc(doc(db, "siteConfig", SITE_CONFIG_DOC));
+        recordFirestoreRead(1);
         if (snap.exists()) {
           const data = snap.data() as SiteConfig;
           setConfig(data);
@@ -2511,6 +2513,7 @@ export default function SitePage() {
     async function loadUnseenCount() {
       try {
         const snap = await getDocs(collection(db, "feedbacks"));
+        recordFirestoreRead(snap.size);
         const count = snap.docs.filter((d) => !d.data().seen).length;
         setUnseenFeedbackCount(count);
       } catch (err) {
@@ -2524,6 +2527,7 @@ export default function SitePage() {
   async function persistConfig(updates: Partial<SiteConfig>) {
     const next = { ...config, ...updates };
     await setDoc(doc(db, "siteConfig", SITE_CONFIG_DOC), next, { merge: true });
+    recordFirestoreWrite(1);
     setConfig(next);
   }
 

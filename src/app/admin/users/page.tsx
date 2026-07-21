@@ -35,6 +35,7 @@ import {
   PermissionGroup,
 } from "@/lib/permissions";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
 import Input from "@/components/ui/Input";
 import {
@@ -332,6 +333,7 @@ function CreateUserModal({
       const usernameSnap = await getDoc(
         doc(db, "usernames", fields.username.trim()),
       );
+      recordFirestoreRead(1);
       if (usernameSnap.exists()) {
         setErrors({ username: "Usuário já existe" });
         return;
@@ -359,6 +361,7 @@ function CreateUserModal({
         }),
         setDoc(doc(db, "usernames", username), { uid, email }),
       ]);
+      recordFirestoreWrite(2);
 
       const newUser: AppUser = {
         uid,
@@ -476,6 +479,7 @@ function EditUserModal({
 
       if (usernameChanged) {
         const snap = await getDoc(doc(db, "usernames", newUsername));
+        recordFirestoreRead(1);
         if (snap.exists()) {
           setUsernameError("Usuário já existe");
           return;
@@ -486,6 +490,7 @@ function EditUserModal({
         username: newUsername,
         status,
       });
+      recordFirestoreWrite(1);
 
       if (usernameChanged) {
         const batch = writeBatch(db);
@@ -495,6 +500,7 @@ function EditUserModal({
           email: user.email,
         });
         await batch.commit();
+        recordFirestoreWrite(2);
       }
 
       // Compute the actual changes for the log
@@ -1003,6 +1009,7 @@ function ActivityModal({
     getDocs(query(collection(db, "logs"), where("performedBy.uid", "==", user.uid)))
       .then((snap) => {
         if (cancelled) return;
+        recordFirestoreRead(snap.size);
         const items: Log[] = snap.docs.map((d) => {
           const data = d.data();
           return {
@@ -1536,7 +1543,8 @@ export default function UsersPage() {
 
   useEffect(() => {
     getDocs(query(collection(db, "users"), orderBy("createdAt", "desc")))
-      .then((snap) =>
+      .then((snap) => {
+        recordFirestoreRead(snap.size);
         setUsers(
           snap.docs.map((d) => {
             const data = d.data();
@@ -1555,8 +1563,8 @@ export default function UsersPage() {
               lastLoginAt: data.lastLoginAt?.toDate(),
             };
           }),
-        ),
-      )
+        );
+      })
       .catch(() => error("Erro ao carregar usuários", "Tente recarregar."))
       .finally(() => setLoadingUsers(false));
   }, []);
@@ -1565,7 +1573,8 @@ export default function UsersPage() {
     getDocs(
       query(collection(db, "permissionProfiles"), orderBy("createdAt", "asc")),
     )
-      .then((snap) =>
+      .then((snap) => {
+        recordFirestoreRead(snap.size);
         setProfiles(
           snap.docs.map((d) => ({
             id: d.id,
@@ -1573,8 +1582,8 @@ export default function UsersPage() {
             permissions: d.data().permissions ?? [],
             createdAt: d.data().createdAt?.toDate() ?? new Date(),
           })),
-        ),
-      )
+        );
+      })
       .catch(() => error("Erro ao carregar perfis", "Tente recarregar."))
       .finally(() => setLoadingProfiles(false));
   }, []);
@@ -1586,6 +1595,7 @@ export default function UsersPage() {
     const user = users.find((u) => u.uid === uid);
     try {
       await updateDoc(doc(db, "users", uid), { status: "approved" });
+      recordFirestoreWrite(1);
       setUsers((prev) =>
         prev.map((u) => (u.uid === uid ? { ...u, status: "approved" } : u)),
       );
@@ -1607,6 +1617,7 @@ export default function UsersPage() {
     const user = users.find((u) => u.uid === uid);
     try {
       await updateDoc(doc(db, "users", uid), { status: "rejected" });
+      recordFirestoreWrite(1);
       setUsers((prev) =>
         prev.map((u) => (u.uid === uid ? { ...u, status: "rejected" } : u)),
       );
@@ -1638,6 +1649,7 @@ export default function UsersPage() {
         profileId: profile?.id ?? null,
         profileName: profile?.name ?? null,
       });
+      recordFirestoreWrite(1);
       setUsers((prev) =>
         prev.map((u) =>
           u.uid === uid
@@ -1696,6 +1708,7 @@ export default function UsersPage() {
       batch.delete(doc(db, "users", user.uid));
       batch.delete(doc(db, "usernames", user.username));
       await batch.commit();
+      recordFirestoreWrite(2);
       setUsers((prev) => prev.filter((u) => u.uid !== user.uid));
       success("Usuário removido", `@${user.username} foi excluído.`);
       log({
@@ -1724,6 +1737,7 @@ export default function UsersPage() {
           name,
           permissions,
         });
+        recordFirestoreWrite(1);
         setProfiles((prev) =>
           prev.map((p) =>
             p.id === editing.id ? { ...p, name, permissions } : p,
@@ -1774,6 +1788,7 @@ export default function UsersPage() {
           permissions,
           createdAt: serverTimestamp(),
         });
+        recordFirestoreWrite(1);
         setProfiles((prev) => [
           ...prev,
           { id: ref.id, name, permissions, createdAt: new Date() },
@@ -1796,6 +1811,7 @@ export default function UsersPage() {
     const profile = profiles.find((p) => p.id === id);
     try {
       await deleteDoc(doc(db, "permissionProfiles", id));
+      recordFirestoreWrite(1);
       setProfiles((prev) => prev.filter((p) => p.id !== id));
       success("Perfil removido", `"${profile?.name}" foi excluído.`);
       log({

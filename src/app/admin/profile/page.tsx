@@ -10,12 +10,14 @@ import {
   FiCheck,
   FiChevronDown,
   FiChevronUp,
+  FiClock,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
 import DiceBearAvatar from "@/components/ui/DiceBearAvatar";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 // ─── DiceBear config ──────────────────────────────────────────────────────────
 
@@ -252,11 +254,56 @@ function AvatarPicker({
   );
 }
 
+// ─── Session helpers ──────────────────────────────────────────────────────────
+
+function fmtDateTime(d: Date): string {
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function fmtRemaining(ms: number): string {
+  if (ms <= 0) return "expirada";
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${m}min`;
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
-  const { appUser, refreshUser } = useAuth();
+  const {
+    appUser,
+    refreshUser,
+    sessionStartedAt,
+    sessionDurationMs,
+    renewSession,
+  } = useAuth();
   const { success, error } = useToast();
+  const [renewing, setRenewing] = useState(false);
+
+  // Só pra manter "tempo restante" razoavelmente atualizado sem sair recalculando toda hora.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  function handleRenewSession() {
+    setRenewing(true);
+    renewSession();
+    success(
+      "Sessão renovada!",
+      "Sua sessão foi estendida por mais 15 horas a partir de agora.",
+    );
+    setTimeout(() => setRenewing(false), 400);
+  }
 
   const [username, setUsername] = useState(appUser?.username ?? "");
   const [usernameError, setUsernameError] = useState("");
@@ -314,6 +361,7 @@ export default function ProfilePage() {
       // Check username availability if changed
       if (usernameChanged) {
         const snap = await getDoc(doc(db, "usernames", newUsername));
+        recordFirestoreRead(1);
         if (snap.exists() && snap.data().uid !== appUser.uid) {
           setUsernameError("Usuário já em uso");
           return;
@@ -343,6 +391,7 @@ export default function ProfilePage() {
       }
 
       await updateDoc(doc(db, "users", appUser.uid), updates);
+      recordFirestoreWrite(1);
 
       // Update usernames collection if username changed
       if (usernameChanged) {
@@ -353,6 +402,7 @@ export default function ProfilePage() {
           email: appUser.email,
         });
         await batch.commit();
+        recordFirestoreWrite(2);
       }
 
       if (changes.length > 0) {
@@ -752,6 +802,98 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Session card */}
+      <div
+        className="rounded-[var(--radius-xl)] p-6 flex flex-col gap-4"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <FiClock size={16} style={{ color: "var(--color-text-muted)" }} />
+          <p
+            className="text-sm font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            Sessão
+          </p>
+        </div>
+
+        {sessionStartedAt != null ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Iniciada em
+                </span>
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {fmtDateTime(new Date(sessionStartedAt))}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Expira em
+                </span>
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {fmtDateTime(
+                    new Date(sessionStartedAt + sessionDurationMs),
+                  )}{" "}
+                  <span style={{ color: "var(--color-text-muted)" }}>
+                    (faltam{" "}
+                    {fmtRemaining(sessionStartedAt + sessionDurationMs - now)}
+                    )
+                  </span>
+                </span>
+              </div>
+            </div>
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              Quando o tempo acabar, você será desconectado automaticamente e
+              vai precisar entrar de novo. Se estiver no meio de um
+              atendimento e quiser evitar isso, renove manualmente abaixo.
+            </p>
+            <button
+              onClick={handleRenewSession}
+              disabled={renewing}
+              className="flex items-center gap-1.5 h-9 px-4 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-all disabled:opacity-50 self-start"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text-secondary)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.borderColor = "var(--color-primary)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.borderColor = "var(--color-border)")
+              }
+            >
+              <FiRefreshCw
+                size={13}
+                className={renewing ? "animate-spin" : ""}
+              />
+              Renovar sessão
+            </button>
+          </>
+        ) : (
+          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+            Informações de sessão indisponíveis.
+          </p>
         )}
       </div>
     </div>

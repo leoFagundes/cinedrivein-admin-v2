@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 interface NotifSettings {
   notifyZeroStock: boolean;
@@ -68,7 +69,9 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
         dismissedBy: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      }).catch(() => {});
+      })
+        .then(() => recordFirestoreWrite(1))
+        .catch(() => {});
     } else if (existing.quantity !== item.quantity) {
       // Ongoing alert — update quantity without resetting dismissals
       updateDoc(doc(db, "stockAlerts", alertId), {
@@ -76,7 +79,9 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
         itemPhoto: item.photo ?? null,
         quantity: item.quantity,
         updatedAt: serverTimestamp(),
-      }).catch(() => {});
+      })
+        .then(() => recordFirestoreWrite(1))
+        .catch(() => {});
     }
   }
 
@@ -86,7 +91,9 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
       updateDoc(doc(db, "stockAlerts", alertId), {
         resolved: true,
         updatedAt: serverTimestamp(),
-      }).catch(() => {});
+      })
+        .then(() => recordFirestoreWrite(1))
+        .catch(() => {});
     }
   }
 
@@ -97,7 +104,9 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
     if (removed) {
       [zeroId, lowId].forEach((id) => {
         if (alertsRef.current.has(id)) {
-          deleteDoc(doc(db, "stockAlerts", id)).catch(() => {});
+          deleteDoc(doc(db, "stockAlerts", id))
+            .then(() => recordFirestoreWrite(1))
+            .catch(() => {});
           alertsRef.current.delete(id);
         }
       });
@@ -131,6 +140,7 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     return onSnapshot(doc(db, "storeConfig", "stockNotifications"), (snap) => {
+      recordFirestoreRead(1);
       if (snap.exists()) {
         const d = snap.data();
         settingsRef.current = {
@@ -145,6 +155,7 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
   // Keeps alertsRef in sync and drains the pending queue on first load
   useEffect(() => {
     return onSnapshot(collection(db, "stockAlerts"), (snap) => {
+      recordFirestoreRead(snap.docChanges().length);
       for (const change of snap.docChanges()) {
         if (change.type === "removed") {
           alertsRef.current.delete(change.doc.id);
@@ -172,6 +183,7 @@ export function StockAlertProvider({ children }: { children: React.ReactNode }) 
     return onSnapshot(
       query(collection(db, "items"), orderBy("createdAt", "desc")),
       (snap) => {
+        recordFirestoreRead(snap.docChanges().length);
         for (const change of snap.docChanges()) {
           const data = change.doc.data();
           const item: ParsedItem = {

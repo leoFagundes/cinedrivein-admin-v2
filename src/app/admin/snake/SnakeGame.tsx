@@ -259,6 +259,7 @@ export default function SnakeGame({ onScoreChange, onGameOver }: SnakeGameProps)
   // ── Teclado ──
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (!e.key) return;
       const key = e.key.toLowerCase();
 
       if (key in KEY_TO_DIRECTION) {

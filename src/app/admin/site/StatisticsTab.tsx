@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import {
   Area,
   AreaChart,
@@ -344,6 +345,7 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
     void (async () => {
       try {
         const snap = await getDoc(doc(db, "siteConfig", "analyticsConfig"));
+        recordFirestoreRead(1);
         if (snap.exists()) setAnalyticsEnabled(snap.data().isEnabled ?? true);
       } catch (e) {
         console.error(e);
@@ -360,6 +362,7 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, "analytics"));
+      recordFirestoreRead(snap.size);
       const allDocs = snap.docs;
 
       const filtered = allDocs
@@ -392,6 +395,7 @@ export default function StatisticsTab({ canManage }: { canManage: boolean }) {
         { isEnabled: next },
         { merge: true },
       );
+      recordFirestoreWrite(1);
       setAnalyticsEnabled(next);
       toastSuccess(
         next ? "Coleta ativada" : "Coleta desativada",

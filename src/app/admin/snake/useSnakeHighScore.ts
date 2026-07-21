@@ -15,6 +15,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 const COLLECTION = "snakeScores";
 
@@ -53,6 +54,7 @@ export function useSnakeHighScore(
     );
     getDocs(q)
       .then((snap) => {
+        recordFirestoreRead(snap.size);
         setLeaderboard(
           snap.docs.map((d) => ({
             uid: d.id,
@@ -73,7 +75,10 @@ export function useSnakeHighScore(
       }
       const q = query(collection(db, COLLECTION), where("highScore", ">", score));
       getCountFromServer(q)
-        .then((snap) => setRank(snap.data().count + 1))
+        .then((snap) => {
+          recordFirestoreRead(1);
+          setRank(snap.data().count + 1);
+        })
         .catch(() => setRank(null));
     },
     [uid],
@@ -85,6 +90,7 @@ export function useSnakeHighScore(
     getDoc(doc(db, COLLECTION, uid))
       .then((snap) => {
         if (cancelled) return;
+        recordFirestoreRead(1);
         const value = snap.exists()
           ? ((snap.data().highScore as number) ?? 0)
           : 0;
@@ -120,6 +126,7 @@ export function useSnakeHighScore(
           },
           { merge: true },
         );
+        recordFirestoreWrite(1);
         refreshLeaderboard();
         refreshRank(score);
       } catch {}

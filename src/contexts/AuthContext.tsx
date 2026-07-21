@@ -19,6 +19,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { AppUser, Permission } from "@/types";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 const SESSION_KEY = "cdi_session_start";
 const SESSION_EXPIRED_KEY = "cdi_session_expired";
@@ -40,6 +41,7 @@ async function markLastLogin(uid: string) {
     const marker = `${uid}:${today}`;
     if (localStorage.getItem(LAST_LOGIN_MARK_KEY) === marker) return;
     await setDoc(doc(db, "users", uid), { lastLoginAt: serverTimestamp() }, { merge: true });
+    recordFirestoreWrite(1);
     localStorage.setItem(LAST_LOGIN_MARK_KEY, marker);
   } catch {
     // silencioso — não é crítico, só afeta a exibição de "último login"
@@ -60,12 +62,24 @@ interface AuthContextValue {
   signUp: (data: SignUpData) => Promise<void>;
   logOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Início da sessão atual (ms desde epoch), ou null se não houver sessão. */
+  sessionStartedAt: number | null;
+  /** Duração máxima da sessão, em ms, antes do logout automático. */
+  sessionDurationMs: number;
+  /** Renova a sessão manualmente (reinicia a contagem das 15h a partir de agora). */
+  renewSession: () => void;
+  /**
+   * Só para teste (Dev Mode) — ajusta o horário de início da sessão pra
+   * simular o relógio avançando, sem precisar esperar horas de verdade.
+   */
+  debugSetSessionStart: (timestamp: number) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function loadAppUser(uid: string): Promise<AppUser | null> {
   const snap = await getDoc(doc(db, "users", uid));
+  recordFirestoreRead(1);
   if (!snap.exists()) return null;
   const data = snap.data();
 
@@ -74,6 +88,7 @@ async function loadAppUser(uid: string): Promise<AppUser | null> {
     const profileSnap = await getDoc(
       doc(db, "permissionProfiles", data.profileId),
     );
+    recordFirestoreRead(1);
     if (profileSnap.exists())
       permissions = profileSnap.data().permissions ?? [];
   }
@@ -99,6 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(
+    null,
+  );
   const signingInRef = useRef(false);
 
   useEffect(() => {
@@ -116,16 +134,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await signOut(auth);
           setFirebaseUser(null);
           setAppUser(null);
+          setSessionStartedAt(null);
           setLoading(false);
           return;
         }
         setFirebaseUser(fbUser);
+        setSessionStartedAt(sessionStart ? parseInt(sessionStart) : null);
         const user = await loadAppUser(fbUser.uid);
         setAppUser(user);
         void markLastLogin(fbUser.uid);
       } else {
         setFirebaseUser(null);
         setAppUser(null);
+        setSessionStartedAt(null);
       }
       setLoading(false);
     });
@@ -170,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signOut(auth);
         setFirebaseUser(null);
         setAppUser(null);
+        setSessionStartedAt(null);
       }
     }, CHECK_INTERVAL);
 
@@ -182,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let email = identifier;
       if (!identifier.includes("@")) {
         const snap = await getDoc(doc(db, "usernames", identifier));
+        recordFirestoreRead(1);
         if (!snap.exists()) throw new Error("USER_NOT_FOUND");
         email = snap.data().email as string;
       }
@@ -191,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
       );
       const userSnap = await getDoc(doc(db, "users", credential.user.uid));
+      recordFirestoreRead(1);
       if (!userSnap.exists()) {
         await signOut(auth);
         throw new Error("USER_NOT_FOUND");
@@ -204,7 +228,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signOut(auth);
         throw new Error("REJECTED");
       }
-      localStorage.setItem(SESSION_KEY, Date.now().toString());
+      const loginTimestamp = Date.now();
+      localStorage.setItem(SESSION_KEY, loginTimestamp.toString());
+      setSessionStartedAt(loginTimestamp);
 
       // Carrega o appUser manualmente após login bem-sucedido
       const appUserData = await loadAppUser(credential.user.uid);
@@ -250,6 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logOut() {
     localStorage.removeItem(SESSION_KEY);
+    setSessionStartedAt(null);
     await signOut(auth);
   }
 
@@ -257,6 +284,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth.currentUser) return;
     const user = await loadAppUser(auth.currentUser.uid);
     setAppUser(user);
+  }
+
+  /** Renovação manual — reinicia a contagem das 15h a partir de agora. */
+  function renewSession() {
+    if (!auth.currentUser) return;
+    const now = Date.now();
+    localStorage.setItem(SESSION_KEY, now.toString());
+    setSessionStartedAt(now);
+  }
+
+  /**
+   * Só para teste (Dev Mode) — define diretamente o horário de início da
+   * sessão. Se o novo horário já ultrapassar as 15h, força a expiração na
+   * hora (não espera o próximo tick do intervalo de 5min), pra dar pra ver o
+   * fluxo de logout automático sem esperar de verdade.
+   */
+  function debugSetSessionStart(timestamp: number) {
+    if (!auth.currentUser) return;
+
+    if (Date.now() - timestamp > SESSION_DURATION) {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.setItem(SESSION_EXPIRED_KEY, "1");
+      signOut(auth);
+      setFirebaseUser(null);
+      setAppUser(null);
+      setSessionStartedAt(null);
+      return;
+    }
+
+    localStorage.setItem(SESSION_KEY, timestamp.toString());
+    setSessionStartedAt(timestamp);
   }
 
   return (
@@ -269,6 +327,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         logOut,
         refreshUser,
+        sessionStartedAt,
+        sessionDurationMs: SESSION_DURATION,
+        renewSession,
+        debugSetSessionStart,
       }}
     >
       {children}

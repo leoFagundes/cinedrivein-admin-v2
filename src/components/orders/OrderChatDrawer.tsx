@@ -26,6 +26,7 @@ import {
   FiInfo,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { useAuth } from "@/contexts/AuthContext";
 import { Order, ChatMessage, ChatTemplate } from "@/types";
 import { renderMarkdown } from "@/lib/chat-format";
@@ -279,6 +280,7 @@ export default function OrderChatDrawer({
       orderBy("createdAt", "asc"),
     );
     const unsub = onSnapshot(q, (snap) => {
+      recordFirestoreRead(snap.docChanges().length);
       setMessages(
         snap.docs.map((d) => ({
           id: d.id,
@@ -298,6 +300,7 @@ export default function OrderChatDrawer({
   // Listen to chat enabled state
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "storeConfig", "main"), (snap) => {
+      recordFirestoreRead(1);
       if (snap.exists()) {
         setIsChatEnabled(snap.data().chatEnabled ?? true);
       }
@@ -309,6 +312,7 @@ export default function OrderChatDrawer({
   useEffect(() => {
     getDocs(query(collection(db, "chatTemplates"), orderBy("trigger")))
       .then((snap) => {
+        recordFirestoreRead(snap.size);
         setTemplates(
           snap.docs.map((d) => ({
             id: d.id,
@@ -432,6 +436,7 @@ export default function OrderChatDrawer({
         uid: appUser.uid,
         createdAt: serverTimestamp(),
       });
+      recordFirestoreWrite(1);
     } catch {
       setText(trimmed);
     } finally {
@@ -454,6 +459,7 @@ export default function OrderChatDrawer({
         text: editText.trim(),
         editedAt: serverTimestamp(),
       });
+      recordFirestoreWrite(1);
       setEditingId(null);
       setEditText("");
     } finally {
@@ -463,6 +469,7 @@ export default function OrderChatDrawer({
 
   async function deleteMessage(msgId: string) {
     await deleteDoc(doc(db, "orders", order.id, "messages", msgId));
+    recordFirestoreWrite(1);
   }
 
   // ── Keyboard ──────────────────────────────────────────────────────────────────

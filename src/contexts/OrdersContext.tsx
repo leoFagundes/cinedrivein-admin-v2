@@ -26,6 +26,7 @@ import { Order, OrderItem } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { decreaseStock } from "@/lib/stock";
 import { usePrinter } from "@/components/orders/ThermalPrinter";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 
 interface OrdersContextValue {
   activeOrders: Order[];
@@ -131,6 +132,7 @@ async function normalizeOrderPrices(order: Order): Promise<void> {
       if (!item.itemId) return item;
       try {
         const snap = await getDoc(doc(db, "items", item.itemId));
+        recordFirestoreRead(1);
         if (!snap.exists()) return item;
         const data = snap.data();
         const realValue = data.value as number;
@@ -180,6 +182,7 @@ async function normalizeOrderPrices(order: Order): Promise<void> {
     serviceFee: newServiceFee,
     total: newTotal,
   });
+  recordFirestoreWrite(1);
 }
 
 async function normalizePrintTwice(order: Order): Promise<void> {
@@ -190,6 +193,7 @@ async function normalizePrintTwice(order: Order): Promise<void> {
       if (item.printTwice) return item; // já está correto
       try {
         const snap = await getDoc(doc(db, "items", item.itemId));
+        recordFirestoreRead(1);
         if (!snap.exists()) return item;
         const printTwice = (snap.data().printTwice as boolean) ?? false;
         if (printTwice) {
@@ -210,6 +214,7 @@ async function normalizePrintTwice(order: Order): Promise<void> {
     Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined)),
   );
   await updateDoc(doc(db, "orders", order.id), { items: cleanItems });
+  recordFirestoreWrite(1);
 }
 
 function loadPrinted(): Set<string> {
@@ -238,6 +243,11 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     new Set(),
   );
   const readyRef = useRef<Set<string>>(new Set());
+  // Guarda a versão do pedido já relida do Firestore logo após a correção de
+  // preço — a impressão automática usa ela em vez de esperar o snapshot
+  // "ecoar" a própria escrita de volta pro estado local (activeOrders), que
+  // podia demorar mais que a decisão de imprimir e sair com o valor errado.
+  const readyOrdersRef = useRef<Map<string, Order>>(new Map());
 
   const pendingRef = useRef<Set<string>>(new Set());
   const printBaselineRef = useRef<Set<string> | null>(null);
@@ -277,13 +287,19 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       if (!readyToPrintIds.has(orderId)) continue;
       if (printedRef.current.has(orderId)) continue;
 
-      const freshOrder = activeOrders.find((o) => o.id === orderId);
+      // Prefere a versão relida do Firestore logo após a correção de preço
+      // (readyOrdersRef) — só cai pro activeOrders se por algum motivo ela
+      // não estiver disponível.
+      const freshOrder =
+        readyOrdersRef.current.get(orderId) ??
+        activeOrders.find((o) => o.id === orderId);
       if (!freshOrder) continue;
 
       printedRef.current.add(orderId);
       setPrintedIds(new Set(printedRef.current));
       savePrinted(printedRef.current);
       pendingRef.current.delete(orderId);
+      readyOrdersRef.current.delete(orderId);
       printOrder(freshOrder);
     }
   }, [activeOrders, readyToPrintIds, autoPrint, isConnected, printOrder]);
@@ -305,6 +321,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     );
 
     const unsub = onSnapshot(q, (snap) => {
+      recordFirestoreRead(snap.docChanges().length);
       const orders = snap.docs.map((d) =>
         parseOrder(d.id, d.data() as Record<string, unknown>),
       );
@@ -354,6 +371,25 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
               normalizePrintTwice(o),
             ]).catch(console.error);
 
+            // Relê o pedido direto do Firestore agora que as correções acima
+            // já foram escritas — garante que a impressão automática use o
+            // valor já corrigido, sem depender de esperar o snapshot deste
+            // listener ecoar essa mesma escrita de volta pro estado local
+            // (activeOrders), que podia demorar mais que a decisão de
+            // imprimir.
+            try {
+              const freshSnap = await getDoc(doc(db, "orders", o.id));
+              recordFirestoreRead(1);
+              if (freshSnap.exists()) {
+                readyOrdersRef.current.set(
+                  o.id,
+                  parseOrder(freshSnap.id, freshSnap.data() as Record<string, unknown>),
+                );
+              }
+            } catch (err) {
+              console.error(err);
+            }
+
             // ✅ Só sinaliza pronto DEPOIS que tudo terminou
             readyRef.current = new Set([...readyRef.current, o.id]);
             setReadyToPrintIds(new Set(readyRef.current));
@@ -393,6 +429,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         limit(1),
       );
       return onSnapshot(q, (snap) => {
+        recordFirestoreRead(snap.docChanges().length);
         if (snap.empty) {
           customerMsgTimesRef.current = {
             ...customerMsgTimesRef.current,

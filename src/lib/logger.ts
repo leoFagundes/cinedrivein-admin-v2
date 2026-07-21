@@ -2,6 +2,7 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { LogCategory, LogChange } from "@/types";
 import { getDevMode } from "./devMode";
+import { recordFirestoreWrite } from "./firestoreDevTracker";
 
 export interface LogEntry {
   action: string;
@@ -32,7 +33,7 @@ export function log(entry: LogEntry): void {
   const data = Object.fromEntries(
     Object.entries(raw).filter(([, v]) => v !== undefined),
   );
-  addDoc(collection(db, "logs"), data).catch((err) =>
-    console.error("[logger] Falha ao salvar log:", err),
-  );
+  addDoc(collection(db, "logs"), data)
+    .then(() => recordFirestoreWrite(1))
+    .catch((err) => console.error("[logger] Falha ao salvar log:", err));
 }

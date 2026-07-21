@@ -48,6 +48,7 @@ import { decreaseStock, increaseStock } from "@/lib/stock";
 import { useOrders, parseOrder } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import NewOrderModal from "@/components/orders/NewOrderModal";
 import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
 import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
@@ -1958,6 +1959,7 @@ function OrdersPageInner() {
         ),
       )
         .then((snap) => {
+          recordFirestoreRead(snap.size);
           if (!snap.empty)
             setOrdersWithMessages((prev) => ({ ...prev, [o.id]: true }));
         })
@@ -1977,6 +1979,7 @@ function OrdersPageInner() {
         ),
       )
         .then((snap) => {
+          recordFirestoreRead(snap.size);
           if (!snap.empty)
             setOrdersWithMessages((prev) => ({ ...prev, [o.id]: true }));
         })
@@ -1999,6 +2002,7 @@ function OrdersPageInner() {
       orderBy("createdAt", "desc"),
     );
     return onSnapshot(q, (snap) => {
+      recordFirestoreRead(snap.docChanges().length);
       setFinishedOrders(
         snap.docs.map((d) =>
           parseOrder(d.id, d.data() as Record<string, unknown>),
@@ -2033,6 +2037,7 @@ function OrdersPageInner() {
         status: "canceled",
         finishedAt: serverTimestamp(),
       });
+      recordFirestoreWrite(1);
       await increaseStock(target.items);
       log({
         action: "Pedido cancelado",
@@ -2078,6 +2083,7 @@ function OrdersPageInner() {
         total: data.total,
         finishedAt: serverTimestamp(),
       });
+      recordFirestoreWrite(1);
       log({
         action: "Pedido finalizado",
         category: "orders",
@@ -2130,10 +2136,12 @@ function OrdersPageInner() {
 
   async function deleteMessages(orderId: string) {
     const snap = await getDocs(collection(db, "orders", orderId, "messages"));
+    recordFirestoreRead(snap.size);
     if (!snap.empty) {
       const batch = writeBatch(db);
       snap.docs.forEach((d) => batch.delete(d.ref));
       await batch.commit();
+      recordFirestoreWrite(snap.docs.length);
     }
   }
 
@@ -2148,6 +2156,7 @@ function OrdersPageInner() {
       }
       await deleteMessages(order.id);
       await deleteDoc(doc(db, "orders", order.id));
+      recordFirestoreWrite(1);
       log({
         action: "Pedido excluído",
         category: "orders",
@@ -2174,6 +2183,7 @@ function OrdersPageInner() {
         total: order.subtotal + order.serviceFee,
         finishedAt: deleteField(),
       });
+      recordFirestoreWrite(1);
       await decreaseStock(order.items);
       log({
         action: "Pedido reativado",
@@ -2203,6 +2213,7 @@ function OrdersPageInner() {
       await Promise.all(
         canceled.map((o) => deleteDoc(doc(db, "orders", o.id))),
       );
+      recordFirestoreWrite(canceled.length);
       log({
         action: "Pedidos cancelados excluídos em massa",
         category: "orders",
@@ -2233,6 +2244,7 @@ function OrdersPageInner() {
         });
       });
       await batch.commit();
+      recordFirestoreWrite(activeOrders.length);
       const allItems = activeOrders.flatMap((o) => o.items);
       await increaseStock(allItems);
       log({

@@ -337,6 +337,7 @@ function itemRow(name: string, price: string, width: number): string[] {
 export function buildOrderTicket(
   order: Order,
   cfg: TicketConfig = DEFAULT_TICKET_CONFIG,
+  testLabel?: string,
 ): Uint8Array {
   const {
     paperWidth,
@@ -356,6 +357,14 @@ export function buildOrderTicket(
 
   // ── Init ──────────────────────────────────────────────────────────────────
   add(CMD.init);
+
+  // ── Selo de teste (só quando testLabel é passado — não afeta comandas reais) ──
+  if (testLabel) {
+    add(CMD.alignCenter, CMD.bold(true));
+    add(CMD.text(testLabel));
+    add(CMD.bold(false));
+    add(CMD.text(DIVIDER));
+  }
 
   // ── Header: VAGA (negrito, grande, centrado) ──────────────────────────────
   if (headerPadding > 0) add(CMD.feed(headerPadding));
@@ -448,6 +457,14 @@ export function buildOrderTicket(
   add(CMD.alignCenter);
   add(CMD.text(DIVIDER));
   add(CMD.text("Cine Drive-in"));
+
+  if (testLabel) {
+    add(CMD.text(DIVIDER));
+    add(CMD.bold(true));
+    add(CMD.text(testLabel));
+    add(CMD.bold(false));
+  }
+
   add(CMD.feed(feedLines));
   add(CMD.feedAndCut);
 
@@ -1008,7 +1025,7 @@ function useThermalPrinterCore() {
         },
       ],
     };
-    await print(buildOrderTicket(fakeOrder, ticketConfig));
+    await print(buildOrderTicket(fakeOrder, ticketConfig, "COMANDA DE TESTE"));
   }, [print, ticketConfig]);
 
   const printHelloWorld = useCallback(async () => {
@@ -2192,13 +2209,13 @@ export default function ThermalPrinterBar({
                   disabled={status === "printing"}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
-                    backgroundColor: "rgba(0,136,194,0.1)",
-                    color: "var(--color-primary)",
-                    border: "1px solid rgba(0,136,194,0.3)",
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-muted)",
+                    border: "1px solid var(--color-border)",
                   }}
                 >
                   <FiPrinter size={11} />
-                  Testar comanda
+                  Comanda de teste
                 </button>
               </div>
             </div>

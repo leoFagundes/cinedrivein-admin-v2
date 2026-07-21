@@ -23,6 +23,7 @@ export function useKonamiCode() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (!e.key) return;
       const key = e.key.toLowerCase();
       const expected = SEQUENCE[progressRef.current];
 

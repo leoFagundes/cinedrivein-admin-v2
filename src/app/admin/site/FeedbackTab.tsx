@@ -28,6 +28,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
+import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { Feedback } from "@/types";
 
@@ -344,6 +345,7 @@ export default function FeedbackTab({
       const snap = await getDocs(
         query(collection(db, "feedbacks"), orderBy("createdAt", "desc")),
       );
+      recordFirestoreRead(snap.size);
       setFeedbacks(sortFeedbacks(snap.docs.map(parseFeedback)));
     } catch (err) {
       console.error(err);
@@ -371,6 +373,7 @@ export default function FeedbackTab({
       await updateDoc(doc(db, "users", appUser.uid), {
         notifyReviewsInSidebar: checked,
       });
+      recordFirestoreWrite(1);
       await refreshUser();
     } catch (err) {
       console.error(err);
@@ -384,6 +387,7 @@ export default function FeedbackTab({
     if (feedback.seen) return;
     try {
       await updateDoc(doc(db, "feedbacks", feedback.id), { seen: true });
+      recordFirestoreWrite(1);
       setFeedbacks((prev) =>
         sortFeedbacks(
           prev.map((f) => (f.id === feedback.id ? { ...f, seen: true } : f)),
@@ -410,6 +414,7 @@ export default function FeedbackTab({
       await updateDoc(doc(db, "feedbacks", feedback.id), {
         favorite: nextFavorite,
       });
+      recordFirestoreWrite(1);
       setFeedbacks((prev) =>
         sortFeedbacks(
           prev.map((f) =>
@@ -446,6 +451,7 @@ export default function FeedbackTab({
     setDeleteLoading(true);
     try {
       await deleteDoc(doc(db, "feedbacks", target.id));
+      recordFirestoreWrite(1);
       setFeedbacks((prev) => prev.filter((f) => f.id !== target.id));
       success("Avaliação excluída", "O comentário foi removido.");
 
