@@ -8,7 +8,9 @@ import {
   createContext,
   useContext,
   ReactNode,
+  ReactElement,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   FiPrinter,
   FiSettings,
@@ -26,6 +28,7 @@ import {
 } from "react-icons/fi";
 import { Order, OrderItem } from "@/types";
 import { useOrders } from "@/contexts/OrdersContext";
+import { PiPopcorn } from "react-icons/pi";
 
 // ── ESC/POS helpers ───────────────────────────────────────────────────────────
 
@@ -527,8 +530,12 @@ export function buildReportTicket(
   // ── Resumo de pedidos ──────────────────────────────────────────────────────
   add(CMD.alignLeft);
   add(CMD.bold(true), CMD.text("PEDIDOS"), CMD.bold(false));
-  add(CMD.text(rowLR("Finalizados:", String(report.finishedOrders), paperWidth)));
-  add(CMD.text(rowLR("Cancelados:", String(report.canceledOrders), paperWidth)));
+  add(
+    CMD.text(rowLR("Finalizados:", String(report.finishedOrders), paperWidth)),
+  );
+  add(
+    CMD.text(rowLR("Cancelados:", String(report.canceledOrders), paperWidth)),
+  );
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
   if (sectionSpacing > 0) add(CMD.feed(sectionSpacing));
 
@@ -544,10 +551,18 @@ export function buildReportTicket(
     add(CMD.text(rowLR("Debito:", fmt(report.revenue.debit), paperWidth)));
   add(CMD.text(DIVIDER));
   add(CMD.text(rowLR("Subtotal:", fmt(report.revenue.subtotal), paperWidth)));
-  add(CMD.text(rowLR("Taxa de servico:", fmt(report.revenue.serviceFee), paperWidth)));
+  add(
+    CMD.text(
+      rowLR("Taxa de servico:", fmt(report.revenue.serviceFee), paperWidth),
+    ),
+  );
   add(CMD.bold(true));
   if ((report.revenue.discount ?? 0) > 0)
-    add(CMD.text(rowLR("Desconto:", `- ${fmt(report.revenue.discount!)}`, paperWidth)));
+    add(
+      CMD.text(
+        rowLR("Desconto:", `- ${fmt(report.revenue.discount!)}`, paperWidth),
+      ),
+    );
   add(CMD.text(rowLR("TOTAL:", fmt(report.revenue.total), paperWidth)));
   add(CMD.bold(false));
   add(CMD.alignCenter, CMD.text(DIVIDER), CMD.alignLeft);
@@ -2224,38 +2239,81 @@ export default function ThermalPrinterBar({
           {/* ── Grupo 3: Comportamento ── */}
           <div className="flex flex-col gap-2 px-4 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-text-muted)" }}>
+              <span
+                className="text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--color-text-muted)" }}
+              >
                 Comportamento
               </span>
               <button
                 onClick={() => setShowSettingsModal(true)}
                 className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-opacity hover:opacity-70"
-                style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}
+                style={{
+                  backgroundColor: "var(--color-bg-surface)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-muted)",
+                }}
               >
                 <FiSettings size={10} /> Comanda
               </button>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="flex items-center gap-2 cursor-pointer" onClick={() => setAutoPrint(!autoPrint)}>
-                <span className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
-                  style={{ backgroundColor: autoPrint ? "var(--color-success)" : "var(--color-border)" }}>
-                  <span className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                    style={{ transform: autoPrint ? "translateX(14px)" : "translateX(2px)" }} />
+              <label
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setAutoPrint(!autoPrint)}
+              >
+                <span
+                  className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
+                  style={{
+                    backgroundColor: autoPrint
+                      ? "var(--color-success)"
+                      : "var(--color-border)",
+                  }}
+                >
+                  <span
+                    className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: autoPrint
+                        ? "translateX(14px)"
+                        : "translateX(2px)",
+                    }}
+                  />
                 </span>
-                <span className="text-[10px]" style={{ color: "var(--color-text-secondary)" }}>
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
                   Auto-imprimir novas comandas
                 </span>
               </label>
 
               {connectionMode === "qztray" && (
-                <label className="flex items-center gap-2 cursor-pointer" onClick={() => setAutoConnect(!autoConnect)}>
-                  <span className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
-                    style={{ backgroundColor: autoConnect ? "var(--color-primary)" : "var(--color-border)" }}>
-                    <span className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                      style={{ transform: autoConnect ? "translateX(14px)" : "translateX(2px)" }} />
+                <label
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() => setAutoConnect(!autoConnect)}
+                >
+                  <span
+                    className="relative inline-flex items-center w-7 h-4 rounded-full shrink-0 transition-colors"
+                    style={{
+                      backgroundColor: autoConnect
+                        ? "var(--color-primary)"
+                        : "var(--color-border)",
+                    }}
+                  >
+                    <span
+                      className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                      style={{
+                        transform: autoConnect
+                          ? "translateX(14px)"
+                          : "translateX(2px)",
+                      }}
+                    />
                   </span>
-                  <span className="text-[10px]" style={{ color: "var(--color-text-secondary)" }}>
+                  <span
+                    className="text-[10px]"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
                     Conectar automaticamente ao abrir
                   </span>
                 </label>
@@ -2274,41 +2332,92 @@ export default function ThermalPrinterBar({
         >
           <div
             className="w-full max-w-sm rounded-2xl overflow-hidden flex flex-col"
-            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--color-border)" }}>
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "1px solid var(--color-border)" }}
+            >
               <div className="flex items-center gap-2">
-                <FiSettings size={15} style={{ color: "var(--color-primary)" }} />
-                <p className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>
+                <FiSettings
+                  size={15}
+                  style={{ color: "var(--color-primary)" }}
+                />
+                <p
+                  className="font-semibold text-sm"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
                   Configurações da comanda
                 </p>
               </div>
-              <button onClick={() => setShowSettingsModal(false)} className="p-1.5 cursor-pointer transition-opacity hover:opacity-70" style={{ color: "var(--color-text-muted)" }}>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-1.5 cursor-pointer transition-opacity hover:opacity-70"
+                style={{ color: "var(--color-text-muted)" }}
+              >
                 <FiX size={16} />
               </button>
             </div>
 
             {/* Body */}
             <div className="px-5 py-4 flex flex-col gap-5 overflow-y-auto max-h-[70vh]">
-
               {/* Largura do papel */}
               <div className="flex flex-col gap-2">
                 <div>
-                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Largura do papel</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-                    {PAPER_PRESETS.find((p) => p.value === ticketConfig.paperWidth)?.label}
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Largura do papel
+                  </p>
+                  <p
+                    className="text-[10px] mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    {
+                      PAPER_PRESETS.find(
+                        (p) => p.value === ticketConfig.paperWidth,
+                      )?.label
+                    }
                   </p>
                 </div>
-                <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                <div
+                  className="flex rounded-[var(--radius-md)] overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
                   {PAPER_PRESETS.map((preset, i) => {
                     const active = ticketConfig.paperWidth === preset.value;
                     return (
-                      <button key={preset.value} onClick={() => setTicketConfig({ paperWidth: preset.value as PaperWidth })}
+                      <button
+                        key={preset.value}
+                        onClick={() =>
+                          setTicketConfig({
+                            paperWidth: preset.value as PaperWidth,
+                          })
+                        }
                         className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
-                        style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < PAPER_PRESETS.length - 1 ? "1px solid var(--color-border)" : "none" }}>
-                        {preset.value === 32 ? "58 mm" : preset.value === 42 ? "80 mm" : "80 mm+"}
+                        style={{
+                          backgroundColor: active
+                            ? "var(--color-primary)"
+                            : "transparent",
+                          color: active ? "white" : "var(--color-text-muted)",
+                          borderRight:
+                            i < PAPER_PRESETS.length - 1
+                              ? "1px solid var(--color-border)"
+                              : "none",
+                        }}
+                      >
+                        {preset.value === 32
+                          ? "58 mm"
+                          : preset.value === 42
+                            ? "80 mm"
+                            : "80 mm+"}
                       </button>
                     );
                   })}
@@ -2319,14 +2428,32 @@ export default function ThermalPrinterBar({
               <div className="grid grid-cols-2 gap-4">
                 {/* Avanço antes do corte */}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Avanço antes do corte</p>
-                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Avanço antes do corte
+                  </p>
+                  <div
+                    className="flex rounded-[var(--radius-md)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
                     {([2, 4, 6] as const).map((v, i) => {
                       const active = ticketConfig.feedLines === v;
                       return (
-                        <button key={v} onClick={() => setTicketConfig({ feedLines: v })}
+                        <button
+                          key={v}
+                          onClick={() => setTicketConfig({ feedLines: v })}
                           className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
-                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 2 ? "1px solid var(--color-border)" : "none" }}>
+                          style={{
+                            backgroundColor: active
+                              ? "var(--color-primary)"
+                              : "transparent",
+                            color: active ? "white" : "var(--color-text-muted)",
+                            borderRight:
+                              i < 2 ? "1px solid var(--color-border)" : "none",
+                          }}
+                        >
                           {v}L
                         </button>
                       );
@@ -2336,14 +2463,32 @@ export default function ThermalPrinterBar({
 
                 {/* Espaço entre itens */}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Espaço entre itens</p>
-                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Espaço entre itens
+                  </p>
+                  <div
+                    className="flex rounded-[var(--radius-md)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
                     {([0, 1, 2] as const).map((v, i) => {
                       const active = ticketConfig.itemSpacing === v;
                       return (
-                        <button key={v} onClick={() => setTicketConfig({ itemSpacing: v })}
+                        <button
+                          key={v}
+                          onClick={() => setTicketConfig({ itemSpacing: v })}
                           className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
-                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 2 ? "1px solid var(--color-border)" : "none" }}>
+                          style={{
+                            backgroundColor: active
+                              ? "var(--color-primary)"
+                              : "transparent",
+                            color: active ? "white" : "var(--color-text-muted)",
+                            borderRight:
+                              i < 2 ? "1px solid var(--color-border)" : "none",
+                          }}
+                        >
                           {v === 0 ? "0" : `${v}L`}
                         </button>
                       );
@@ -2353,14 +2498,32 @@ export default function ThermalPrinterBar({
 
                 {/* Espaço entre seções */}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Espaço entre seções</p>
-                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Espaço entre seções
+                  </p>
+                  <div
+                    className="flex rounded-[var(--radius-md)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
                     {([0, 1] as const).map((v, i) => {
                       const active = ticketConfig.sectionSpacing === v;
                       return (
-                        <button key={v} onClick={() => setTicketConfig({ sectionSpacing: v })}
+                        <button
+                          key={v}
+                          onClick={() => setTicketConfig({ sectionSpacing: v })}
                           className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
-                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 1 ? "1px solid var(--color-border)" : "none" }}>
+                          style={{
+                            backgroundColor: active
+                              ? "var(--color-primary)"
+                              : "transparent",
+                            color: active ? "white" : "var(--color-text-muted)",
+                            borderRight:
+                              i < 1 ? "1px solid var(--color-border)" : "none",
+                          }}
+                        >
                           {v === 0 ? "Nenhum" : "1L"}
                         </button>
                       );
@@ -2370,14 +2533,32 @@ export default function ThermalPrinterBar({
 
                 {/* Margem no topo */}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Margem no topo</p>
-                  <div className="flex rounded-[var(--radius-md)] overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Margem no topo
+                  </p>
+                  <div
+                    className="flex rounded-[var(--radius-md)] overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
                     {([0, 1, 2] as const).map((v, i) => {
                       const active = ticketConfig.headerPadding === v;
                       return (
-                        <button key={v} onClick={() => setTicketConfig({ headerPadding: v })}
+                        <button
+                          key={v}
+                          onClick={() => setTicketConfig({ headerPadding: v })}
                           className="flex-1 py-1.5 text-xs font-medium cursor-pointer transition-all"
-                          style={{ backgroundColor: active ? "var(--color-primary)" : "transparent", color: active ? "white" : "var(--color-text-muted)", borderRight: i < 2 ? "1px solid var(--color-border)" : "none" }}>
+                          style={{
+                            backgroundColor: active
+                              ? "var(--color-primary)"
+                              : "transparent",
+                            color: active ? "white" : "var(--color-text-muted)",
+                            borderRight:
+                              i < 2 ? "1px solid var(--color-border)" : "none",
+                          }}
+                        >
                           {v === 0 ? "0" : `${v}L`}
                         </button>
                       );
@@ -2387,15 +2568,43 @@ export default function ThermalPrinterBar({
               </div>
 
               {/* Toggle espaço compacto */}
-              <label className="flex items-center gap-3 cursor-pointer" onClick={() => setTicketConfig({ compactAdditionalsSpacing: !ticketConfig.compactAdditionalsSpacing })}>
-                <span className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 transition-colors"
-                  style={{ backgroundColor: ticketConfig.compactAdditionalsSpacing ? "var(--color-primary)" : "var(--color-border)" }}>
-                  <span className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
-                    style={{ transform: ticketConfig.compactAdditionalsSpacing ? "translateX(18px)" : "translateX(2px)" }} />
+              <label
+                className="flex items-center gap-3 cursor-pointer"
+                onClick={() =>
+                  setTicketConfig({
+                    compactAdditionalsSpacing:
+                      !ticketConfig.compactAdditionalsSpacing,
+                  })
+                }
+              >
+                <span
+                  className="relative inline-flex items-center w-8 h-4 rounded-full shrink-0 transition-colors"
+                  style={{
+                    backgroundColor: ticketConfig.compactAdditionalsSpacing
+                      ? "var(--color-primary)"
+                      : "var(--color-border)",
+                  }}
+                >
+                  <span
+                    className="absolute w-3 h-3 bg-white rounded-full shadow transition-transform"
+                    style={{
+                      transform: ticketConfig.compactAdditionalsSpacing
+                        ? "translateX(18px)"
+                        : "translateX(2px)",
+                    }}
+                  />
                 </span>
                 <div>
-                  <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>Espaço menor após adicionais</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    Espaço menor após adicionais
+                  </p>
+                  <p
+                    className="text-[10px] mt-0.5"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     Itens com adicionais recebem menos espaço abaixo
                   </p>
                 </div>
@@ -2435,6 +2644,63 @@ export default function ThermalPrinterBar({
   );
 }
 
+// ── IconTooltip ───────────────────────────────────────────────────────────────
+
+// Envolve um botão de ícone e mostra um rótulo ao passar o mouse/focar.
+// Renderiza o rótulo num portal (direto no <body>), posicionado via
+// getBoundingClientRect — assim ele nunca fica cortado pelo overflow-hidden
+// do card do pedido nem escondido atrás de outro card vizinho. Não substitui
+// o `title` nativo do botão (mantido para acessibilidade).
+function IconTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactElement;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  function show() {
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) setPos({ top: rect.top, left: rect.left + rect.width / 2 });
+  }
+  function hide() {
+    setPos(null);
+  }
+
+  return (
+    <span
+      ref={ref}
+      className="inline-flex"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
+      {children}
+      {pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <span
+            className="pointer-events-none fixed -translate-x-1/2 -translate-y-full whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium z-999"
+            style={{
+              top: pos.top - 8,
+              left: pos.left,
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-primary)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            {label}
+          </span>,
+          document.body,
+        )}
+    </span>
+  );
+}
+
 // ── PrintOrderButton ──────────────────────────────────────────────────────────
 
 export function PrintOrderButton({ order }: { order: Order }) {
@@ -2453,17 +2719,106 @@ export function PrintOrderButton({ order }: { order: Order }) {
     setTimeout(() => setJustPrinted(false), 2000);
   }
 
+  const label = justPrinted ? "Impresso!" : "Imprimir comanda";
+
   return (
-    <button
-      onClick={handleClick}
-      disabled={status === "printing"}
-      className="p-1 rounded cursor-pointer transition-all hover:opacity-70 disabled:opacity-40"
-      style={{
-        color: justPrinted ? "var(--color-success)" : "var(--color-text-muted)",
-      }}
-      title={justPrinted ? "Impresso!" : "Imprimir comanda"}
-    >
-      <FiPrinter size={13} />
-    </button>
+    <IconTooltip label={label}>
+      <button
+        onClick={handleClick}
+        disabled={status === "printing"}
+        className="p-1 rounded cursor-pointer transition-all hover:opacity-70 disabled:opacity-40"
+        style={{
+          color: justPrinted
+            ? "var(--color-success)"
+            : "var(--color-text-muted)",
+        }}
+      >
+        <FiPrinter size={13} />
+      </button>
+    </IconTooltip>
+  );
+}
+
+// ── PrintVisibleValueButton ───────────────────────────────────────────────────
+
+function hasVisibleValueItems(order: Order): boolean {
+  return order.items.some(
+    (item) =>
+      item.visibleValue != null &&
+      item.visibleValue > 0 &&
+      item.visibleValue !== item.value,
+  );
+}
+
+// Monta uma comanda "fictícia" só com os itens que têm valor visível ao
+// cliente diferente do valor real, usando o valor visível como se fosse o
+// valor do item — subtotal/taxa/total recalculados só com esses itens,
+// sem misturar com o resto do pedido.
+function buildVisibleValueOrder(order: Order): Order {
+  const items = order.items
+    .filter(
+      (item) =>
+        item.visibleValue != null &&
+        item.visibleValue > 0 &&
+        item.visibleValue !== item.value,
+    )
+    .map((item) => ({ ...item, value: item.visibleValue! }));
+
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.value * (item.quantity ?? 1),
+    0,
+  );
+  const serviceFee = Math.round(subtotal * 0.1 * 100) / 100;
+
+  return {
+    ...order,
+    items,
+    subtotal,
+    serviceFee,
+    total: subtotal + serviceFee,
+  };
+}
+
+/** Só aparece quando o pedido tem algum item com valor visível ao cliente. */
+export function PrintVisibleValueButton({ order }: { order: Order }) {
+  const { isConnected, print, ticketConfig, status } = usePrinter();
+  const [justPrinted, setJustPrinted] = useState(false);
+
+  if (!isConnected || !hasVisibleValueItems(order)) return null;
+
+  async function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    const visibleValueOrder = buildVisibleValueOrder(order);
+    logOrderTicket(visibleValueOrder, ticketConfig);
+    await print(
+      buildOrderTicket(
+        visibleValueOrder,
+        ticketConfig,
+        "ITENS - VALOR CLIENTE",
+      ),
+    );
+    setJustPrinted(true);
+    setTimeout(() => setJustPrinted(false), 2000);
+  }
+
+  const label = justPrinted
+    ? "Impresso!"
+    : "Imprimir itens com valor visível ao cliente";
+
+  return (
+    <IconTooltip label={label}>
+      <button
+        onClick={handleClick}
+        disabled={status === "printing"}
+        className="p-1 rounded cursor-pointer transition-all hover:opacity-70 disabled:opacity-40"
+        style={{
+          color: justPrinted
+            ? "var(--color-success)"
+            : "var(--color-text-muted)",
+        }}
+      >
+        <PiPopcorn scale={13} />
+      </button>
+    </IconTooltip>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, ReactElement } from "react";
+import { createPortal } from "react-dom";
 import {
   collection,
   query,
@@ -48,13 +49,17 @@ import { decreaseStock, increaseStock } from "@/lib/stock";
 import { useOrders, parseOrder } from "@/contexts/OrdersContext";
 import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
-import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
+import {
+  recordFirestoreRead,
+  recordFirestoreWrite,
+} from "@/lib/firestoreDevTracker";
 import NewOrderModal from "@/components/orders/NewOrderModal";
 import OrderChatDrawer from "@/components/orders/OrderChatDrawer";
 import ChatTemplatesModal from "@/components/orders/ChatTemplatesModal";
 import { Order, OrderItem, OrderPayment } from "@/types";
 import ThermalPrinterBar, {
   PrintOrderButton,
+  PrintVisibleValueButton,
   usePrinter,
 } from "@/components/orders/ThermalPrinter";
 import {
@@ -277,6 +282,61 @@ function PrinterReminderToast({
   );
 }
 
+// Envolve um botão de ícone e mostra um rótulo ao passar o mouse/focar.
+// Renderiza o rótulo num portal (direto no <body>), posicionado via
+// getBoundingClientRect — assim ele nunca fica cortado pelo overflow-hidden
+// do card do pedido nem escondido atrás de outro card vizinho. Não substitui
+// o `title` nativo do botão (mantido para acessibilidade).
+function IconTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactElement;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  function show() {
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) setPos({ top: rect.top, left: rect.left + rect.width / 2 });
+  }
+  function hide() {
+    setPos(null);
+  }
+
+  return (
+    <span
+      ref={ref}
+      className="inline-flex"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
+      {children}
+      {pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <span
+            className="pointer-events-none fixed -translate-x-1/2 -translate-y-full whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium z-999"
+            style={{
+              top: pos.top - 8,
+              left: pos.left,
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-primary)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            {label}
+          </span>,
+          document.body,
+        )}
+    </span>
+  );
+}
+
 // ── OrderCard ─────────────────────────────────────────────────────────────────
 
 function OrderCard({
@@ -412,56 +472,59 @@ function OrderCard({
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             <PrintOrderButton order={order} />
+            <PrintVisibleValueButton order={order} />
             {onChat && (
-              <button
-                onClick={onChat}
-                className="relative flex items-center justify-center rounded cursor-pointer transition-all"
-                style={{
-                  width: 26,
-                  height: 26,
-                  color: hasUnread
-                    ? "var(--color-error)"
-                    : "var(--color-text-muted)",
-                  backgroundColor: hasUnread
-                    ? "rgba(239,68,68,0.12)"
-                    : hasAnyMsg
-                    ? "var(--color-bg-elevated)"
-                    : "transparent",
-                  border: hasUnread
-                    ? "1px solid rgba(239,68,68,0.3)"
-                    : hasAnyMsg
-                    ? "1px solid var(--color-border)"
-                    : "1px solid transparent",
-                }}
-                title="Chat"
-              >
-                <FiMessageSquare size={13} />
-                {hasUnread && (
-                  <>
-                    <span
-                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
-                      style={{
-                        backgroundColor: "var(--color-error)",
-                        opacity: 0.6,
-                      }}
-                    />
-                    <span
-                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: "var(--color-error)" }}
-                    />
-                  </>
-                )}
-              </button>
+              <IconTooltip label="Chat">
+                <button
+                  onClick={onChat}
+                  className="relative flex items-center justify-center rounded cursor-pointer transition-all"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    color: hasUnread
+                      ? "var(--color-error)"
+                      : "var(--color-text-muted)",
+                    backgroundColor: hasUnread
+                      ? "rgba(239,68,68,0.12)"
+                      : hasAnyMsg
+                        ? "var(--color-bg-elevated)"
+                        : "transparent",
+                    border: hasUnread
+                      ? "1px solid rgba(239,68,68,0.3)"
+                      : hasAnyMsg
+                        ? "1px solid var(--color-border)"
+                        : "1px solid transparent",
+                  }}
+                >
+                  <FiMessageSquare size={13} />
+                  {hasUnread && (
+                    <>
+                      <span
+                        className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
+                        style={{
+                          backgroundColor: "var(--color-error)",
+                          opacity: 0.6,
+                        }}
+                      />
+                      <span
+                        className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: "var(--color-error)" }}
+                      />
+                    </>
+                  )}
+                </button>
+              </IconTooltip>
             )}
             {onEdit && (
-              <button
-                onClick={onEdit}
-                className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
-                style={{ color: "var(--color-text-muted)" }}
-                title="Editar pedido"
-              >
-                <FiEdit2 size={13} />
-              </button>
+              <IconTooltip label="Editar pedido">
+                <button
+                  onClick={onEdit}
+                  className="p-1 rounded cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  <FiEdit2 size={13} />
+                </button>
+              </IconTooltip>
             )}
           </div>
         </div>
@@ -872,7 +935,11 @@ function FinishedCard({
             {hasAnyMsg && (
               <FiMessageSquare
                 size={9}
-                style={{ color: "var(--color-text-muted)", opacity: 0.45, flexShrink: 0 }}
+                style={{
+                  color: "var(--color-text-muted)",
+                  opacity: 0.45,
+                  flexShrink: 0,
+                }}
               />
             )}
             <div
@@ -1863,6 +1930,8 @@ function OrdersPageInner() {
   const [finishedOrders, setFinishedOrders] = useState<Order[]>([]);
   const [spotFilter, setSpotFilter] = useState("");
   const [orderFilter, setOrderFilter] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("");
+  const [onlyNotPrinted, setOnlyNotPrinted] = useState(false);
 
   type SortOption = "newest" | "oldest" | "spot" | "value";
   const [sortActive, setSortActive] = useState<SortOption>("newest");
@@ -1895,7 +1964,9 @@ function OrdersPageInner() {
   const playedMsgIdsRef = useRef<Set<string>>(new Set());
 
   const checkedForMsgsRef = useRef<Set<string>>(new Set());
-  const [ordersWithMessages, setOrdersWithMessages] = useState<Record<string, boolean>>({});
+  const [ordersWithMessages, setOrdersWithMessages] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     chatOrderIdRef.current = chatOrder?.id ?? null;
@@ -1929,7 +2000,12 @@ function OrdersPageInner() {
     for (const [orderId, ts] of Object.entries(customerMsgTimes)) {
       const prev = prevMsgTimesRef.current[orderId] ?? 0;
       const baseline = soundBaselineRef.current[orderId] ?? 0;
-      if (ts > 0 && ts > prev && ts > baseline && chatOrderIdRef.current !== orderId) {
+      if (
+        ts > 0 &&
+        ts > prev &&
+        ts > baseline &&
+        chatOrderIdRef.current !== orderId
+      ) {
         const key = `${orderId}:${ts}`;
         if (!playedMsgIdsRef.current.has(key)) {
           playedMsgIdsRef.current.add(key);
@@ -2265,11 +2341,23 @@ function OrdersPageInner() {
     }
   }
 
+  function matchesCustomer(o: Order): boolean {
+    if (!customerFilter) return true;
+    const q = customerFilter.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
+    const matchesName = o.username.toLowerCase().includes(q);
+    const matchesPhone =
+      qDigits.length > 0 && o.phone.replace(/\D/g, "").includes(qDigits);
+    return matchesName || matchesPhone;
+  }
+
   const filteredActive = activeOrders
     .filter((o) => {
       if (spotFilter && !String(o.spot).includes(spotFilter)) return false;
       if (orderFilter && !String(o.orderNumber).includes(orderFilter))
         return false;
+      if (!matchesCustomer(o)) return false;
+      if (onlyNotPrinted && printedIds.has(o.id)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -2291,6 +2379,7 @@ function OrdersPageInner() {
     if (spotFilter && !String(o.spot).includes(spotFilter)) return false;
     if (orderFilter && !String(o.orderNumber).includes(orderFilter))
       return false;
+    if (!matchesCustomer(o)) return false;
     if (finishedStatusFilter !== "all" && o.status !== finishedStatusFilter)
       return false;
     if (finishedDateFilter) {
@@ -2475,9 +2564,9 @@ function OrdersPageInner() {
         </div>
 
         {/* Filters – desktop */}
-        <div className="hidden sm:flex flex-col sm:flex-row gap-2">
+        <div className="hidden sm:flex flex-row flex-wrap gap-2">
           <div
-            className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)]"
+            className="flex items-center gap-2 flex-1 min-w-40 px-3 py-2 rounded-[var(--radius-md)]"
             style={{
               backgroundColor: "var(--color-bg-elevated)",
               border: "1px solid var(--color-border)",
@@ -2505,7 +2594,7 @@ function OrdersPageInner() {
             )}
           </div>
           <div
-            className="flex items-center gap-2 flex-1 px-3 py-2 rounded-[var(--radius-md)]"
+            className="flex items-center gap-2 flex-1 min-w-40 px-3 py-2 rounded-[var(--radius-md)]"
             style={{
               backgroundColor: "var(--color-bg-elevated)",
               border: "1px solid var(--color-border)",
@@ -2526,6 +2615,34 @@ function OrdersPageInner() {
             {orderFilter && (
               <button
                 onClick={() => setOrderFilter("")}
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                <FiX size={14} />
+              </button>
+            )}
+          </div>
+          <div
+            className="flex items-center gap-2 flex-1 min-w-40 px-3 py-2 rounded-[var(--radius-md)]"
+            style={{
+              backgroundColor: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <FiSearch
+              size={14}
+              style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+            />
+            <input
+              type="text"
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              placeholder="Nome ou telefone"
+              className="flex-1 bg-transparent text-sm outline-none min-w-0"
+              style={{ color: "var(--color-text-primary)" }}
+            />
+            {customerFilter && (
+              <button
+                onClick={() => setCustomerFilter("")}
                 style={{ color: "var(--color-text-muted)" }}
               >
                 <FiX size={14} />
@@ -2568,6 +2685,19 @@ function OrdersPageInner() {
                 {opt.label}
               </button>
             ))}
+            <button
+              onClick={() => setOnlyNotPrinted((v) => !v)}
+              className="px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-all flex-shrink-0"
+              style={{
+                backgroundColor: onlyNotPrinted
+                  ? "var(--color-primary)"
+                  : "var(--color-bg-elevated)",
+                color: onlyNotPrinted ? "white" : "var(--color-text-muted)",
+                border: `1px solid ${onlyNotPrinted ? "var(--color-primary)" : "var(--color-border)"}`,
+              }}
+            >
+              Só não impressos
+            </button>
           </div>
         )}
 
@@ -2586,7 +2716,9 @@ function OrdersPageInner() {
             Filtros
             {(spotFilter ||
               orderFilter ||
-              (tab === "active" && sortActive !== "newest")) && (
+              customerFilter ||
+              (tab === "active" && sortActive !== "newest") ||
+              (tab === "active" && onlyNotPrinted)) && (
               <span
                 className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
                 style={{
@@ -2598,7 +2730,9 @@ function OrdersPageInner() {
                   [
                     spotFilter,
                     orderFilter,
+                    customerFilter,
                     tab === "active" && sortActive !== "newest",
+                    tab === "active" && onlyNotPrinted,
                   ].filter(Boolean).length
                 }
               </span>
@@ -2631,7 +2765,7 @@ function OrdersPageInner() {
                 className="text-sm font-medium"
                 style={{ color: "var(--color-text-muted)" }}
               >
-                {spotFilter || orderFilter
+                {spotFilter || orderFilter || customerFilter || onlyNotPrinted
                   ? "Nenhum pedido encontrado"
                   : "Nenhum pedido ativo no momento"}
               </p>
@@ -2864,7 +2998,7 @@ function OrdersPageInner() {
                   className="text-sm font-medium"
                   style={{ color: "var(--color-text-muted)" }}
                 >
-                  {spotFilter || orderFilter
+                  {spotFilter || orderFilter || customerFilter
                     ? "Nenhum pedido encontrado"
                     : "Nenhum pedido finalizado"}
                 </p>
@@ -3084,6 +3218,43 @@ function OrdersPageInner() {
               </div>
             </div>
 
+            <div className="flex flex-col gap-1.5">
+              <span
+                className="text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Nome ou telefone
+              </span>
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)]"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                <FiSearch
+                  size={14}
+                  style={{ color: "var(--color-text-muted)", flexShrink: 0 }}
+                />
+                <input
+                  type="text"
+                  value={customerFilter}
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  placeholder="Nome ou telefone"
+                  className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                  style={{ color: "var(--color-text-primary)" }}
+                />
+                {customerFilter && (
+                  <button
+                    onClick={() => setCustomerFilter("")}
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    <FiX size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {tab === "active" && (
               <div className="flex flex-col gap-1.5">
                 <span
@@ -3121,6 +3292,30 @@ function OrdersPageInner() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {tab === "active" && (
+              <div className="flex flex-col gap-1.5">
+                <span
+                  className="text-xs"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Impressão
+                </span>
+                <button
+                  onClick={() => setOnlyNotPrinted((v) => !v)}
+                  className="px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-all w-fit"
+                  style={{
+                    backgroundColor: onlyNotPrinted
+                      ? "var(--color-primary)"
+                      : "var(--color-bg-elevated)",
+                    color: onlyNotPrinted ? "white" : "var(--color-text-muted)",
+                    border: `1px solid ${onlyNotPrinted ? "var(--color-primary)" : "var(--color-border)"}`,
+                  }}
+                >
+                  Só não impressos
+                </button>
               </div>
             )}
 
