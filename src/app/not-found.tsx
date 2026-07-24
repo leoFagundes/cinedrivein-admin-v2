@@ -68,22 +68,9 @@ export default function NotFound() {
       />
 
       <div className="relative z-10 flex flex-col items-center gap-6 text-center max-w-md">
-        {/* Logo */}
-        <Image
-          src="/images/logo-drivein.svg"
-          alt="Cine Drive-in"
-          width={56}
-          height={56}
-          priority
-        />
-
         {/* 404 */}
         <div className="flex flex-col items-center gap-2">
           <div className="flex items-center gap-3">
-            <FiFilm
-              size={32}
-              style={{ color: "var(--color-primary)", opacity: 0.7 }}
-            />
             <span
               className="font-black"
               style={{
@@ -96,14 +83,6 @@ export default function NotFound() {
             >
               404
             </span>
-            <FiFilm
-              size={32}
-              style={{
-                color: "var(--color-primary)",
-                opacity: 0.7,
-                transform: "scaleX(-1)",
-              }}
-            />
           </div>
 
           <div

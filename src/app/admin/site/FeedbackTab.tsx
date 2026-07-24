@@ -5,10 +5,11 @@ import {
   collection,
   query,
   orderBy,
-  getDocs,
+  onSnapshot,
   deleteDoc,
   updateDoc,
   doc,
+  serverTimestamp,
   QueryDocumentSnapshot,
   DocumentData,
 } from "firebase/firestore";
@@ -19,10 +20,11 @@ import {
   FiMessageSquare,
   FiAlertTriangle,
   FiX,
-  FiRefreshCw,
   FiCheckCircle,
   FiCheck,
   FiBell,
+  FiEyeOff,
+  FiCornerUpLeft,
 } from "react-icons/fi";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,7 +32,7 @@ import { useToast } from "@/components/ui/Toast";
 import { log } from "@/lib/logger";
 import { recordFirestoreRead, recordFirestoreWrite } from "@/lib/firestoreDevTracker";
 import { useDevMode } from "@/contexts/DevModeContext";
-import { Feedback } from "@/types";
+import { Feedback, FeedbackStatus } from "@/types";
 
 function timeAgo(date: Date): string {
   const diff = Date.now() - date.getTime();
@@ -59,12 +61,18 @@ function parseFeedback(d: QueryDocumentSnapshot<DocumentData>): Feedback {
     message: data.message ?? "",
     favorite: data.favorite ?? false,
     seen: data.seen ?? false,
+    status: (data.status as FeedbackStatus | undefined) ?? "approved",
+    reply: data.reply ?? undefined,
+    repliedAt: data.repliedAt?.toDate(),
     createdAt: data.createdAt?.toDate() ?? new Date(),
   };
 }
 
 function sortFeedbacks(list: Feedback[]): Feedback[] {
   return [...list].sort((a, b) => {
+    const pa = (a.status ?? "approved") === "pending" ? 1 : 0;
+    const pb = (b.status ?? "approved") === "pending" ? 1 : 0;
+    if (pa !== pb) return pb - pa;
     const fa = a.favorite ? 1 : 0;
     const fb = b.favorite ? 1 : 0;
     if (fa !== fb) return fb - fa;
@@ -194,27 +202,59 @@ function FeedbackCard({
   onToggleFavorite,
   onDelete,
   onMarkAsSeen,
+  onSetStatus,
+  onSaveReply,
 }: {
   feedback: Feedback;
   canManage: boolean;
   onToggleFavorite: (feedback: Feedback) => void;
   onDelete: (feedback: Feedback) => void;
   onMarkAsSeen: (feedback: Feedback) => void;
+  onSetStatus: (feedback: Feedback, status: FeedbackStatus) => void;
+  onSaveReply: (feedback: Feedback, reply: string) => Promise<void>;
 }) {
+  const status = feedback.status ?? "approved";
+  const isPending = status === "pending";
+  const isHidden = status === "hidden";
+
+  const [editingReply, setEditingReply] = useState(false);
+  const [replyDraft, setReplyDraft] = useState(feedback.reply ?? "");
+  const [savingReply, setSavingReply] = useState(false);
+  // Mantém replyDraft sincronizado com feedback.reply (que pode mudar via
+  // onSnapshot em tempo real) sem sobrescrever o que o admin está digitando —
+  // ajuste de estado durante o render, não dentro de um efeito.
+  const [lastSyncedReply, setLastSyncedReply] = useState(feedback.reply);
+  if (!editingReply && feedback.reply !== lastSyncedReply) {
+    setLastSyncedReply(feedback.reply);
+    setReplyDraft(feedback.reply ?? "");
+  }
+
+  async function handleSaveReply() {
+    setSavingReply(true);
+    await onSaveReply(feedback, replyDraft);
+    setSavingReply(false);
+    setEditingReply(false);
+  }
+
   return (
     <div
       className="flex flex-col gap-2.5 p-4 rounded-[var(--radius-lg)]"
       style={{
-        backgroundColor: feedback.favorite
+        backgroundColor: isPending
           ? "rgba(245,158,11,0.06)"
-          : "var(--color-bg-surface)",
+          : feedback.favorite
+            ? "rgba(245,158,11,0.06)"
+            : "var(--color-bg-surface)",
         border: `1px solid ${
-          !feedback.seen
-            ? "var(--color-primary)"
-            : feedback.favorite
-              ? "rgba(245,158,11,0.3)"
-              : "var(--color-border)"
+          isPending
+            ? "var(--color-warning)"
+            : !feedback.seen
+              ? "var(--color-primary)"
+              : feedback.favorite
+                ? "rgba(245,158,11,0.3)"
+                : "var(--color-border)"
         }`,
+        opacity: isHidden ? 0.6 : 1,
       }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -229,18 +269,72 @@ function FeedbackCard({
             <FiUser size={14} />
           </div>
           <div className="min-w-0">
-            <p
-              className="text-sm font-semibold truncate"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              {feedback.name?.trim() || "Anônimo"}
-            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p
+                className="text-sm font-semibold truncate"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                {feedback.name?.trim() || "Anônimo"}
+              </p>
+              {isPending && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                  style={{
+                    backgroundColor: "rgba(245,158,11,0.15)",
+                    color: "var(--color-warning)",
+                    border: "1px solid rgba(245,158,11,0.3)",
+                  }}
+                >
+                  Pendente
+                </span>
+              )}
+              {isHidden && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    color: "var(--color-text-muted)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  Oculta
+                </span>
+              )}
+            </div>
             <Stars rating={feedback.rating} />
           </div>
         </div>
 
         {canManage && (
           <div className="flex items-center gap-1 flex-shrink-0">
+            {(isPending || isHidden) && (
+              <button
+                onClick={() => onSetStatus(feedback, "approved")}
+                title={isPending ? "Aprovar avaliação" : "Restaurar avaliação"}
+                className="w-8 h-8 rounded-[var(--radius-md)] flex items-center justify-center cursor-pointer transition-all"
+                style={{
+                  backgroundColor: "rgba(34,197,94,0.12)",
+                  color: "var(--color-success)",
+                  border: "1px solid rgba(34,197,94,0.3)",
+                }}
+              >
+                <FiCheck size={14} />
+              </button>
+            )}
+            {!isHidden && (
+              <button
+                onClick={() => onSetStatus(feedback, "hidden")}
+                title={isPending ? "Rejeitar (ocultar)" : "Ocultar avaliação"}
+                className="w-8 h-8 rounded-[var(--radius-md)] flex items-center justify-center cursor-pointer transition-all"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-muted)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                <FiEyeOff size={14} />
+              </button>
+            )}
             <button
               onClick={() => onToggleFavorite(feedback)}
               title={feedback.favorite ? "Remover destaque" : "Destacar avaliação"}
@@ -314,6 +408,105 @@ function FeedbackCard({
           </button>
         )}
       </div>
+
+      {canManage ? (
+        <div
+          className="flex flex-col gap-1.5 pt-2.5"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          {editingReply ? (
+            <>
+              <textarea
+                value={replyDraft}
+                onChange={(e) => setReplyDraft(e.target.value)}
+                placeholder="Escreva uma resposta pública..."
+                rows={2}
+                maxLength={500}
+                autoFocus
+                className="w-full text-sm rounded-[var(--radius-md)] px-3 py-2 outline-none resize-none"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-primary)",
+                }}
+              />
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingReply(false);
+                    setReplyDraft(feedback.reply ?? "");
+                  }}
+                  className="text-xs cursor-pointer"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveReply}
+                  disabled={savingReply}
+                  className="h-7 px-2.5 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-primary)", color: "white" }}
+                >
+                  {savingReply ? "Salvando..." : "Salvar resposta"}
+                </button>
+              </div>
+            </>
+          ) : feedback.reply ? (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className="flex items-center gap-1 text-xs font-semibold"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  <FiCornerUpLeft size={11} />
+                  Sua resposta
+                </span>
+                <button
+                  onClick={() => setEditingReply(true)}
+                  className="text-xs cursor-pointer"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Editar
+                </button>
+              </div>
+              <p
+                className="text-sm whitespace-pre-wrap"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                {feedback.reply}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setEditingReply(true)}
+              className="flex items-center gap-1.5 text-xs font-medium cursor-pointer w-fit"
+              style={{ color: "var(--color-primary)" }}
+            >
+              <FiCornerUpLeft size={12} />
+              Responder publicamente
+            </button>
+          )}
+        </div>
+      ) : feedback.reply ? (
+        <div
+          className="flex flex-col gap-1 pt-2.5"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          <span
+            className="flex items-center gap-1 text-xs font-semibold"
+            style={{ color: "var(--color-primary)" }}
+          >
+            <FiCornerUpLeft size={11} />
+            Resposta
+          </span>
+          <p
+            className="text-sm whitespace-pre-wrap"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            {feedback.reply}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -322,10 +515,10 @@ function FeedbackCard({
 
 export default function FeedbackTab({
   canManage,
-  onUnseenCountChange,
+  onPendingCountChange,
 }: {
   canManage: boolean;
-  onUnseenCountChange?: (count: number) => void;
+  onPendingCountChange?: (count: number) => void;
 }) {
   const { appUser, refreshUser } = useAuth();
   const { success, error } = useToast();
@@ -338,31 +531,32 @@ export default function FeedbackTab({
   const [deleteTarget, setDeleteTarget] = useState<Feedback | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [savingSidebarNotify, setSavingSidebarNotify] = useState(false);
-
-  async function fetchFeedbacks() {
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(collection(db, "feedbacks"), orderBy("createdAt", "desc")),
-      );
-      recordFirestoreRead(snap.size);
-      setFeedbacks(sortFeedbacks(snap.docs.map(parseFeedback)));
-    } catch (err) {
-      console.error(err);
-      error("Erro ao carregar avaliações", "Tente recarregar.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [statusFilter, setStatusFilter] = useState<FeedbackStatus | "all">(
+    "all",
+  );
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchFeedbacks();
+    const unsub = onSnapshot(
+      query(collection(db, "feedbacks"), orderBy("createdAt", "desc")),
+      (snap) => {
+        recordFirestoreRead(snap.docChanges().length);
+        setFeedbacks(sortFeedbacks(snap.docs.map(parseFeedback)));
+        setLoading(false);
+      },
+      (err) => {
+        console.error(err);
+        error("Erro ao carregar avaliações", "Tente recarregar a página.");
+        setLoading(false);
+      },
+    );
+    return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    onUnseenCountChange?.(feedbacks.filter((f) => !f.seen).length);
+    onPendingCountChange?.(
+      feedbacks.filter((f) => (f.status ?? "approved") === "pending").length,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedbacks]);
 
@@ -445,6 +639,87 @@ export default function FeedbackTab({
     }
   }
 
+  async function handleSetStatus(feedback: Feedback, status: FeedbackStatus) {
+    const prevStatus = feedback.status ?? "approved";
+    if (prevStatus === status) return;
+    try {
+      await updateDoc(doc(db, "feedbacks", feedback.id), { status });
+      recordFirestoreWrite(1);
+      setFeedbacks((prev) =>
+        sortFeedbacks(
+          prev.map((f) => (f.id === feedback.id ? { ...f, status } : f)),
+        ),
+      );
+
+      const authorName = feedback.name?.trim() || "Anônimo";
+      const labels: Record<FeedbackStatus, string> = {
+        pending: "pendente",
+        approved: "aprovada",
+        hidden: "oculta",
+      };
+      success(
+        status === "approved" ? "Avaliação aprovada" : "Avaliação ocultada",
+        status === "approved"
+          ? "Agora está visível para os clientes no site."
+          : "Não aparece mais para os clientes.",
+      );
+      log({
+        action: "set_feedback_status",
+        category: "site",
+        description: `Marcou a avaliação de "${authorName}" como ${labels[status]}`,
+        performedBy: actor,
+        target: { type: "feedback", id: feedback.id, name: authorName },
+        changes: [{ field: "status", from: labels[prevStatus], to: labels[status] }],
+      });
+    } catch (err) {
+      console.error(err);
+      error("Erro ao atualizar", "Tente novamente.");
+    }
+  }
+
+  async function handleSaveReply(feedback: Feedback, reply: string) {
+    const trimmed = reply.trim();
+    if (trimmed === (feedback.reply ?? "")) return;
+    try {
+      await updateDoc(doc(db, "feedbacks", feedback.id), {
+        reply: trimmed.length > 0 ? trimmed : null,
+        repliedAt: trimmed.length > 0 ? serverTimestamp() : null,
+      });
+      recordFirestoreWrite(1);
+      setFeedbacks((prev) =>
+        sortFeedbacks(
+          prev.map((f) =>
+            f.id === feedback.id
+              ? {
+                  ...f,
+                  reply: trimmed.length > 0 ? trimmed : undefined,
+                  repliedAt: trimmed.length > 0 ? new Date() : undefined,
+                }
+              : f,
+          ),
+        ),
+      );
+      success(
+        trimmed.length > 0 ? "Resposta salva" : "Resposta removida",
+        trimmed.length > 0 ? "Sua resposta já aparece no site." : "",
+      );
+
+      const authorName = feedback.name?.trim() || "Anônimo";
+      log({
+        action: "reply_feedback",
+        category: "site",
+        description: trimmed.length > 0
+          ? `Respondeu a avaliação de "${authorName}"`
+          : `Removeu a resposta da avaliação de "${authorName}"`,
+        performedBy: actor,
+        target: { type: "feedback", id: feedback.id, name: authorName },
+      });
+    } catch (err) {
+      console.error(err);
+      error("Erro ao salvar resposta", "Tente novamente.");
+    }
+  }
+
   async function handleDelete(fb?: Feedback) {
     const target = fb ?? deleteTarget;
     if (!target) return;
@@ -473,6 +748,10 @@ export default function FeedbackTab({
     }
   }
 
+  const filteredFeedbacks = feedbacks.filter(
+    (f) => statusFilter === "all" || (f.status ?? "approved") === statusFilter,
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -487,23 +766,61 @@ export default function FeedbackTab({
             className="text-sm mt-0.5"
             style={{ color: "var(--color-text-muted)" }}
           >
-            Comentários enviados pelo site, mais recentes primeiro. Avaliações
-            destacadas aparecem no topo.
+            Comentários enviados pelo site, em tempo real. Avaliações
+            pendentes precisam de aprovação antes de aparecer publicamente —
+            você também pode ocultar e responder cada uma.
           </p>
         </div>
-        <button
-          onClick={fetchFeedbacks}
-          disabled={loading}
-          className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] text-sm cursor-pointer transition-all disabled:opacity-50 flex-shrink-0"
-          style={{
-            backgroundColor: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            color: "var(--color-text-secondary)",
-          }}
-        >
-          <FiRefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          <span className="hidden sm:inline">Atualizar</span>
-        </button>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {(
+          [
+            { key: "all", label: "Todas" },
+            { key: "pending", label: "Pendentes" },
+            { key: "approved", label: "Aprovadas" },
+            { key: "hidden", label: "Ocultas" },
+          ] as { key: FeedbackStatus | "all"; label: string }[]
+        ).map((opt) => {
+          const count =
+            opt.key === "all"
+              ? feedbacks.length
+              : feedbacks.filter((f) => (f.status ?? "approved") === opt.key)
+                  .length;
+          const showPendingDot = opt.key === "pending" && count > 0;
+          return (
+            <button
+              key={opt.key}
+              onClick={() => setStatusFilter(opt.key)}
+              className="relative px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium cursor-pointer transition-all"
+              style={{
+                backgroundColor:
+                  statusFilter === opt.key
+                    ? "var(--color-primary)"
+                    : "var(--color-bg-elevated)",
+                color:
+                  statusFilter === opt.key
+                    ? "white"
+                    : "var(--color-text-muted)",
+                border: `1px solid ${statusFilter === opt.key ? "var(--color-primary)" : "var(--color-border)"}`,
+              }}
+            >
+              {opt.label} ({count})
+              {showPendingDot && (
+                <>
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping"
+                    style={{ backgroundColor: "var(--color-warning)", opacity: 0.6 }}
+                  />
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: "var(--color-warning)" }}
+                  />
+                </>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div
@@ -571,7 +888,7 @@ export default function FeedbackTab({
             />
           </svg>
         </div>
-      ) : feedbacks.length === 0 ? (
+      ) : filteredFeedbacks.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center py-20 gap-3 rounded-[var(--radius-lg)]"
           style={{
@@ -580,11 +897,15 @@ export default function FeedbackTab({
           }}
         >
           <FiMessageSquare size={28} style={{ opacity: 0.4 }} />
-          <p className="text-sm">Nenhuma avaliação recebida ainda.</p>
+          <p className="text-sm">
+            {statusFilter === "all"
+              ? "Nenhuma avaliação recebida ainda."
+              : "Nenhuma avaliação nesse filtro."}
+          </p>
         </div>
       ) : (
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
-          {feedbacks.map((f) => (
+          {filteredFeedbacks.map((f) => (
             <FeedbackCard
               key={f.id}
               feedback={f}
@@ -592,6 +913,8 @@ export default function FeedbackTab({
               onToggleFavorite={handleToggleFavorite}
               onDelete={(fb) => devMode.skipConfirmations ? handleDelete(fb) : setDeleteTarget(fb)}
               onMarkAsSeen={handleMarkAsSeen}
+              onSetStatus={handleSetStatus}
+              onSaveReply={handleSaveReply}
             />
           ))}
         </div>

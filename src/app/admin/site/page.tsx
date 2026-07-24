@@ -2465,7 +2465,7 @@ export default function SitePage() {
   const [activeTab, setActiveTab] = useState<
     "general" | "feedback" | "statistics"
   >("general");
-  const [unseenFeedbackCount, setUnseenFeedbackCount] = useState(0);
+  const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
   const [activeUsers, setActiveUsers] = useState(0);
 
   const [editModal, setEditModal] = useState<{
@@ -2508,19 +2508,21 @@ export default function SitePage() {
     });
   }, []);
 
-  // Load unseen feedback count (for the "Avaliações" tab badge)
+  // Load pending feedback count (for the "Avaliações" tab badge, antes de abrir a aba)
   useEffect(() => {
-    async function loadUnseenCount() {
+    async function loadPendingCount() {
       try {
         const snap = await getDocs(collection(db, "feedbacks"));
         recordFirestoreRead(snap.size);
-        const count = snap.docs.filter((d) => !d.data().seen).length;
-        setUnseenFeedbackCount(count);
+        const count = snap.docs.filter(
+          (d) => (d.data().status ?? "approved") === "pending",
+        ).length;
+        setPendingFeedbackCount(count);
       } catch (err) {
         console.error(err);
       }
     }
-    void loadUnseenCount();
+    void loadPendingCount();
   }, []);
 
   // Persist to Firestore
@@ -3050,15 +3052,16 @@ export default function SitePage() {
             >
               <FiStar size={14} />
               Avaliações
-              {unseenFeedbackCount > 0 && (
+              {pendingFeedbackCount > 0 && (
                 <span
                   className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none"
                   style={{
-                    backgroundColor: "var(--color-primary)",
+                    backgroundColor: "var(--color-warning)",
                     color: "var(--color-bg-surface)",
                   }}
+                  title="Avaliações pendentes de aprovação"
                 >
-                  {unseenFeedbackCount}
+                  {pendingFeedbackCount}
                 </span>
               )}
             </button>
@@ -3085,7 +3088,7 @@ export default function SitePage() {
           {activeTab === "feedback" ? (
             <FeedbackTab
               canManage={canManageSiteSettings}
-              onUnseenCountChange={setUnseenFeedbackCount}
+              onPendingCountChange={setPendingFeedbackCount}
             />
           ) : activeTab === "statistics" ? (
             <StatisticsTab canManage={canManageSiteSettings} />

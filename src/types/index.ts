@@ -137,6 +137,8 @@ export interface StoreStatus {
   closingTime?: string;
 }
 
+export type FeedbackStatus = "pending" | "approved" | "hidden";
+
 export interface Feedback {
   id: string;
   name?: string;
@@ -144,6 +146,10 @@ export interface Feedback {
   message: string;
   favorite?: boolean;
   seen?: boolean;
+  /** Avaliações antigas sem esse campo são tratadas como "approved". */
+  status?: FeedbackStatus;
+  reply?: string;
+  repliedAt?: Date;
   createdAt: Date;
 }
 
